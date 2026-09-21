@@ -77,6 +77,7 @@ CREATE TABLE public.libraries (
     "borrowLimit" INT DEFAULT 2,
     "loanDays" INT DEFAULT 14,
     "qrAttendanceStrictShift" BOOLEAN DEFAULT FALSE,
+    "subscription_active" BOOLEAN DEFAULT TRUE,
     "createdAt" BIGINT DEFAULT 0,
     "updatedAt" BIGINT DEFAULT 0
 );
@@ -431,6 +432,7 @@ CREATE TABLE public.library_subscriptions (
     "planId" TEXT NOT NULL,
     "planName" TEXT NOT NULL,
     status TEXT DEFAULT 'ACTIVE',
+    "subscription_active" BOOLEAN DEFAULT TRUE,
     "startDate" TEXT DEFAULT '',
     "expiryDate" TEXT DEFAULT '',
     price DOUBLE PRECISION NOT NULL,

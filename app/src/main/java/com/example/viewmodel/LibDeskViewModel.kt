@@ -29,6 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
  */
 sealed class LiveSubscriptionCheck {
     object Active : LiveSubscriptionCheck()
+    object Inactive : LiveSubscriptionCheck()
     object Expired : LiveSubscriptionCheck()
     object Suspended : LiveSubscriptionCheck()
     object PendingVerification : LiveSubscriptionCheck()
@@ -48,6 +49,9 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     private val _openQrScannerRequest = MutableStateFlow(false)
     val openQrScannerRequest: StateFlow<Boolean> = _openQrScannerRequest.asStateFlow()
+
+    // Global Authentication Guard State for real-time subscription verification
+    val authGuardStatus: StateFlow<LiveSubscriptionCheck?> = com.example.data.remote.AuthGuardService.guardState
 
     fun triggerOpenQrScanner() {
         _openQrScannerRequest.value = true
@@ -915,6 +919,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     fun logout() {
         SessionManager.logout(getApplication())
+        com.example.data.remote.AuthGuardService.reset()
         _isAuthenticated.value = false
         _userMessage.value = "You have been logged out."
         persistAuthSession(
@@ -2185,6 +2190,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     put("maxSeats", sub.maxSeats)
                     put("notes", sub.notes)
                     put("updatedAt", sub.updatedAt)
+                    put("subscription_active", sub.status.equals("ACTIVE", ignoreCase = true) || sub.status.equals("TRIAL", ignoreCase = true))
                 }
                 val array = org.json.JSONArray().put(json)
                 com.example.data.remote.SupabaseClient.upsertRecords("library_subscriptions", array)
@@ -2196,33 +2202,13 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Fresh, non-cached subscription check straight from Supabase. This is
-     * the actual enforcement point: it deliberately never reads Room. Call
-     * sites decide what to do with each outcome, but the intent is
-     * fail-closed — anything other than a confirmed ACTIVE status blocks
-     * access to paid library features.
+     * Fresh, non-cached subscription check straight from Supabase via AuthGuardService.
+     * This is the actual enforcement point: it verifies the 'subscription_active' flag
+     * directly against the remote Supabase tables ('libraries' and 'library_subscriptions').
+     * Fail-closed: only [Active] grants access to library features.
      */
     suspend fun verifyLiveSubscriptionStatus(libraryId: String): LiveSubscriptionCheck {
-        return try {
-            val (success, records) = com.example.data.remote.SupabaseClient.fetchRecords("library_subscriptions", libraryId)
-            if (!success || records == null) {
-                return LiveSubscriptionCheck.NetworkError
-            }
-            if (records.length() == 0) return LiveSubscriptionCheck.NoSubscription
-            val obj = records.getJSONObject(0)
-            val status = obj.optString("status", "")
-            val expiryDate = obj.optString("expiryDate", "")
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
-            when {
-                status == "SUSPENDED" -> LiveSubscriptionCheck.Suspended
-                status == "PENDING_VERIFICATION" -> LiveSubscriptionCheck.PendingVerification
-                expiryDate.isNotBlank() && expiryDate < today -> LiveSubscriptionCheck.Expired
-                status == "ACTIVE" || status == "TRIAL" -> LiveSubscriptionCheck.Active
-                else -> LiveSubscriptionCheck.NoSubscription
-            }
-        } catch (e: Exception) {
-            LiveSubscriptionCheck.NetworkError
-        }
+        return com.example.data.remote.AuthGuardService.verifyLibrarySubscription(libraryId)
     }
 
     fun toggleLibrarySuspension(libraryId: String, libraryName: String, isSuspended: Boolean) {
@@ -2253,6 +2239,18 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 repository.saveLibrarySubscription(fallbackSub)
                 pushSubscriptionToSupabase(fallbackSub)
             }
+
+            // Sync 'subscription_active' flag directly to Supabase libraries organization table
+            try {
+                val libUpdate = org.json.JSONObject().apply {
+                    put("id", libraryId)
+                    put("subscription_active", !isSuspended)
+                }
+                com.example.data.remote.SupabaseClient.upsertRecords("libraries", org.json.JSONArray().put(libUpdate))
+            } catch (e: Exception) {
+                // Best-effort push
+            }
+
             _userMessage.value = if (isSuspended) "Library $libraryName has been SUSPENDED" else "Library $libraryName reactivated!"
         }
     }

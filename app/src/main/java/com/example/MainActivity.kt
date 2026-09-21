@@ -298,13 +298,16 @@ fun LibDeskApp(
     // a live, non-cached check against Supabase every time a Manager opens
     // the app, and fails CLOSED: anything except a confirmed Active result
     // (including a network error) blocks access until it can be verified.
+    // GLOBAL AUTHENTICATION GUARD: Checks the 'subscription_active' flag for
+    // the logged-in library organization directly in Supabase before granting access to library features.
+    // Fails CLOSED: anything except a confirmed Active result (including network error) blocks access.
     var liveSubCheck by remember(currentLib?.id) { mutableStateOf<com.example.viewmodel.LiveSubscriptionCheck?>(null) }
     var subCheckAttempt by remember(currentLib?.id) { mutableIntStateOf(0) }
     val isManagerRole = normalizeUserRole(currentRole) == LibDeskRoles.MANAGER
 
     LaunchedEffect(currentLib?.id, subCheckAttempt) {
         if (isManagerRole && currentLib != null) {
-            liveSubCheck = viewModel.verifyLiveSubscriptionStatus(currentLib.id)
+            liveSubCheck = com.example.data.remote.AuthGuardService.verifyLibrarySubscription(currentLib.id)
         }
     }
 

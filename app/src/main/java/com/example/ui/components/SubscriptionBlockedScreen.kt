@@ -49,6 +49,12 @@ fun SubscriptionBlockedScreen(
             "Your library's subscription has expired. Renew your plan to restore access for you and your students.",
             "Renew Now" to onViewPlans
         )
+        LiveSubscriptionCheck.Inactive -> BlockedContent(
+            Icons.Default.Block,
+            "Subscription Inactive",
+            "Your library's subscription is inactive in Supabase. Please activate your subscription or contact support to restore access.",
+            "View Plans" to onViewPlans
+        )
         LiveSubscriptionCheck.Suspended -> BlockedContent(
             Icons.Default.Block,
             "Account Suspended",
