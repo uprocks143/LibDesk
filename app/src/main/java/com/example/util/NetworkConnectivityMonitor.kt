@@ -27,7 +27,7 @@ class NetworkConnectivityMonitor(context: Context) {
 
         override fun onLost(network: Network) {
             val stillOnline = checkCurrentConnectivity()
-            Log.d(TAG, "Network lost -> Online state: $stillOnline (Room DB active fallback)")
+            Log.d(TAG, "Network lost -> Online state: $stillOnline")
             _isOnline.value = stillOnline
         }
 

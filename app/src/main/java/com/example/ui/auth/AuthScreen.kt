@@ -1518,7 +1518,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Encrypted Local SQLite Database • Offline Capable",
+                    text = "Rule-based Cloud Verification • Supabase Secured",
                     fontSize = 10.5.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )

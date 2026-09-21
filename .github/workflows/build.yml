@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      - master
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,10 +17,25 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up JDK 17
-      uses: actions/setup-java@v5
+      uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Restore debug keystore if needed
+      run: |
+        if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+          base64 -d debug.keystore.base64 > debug.keystore
+        fi
+
+    - name: Ensure .env exists
+      run: |
+        if [ ! -f .env ]; then
+          cp .env.example .env 2>/dev/null || touch .env
+        fi
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew

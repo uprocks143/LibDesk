@@ -95,7 +95,7 @@ fun DynamicEntranceQrCard(
     }
 
     val membershipId = student.studentCode.ifBlank { student.id.takeLast(8).uppercase() }
-    val seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "A-14" }
+    val seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "Unassigned" }
 
     // Dynamic QR payload based on mode and rotating security token
     val dynamicQrPayload = remember(selectedMode, membershipId, seatNumber, rollingTokenNonce) {

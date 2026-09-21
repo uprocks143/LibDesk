@@ -78,37 +78,8 @@ fun ProfileScreen(
     var showExpandedGatePassModal by remember { mutableStateOf(false) }
     var selectedSectionFilter by remember { mutableStateOf(0) } // 0: All, 1: Membership, 2: Bookings, 3: ID Pass
 
-    // Offline First: If live student is null but Room DB cache is available, construct effective student
-    val effectiveStudent = student ?: cachedUserBooking?.let { cache ->
-        StudentEntity(
-            id = cache.studentId,
-            libraryId = cache.libraryId,
-            studentCode = cache.studentCode,
-            fullName = cache.fullName,
-            email = cache.email,
-            mobile = cache.phone,
-            address = cache.libraryAddress,
-            gender = "Student Member",
-            dob = "",
-            joiningDate = cache.startDate,
-            seatId = cache.seatId,
-            seatNumber = cache.seatNumber,
-            hallName = cache.hallName,
-            shiftId = cache.shiftId,
-            shiftName = cache.shiftName,
-            planId = cache.planId,
-            planName = cache.planName,
-            status = cache.membershipStatus,
-            expiryDate = cache.expiryDate,
-            rfidQrCode = cache.rfidQrCode,
-            totalFee = 0.0,
-            paidAmount = 0.0,
-            dueAmount = 0.0,
-            emergencyContact = "",
-            courseClass = "Library Scholar",
-            targetExam = "Study Hub Member"
-        )
-    }
+    // Strict rule-based: Display only authentic student profile data directly from live session
+    val effectiveStudent = student
 
     if (onClose != null) {
         BackHandler { onClose() }
@@ -880,7 +851,7 @@ private fun ActiveSeatBookingCard(
     onOpenQrScanner: () -> Unit
 ) {
     val isSeatConfirmed = student.seatNumber.isNotBlank() || assignedSeat != null
-    val isCheckedInToday = cachedUserBooking?.isCheckedIn == true
+    val isCheckedInToday = false
 
     Card(
         shape = RoundedCornerShape(22.dp),

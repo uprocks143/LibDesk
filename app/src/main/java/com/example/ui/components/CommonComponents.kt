@@ -183,7 +183,7 @@ fun LibDeskHeader(
                                 .background(if (isOnline) (if (isDark) LibDeskColors.warning else MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.onSurfaceVariant)
                         )
                         Text(
-                            text = if (isOnline) "SYNC" else "ROOM",
+                            text = if (isOnline) "SYNC" else "OFFLINE",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.ExtraBold,
                                 color = syncText,
