@@ -35,6 +35,7 @@ import com.example.ui.onboarding.OnboardingWizardScreen
 import com.example.ui.profile.ProfileScreen
 import com.example.ui.student.StudentPortalScreen
 import com.example.ui.superadmin.SuperAdminScreen
+import com.example.ui.superadmin.RestrictedPlatformOwnerGate
 import com.example.ui.theme.LibDeskTheme
 import com.example.viewmodel.LibDeskViewModel
 import com.example.viewmodel.BackupViewModel
@@ -248,7 +249,7 @@ fun LibDeskApp(
             },
 
             onAuthenticate = { identifier, password, role, onSuccess, onError ->
-                viewModel.authenticateWithPassword(identifier, password, role, onSuccess, onError)
+                viewModel.authenticateWithPassword(identifier, password, role, onSuccess = onSuccess, onError = onError)
             },
             onRegister = { name, email, libName, phone, password ->
                 viewModel.registerAndLogin(name, email, libName, phone, password)
@@ -498,7 +499,7 @@ fun LibDeskApp(
 onOpenSyncBackup = { showBackupScreen = true },
                     onOpenQrScanner = { showQrScannerModal = true },
                     onShowLibraryQr = { showLibraryQrModal = true },
-                    onOpenSuperAdmin = {},
+                    onOpenSuperAdmin = { currentManagerTab = 4 },
                     onOpenMySubscription = {
                         showSaaSOffersModal = true
                     },
@@ -584,6 +585,13 @@ onOpenSyncBackup = { showBackupScreen = true },
                                 onClick = { currentManagerTab = 3 },
                                 icon = { Icon(if (currentManagerTab == 3) Icons.Filled.Payments else Icons.Outlined.Payments, contentDescription = "Finance") },
                                 label = { Text("Finance", style = MaterialTheme.typography.labelSmall) },
+                                colors = navColors
+                            )
+                            NavigationBarItem(
+                                selected = currentManagerTab == 4,
+                                onClick = { currentManagerTab = 4 },
+                                icon = { Icon(if (currentManagerTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "SaaS Admin") },
+                                label = { Text("SaaS Admin", style = MaterialTheme.typography.labelSmall) },
                                 colors = navColors
                             )
                         }
@@ -887,6 +895,15 @@ onOpenSyncBackup = { showBackupScreen = true },
                                     },
                                     onDeleteExpense = { exp ->
                                         viewModel.deleteExpenseRecord(exp)
+                                    }
+                                )
+                                4 -> RestrictedPlatformOwnerGate(
+                                    viewModel = viewModel,
+                                    onExit = { currentManagerTab = 0 },
+                                    onOpenMenu = {
+                                        coroutineScope.launch {
+                                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                        }
                                     }
                                 )
                             }

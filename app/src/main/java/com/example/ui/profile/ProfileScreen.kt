@@ -37,7 +37,6 @@ import com.example.data.local.entities.*
 import com.example.ui.components.DynamicEntranceQrCard
 import com.example.ui.components.LogoutConfirmationDialog
 import com.example.ui.components.MembershipStatusCard
-import com.example.ui.components.OfflineCacheStatusBanner
 import com.example.ui.components.QrCodeView
 import com.example.ui.components.calculateMembershipExpiration
 import com.example.ui.theme.*
@@ -264,15 +263,6 @@ fun ProfileScreen(
                     onOpenEditProfile = onOpenEditProfile,
                     onViewFullIdCard = onViewFullIdCard,
                     onChangeStudent = onChangeStudent
-                )
-            }
-
-            // Offline Room Database Local Cache Status Banner
-            item {
-                OfflineCacheStatusBanner(
-                    cachedBooking = cachedUserBooking,
-                    isOfflineMode = student == null && cachedUserBooking != null,
-                    onTriggerCheckInAnimation = onTriggerCheckInAnimation
                 )
             }
 
@@ -529,7 +519,7 @@ fun ProfileScreen(
                         }
 
                         Text(
-                            text = "LibDesk Access Control v2.4 • Offline Encrypted Session",
+                            text = "LibDesk Access Control • Realtime Supabase Cloud Session",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,

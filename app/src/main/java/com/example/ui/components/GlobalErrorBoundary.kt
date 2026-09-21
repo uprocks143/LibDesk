@@ -119,9 +119,9 @@ object SnackbarController {
         } else {
             sendNotification(
                 AppNotification(
-                    message = "No internet connection. LibDesk running in offline Room DB mode.",
+                    message = "No internet connection. Active connection required for LibDesk Cloud.",
                     type = NotificationType.NETWORK_OFFLINE,
-                    title = "Offline Mode",
+                    title = "Connection Lost",
                     durationMs = 4500L
                 )
             )

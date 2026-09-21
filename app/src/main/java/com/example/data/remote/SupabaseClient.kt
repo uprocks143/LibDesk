@@ -172,6 +172,32 @@ object SupabaseClient {
         }
     }
 
+    suspend fun queryTable(pathWithQuery: String): Pair<Boolean, JSONArray?> = withContext(Dispatchers.IO) {
+        try {
+            val url = if (pathWithQuery.startsWith("http")) pathWithQuery else "$projectUrl/rest/v1/$pathWithQuery"
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", apiKey)
+                .addHeader("Authorization", "Bearer ${currentAuthToken ?: apiKey}")
+                .get()
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                val respBody = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val array = JSONArray(respBody)
+                    Pair(true, array)
+                } else {
+                    Log.w(TAG, "queryTable failed (${response.code}) for $pathWithQuery: $respBody")
+                    Pair(false, null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception querying $pathWithQuery", e)
+            Pair(false, null)
+        }
+    }
+
     
     fun getRecommendedSqlSchema(): String {
         return """

@@ -409,13 +409,13 @@ fun DynamicEntranceQrCard(
                             Spacer(modifier = Modifier.width(6.dp))
                             Column {
                                 Text(
-                                    text = "Room DB Offline Cache Active",
+                                    text = "Realtime Cloud Verification Active",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = LibDeskColors.success
                                 )
                                 Text(
-                                    text = "Pass works 100% offline at turnstile gates without internet",
+                                    text = "Pass verified live with Supabase cloud security",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

@@ -306,7 +306,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     ensureSupabaseSessionFreshness()
                     supabaseSyncManager.syncLocalToSupabase(_currentLibraryId.value)
                 } else {
-                    _supabaseStatusMessage.value = "● Offline Mode (Room DB active - will sync when online)"
+                    _supabaseStatusMessage.value = "● Cloud Disconnected (Active Internet Required)"
                 }
             }
         }
@@ -699,14 +699,16 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         identifier: String,
         passwordInput: String,
         role: String,
+        tenantCode: String = "",
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
         val trimmedIdentifier = identifier.trim()
         val trimmedPassword = passwordInput.trim()
+        val trimmedTenantCode = tenantCode.trim()
 
         if (trimmedIdentifier.isBlank()) {
-            onError("Please enter your registered Email.")
+            onError("Please enter your registered Email, Mobile, or ID.")
             return
         }
         if (trimmedPassword.isBlank()) {
@@ -715,15 +717,16 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
-            if (!trimmedIdentifier.contains("@")) {
-                onError("Please use your registered email for authentication.")
-                return@launch
-            }
+            // Resolve identifier if it is mobile or student code instead of raw email
+            val (resolvedEmail, resolvedTenantFromId) = SupabaseAuthService.resolveLoginEmail(trimmedIdentifier, role)
+            val effectiveTenantCode = if (trimmedTenantCode.isNotBlank()) trimmedTenantCode else (resolvedTenantFromId ?: "")
 
             val supabaseResult = SupabaseAuthService.signInWithPassword(
                 context = getApplication(),
-                email = trimmedIdentifier,
-                password = trimmedPassword
+                email = resolvedEmail,
+                password = trimmedPassword,
+                tenantCode = effectiveTenantCode.takeIf { it.isNotBlank() },
+                expectedRole = role
             )
 
             if (supabaseResult.isSuccess) {
@@ -755,6 +758,18 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     
                     if (_currentLibraryId.value.isNotBlank()) {
                         com.example.data.remote.SupabaseSyncManager(repository.database).pullSupabaseToLocal(_currentLibraryId.value)
+                        // If student session and studentId was blank, try to resolve from local repository
+                        if (_currentRole.value == "STUDENT" && _activeStudentId.value.isBlank()) {
+                            val localStudent = repository.findStudentByIdentifier(session.email)
+                                ?: repository.findStudentByIdentifier(trimmedIdentifier)
+                            if (localStudent != null) {
+                                _activeStudentId.value = localStudent.id
+                                persistAuthSession(
+                                    authenticated = true,
+                                    studentId = localStudent.id
+                                )
+                            }
+                        }
                     }
 
                     onSuccess()

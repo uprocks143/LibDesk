@@ -292,7 +292,116 @@ class SupabaseSyncManager(
         try {
             var totalPulled = 0
 
-            
+            // 1. Pull Library Tenant Record
+            val (libOk, libArray) = SupabaseClient.queryTable("libraries?id=eq.$libraryId&select=*")
+            if (libOk && libArray != null && libArray.length() > 0) {
+                val libObj = libArray.getJSONObject(0)
+                val libraryEntity = LibraryEntity(
+                    id = libObj.optString("id", libraryId),
+                    name = libObj.optString("name", "Library Center"),
+                    code = libObj.optString("code", "LIB-1001"),
+                    logoUrl = libObj.optString("logoUrl", ""),
+                    description = libObj.optString("description", ""),
+                    establishedDate = libObj.optString("establishedDate", ""),
+                    regNumber = libObj.optString("regNumber", ""),
+                    ownerName = libObj.optString("ownerName", ""),
+                    ownerPhone = libObj.optString("ownerPhone", ""),
+                    ownerEmail = libObj.optString("ownerEmail", ""),
+                    ownerWhatsApp = libObj.optString("ownerWhatsApp", ""),
+                    alternateContact = libObj.optString("alternateContact", ""),
+                    address = libObj.optString("address", ""),
+                    landmark = libObj.optString("landmark", ""),
+                    city = libObj.optString("city", ""),
+                    district = libObj.optString("district", ""),
+                    state = libObj.optString("state", ""),
+                    pincode = libObj.optString("pincode", ""),
+                    latitude = libObj.optDouble("latitude", 0.0),
+                    longitude = libObj.optDouble("longitude", 0.0),
+                    phone = libObj.optString("phone", ""),
+                    whatsapp = libObj.optString("whatsapp", ""),
+                    email = libObj.optString("email", ""),
+                    website = libObj.optString("website", ""),
+                    upiId = libObj.optString("upiId", ""),
+                    upiPayeeName = libObj.optString("upiPayeeName", ""),
+                    receiptPrefix = libObj.optString("receiptPrefix", "REC"),
+                    defaultFinePerDay = libObj.optDouble("defaultFinePerDay", 5.0),
+                    borrowLimit = libObj.optInt("borrowLimit", 2),
+                    loanDays = libObj.optInt("loanDays", 14),
+                    qrAttendanceStrictShift = libObj.optBoolean("qrAttendanceStrictShift", false),
+                    createdAt = libObj.optLong("createdAt", System.currentTimeMillis()),
+                    updatedAt = libObj.optLong("updatedAt", System.currentTimeMillis())
+                )
+                libraryDao.insertLibrary(libraryEntity)
+            }
+
+            // 2. Pull Halls
+            val (hOk, hArray) = SupabaseClient.fetchRecords("halls", libraryId)
+            if (hOk && hArray != null) {
+                for (i in 0 until hArray.length()) {
+                    val obj = hArray.getJSONObject(i)
+                    val hall = HallEntity(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        libraryId = obj.optString("libraryId", libraryId),
+                        name = obj.optString("name", "Main Hall"),
+                        type = obj.optString("type", "AC Hall"),
+                        floor = obj.optString("floor", "Ground Floor"),
+                        isAc = obj.optBoolean("isAc", true),
+                        description = obj.optString("description", ""),
+                        seatCount = obj.optInt("seatCount", 0),
+                        openingTime = obj.optString("openingTime", "06:00 AM"),
+                        closingTime = obj.optString("closingTime", "11:00 PM"),
+                        isActive = obj.optBoolean("isActive", true)
+                    )
+                    hallDao.insertHall(hall)
+                }
+            }
+
+            // 3. Pull Shifts
+            val (shOk, shArray) = SupabaseClient.fetchRecords("shifts", libraryId)
+            if (shOk && shArray != null) {
+                for (i in 0 until shArray.length()) {
+                    val obj = shArray.getJSONObject(i)
+                    val shift = ShiftEntity(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        libraryId = obj.optString("libraryId", libraryId),
+                        name = obj.optString("name", "Morning Shift"),
+                        startTime = obj.optString("startTime", "08:00 AM"),
+                        endTime = obj.optString("endTime", "02:00 PM"),
+                        fee = obj.optDouble("fee", 800.0),
+                        description = obj.optString("description", ""),
+                        isActive = obj.optBoolean("isActive", true)
+                    )
+                    shiftDao.insertShift(shift)
+                }
+            }
+
+            // 4. Pull Membership Plans
+            val (planOk, planArray) = SupabaseClient.fetchRecords("membership_plans", libraryId)
+            if (planOk && planArray != null) {
+                for (i in 0 until planArray.length()) {
+                    val obj = planArray.getJSONObject(i)
+                    val plan = MembershipPlanEntity(
+                        id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+                        libraryId = obj.optString("libraryId", libraryId),
+                        name = obj.optString("name", "Standard Monthly"),
+                        durationMonths = obj.optInt("durationMonths", 1),
+                        durationDays = obj.optInt("durationDays", 30),
+                        durationType = obj.optString("durationType", "MONTHS"),
+                        baseFee = obj.optDouble("baseFee", 1000.0),
+                        maintenanceFee = obj.optDouble("maintenanceFee", 100.0),
+                        securityDeposit = obj.optDouble("securityDeposit", 500.0),
+                        discount = obj.optDouble("discount", 0.0),
+                        seatType = obj.optString("seatType", "Standard"),
+                        shiftId = obj.optString("shiftId", ""),
+                        facilities = obj.optString("facilities", "High-Speed Wi-Fi, RO Water, Silent AC"),
+                        renewalRules = obj.optString("renewalRules", "Grace period of 3 days"),
+                        isActive = obj.optBoolean("isActive", true)
+                    )
+                    membershipPlanDao.insertPlan(plan)
+                }
+            }
+
+            // 5. Pull Students
             val (sSuccess, sArray) = SupabaseClient.fetchRecords("students", libraryId)
             if (sSuccess && sArray != null) {
                 for (i in 0 until sArray.length()) {
@@ -328,7 +437,7 @@ class SupabaseSyncManager(
                 }
             }
 
-            
+            // 6. Pull Seats
             val (seatSuccess, seatArray) = SupabaseClient.fetchRecords("seats", libraryId)
             if (seatSuccess && seatArray != null) {
                 for (i in 0 until seatArray.length()) {
@@ -353,7 +462,7 @@ class SupabaseSyncManager(
                 }
             }
 
-            
+            // 7. Pull Notices
             val (notSuccess, notArray) = SupabaseClient.fetchRecords("notices", libraryId)
             if (notSuccess && notArray != null) {
                 for (i in 0 until notArray.length()) {

@@ -539,6 +539,18 @@ fun LibDeskDrawerContent(
             }
 
             DrawerNavItem(
+                icon = Icons.Default.AdminPanelSettings,
+                title = "SaaS Admin Portal",
+                subtitle = "Restricted management interface for platform owner",
+                badge = "Owner",
+                badgeColor = MaterialTheme.colorScheme.primary,
+                onClick = {
+                    onOpenSuperAdmin()
+                    onCloseDrawer()
+                }
+            )
+
+            DrawerNavItem(
                 icon = Icons.Default.Logout,
                 title = "Sign Out",
                 subtitle = "Return to login screen",
@@ -569,7 +581,7 @@ fun LibDeskDrawerContent(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Room Database Active • Auto-Hidden Drawer",
+                        text = "Realtime Supabase Cloud Active",
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

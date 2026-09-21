@@ -236,10 +236,193 @@ object SupabaseAuthService {
     }
 
     
+    data class TenantResolutionResult(
+        val libraryId: String = "",
+        val libraryName: String = "",
+        val studentId: String = "",
+        val studentCode: String = "",
+        val membershipStatus: String = "ACTIVE",
+        val verified: Boolean = false,
+        val errorMessage: String? = null
+    )
+
+    suspend fun resolveLoginEmail(identifier: String, role: String): Pair<String, String?> = withContext(Dispatchers.IO) {
+        val clean = identifier.trim()
+        if (clean.contains("@")) {
+            return@withContext Pair(clean.lowercase(), null)
+        }
+
+        // 1. Check if digits only (Mobile number)
+        val digitsOnly = clean.filter { it.isDigit() }
+        if (digitsOnly.length >= 7) {
+            val (sOk, sArr) = SupabaseClient.queryTable("students?mobile=eq.$digitsOnly&select=email,libraryId,id,fullName,studentCode")
+            if (sOk && sArr != null && sArr.length() > 0) {
+                val rec = sArr.getJSONObject(0)
+                val em = rec.optString("email").trim()
+                val finalEmail = if (em.isNotBlank() && em.contains("@")) em else "$digitsOnly@student.libdesk"
+                return@withContext Pair(finalEmail, rec.optString("libraryId"))
+            }
+
+            val (lOk, lArr) = SupabaseClient.queryTable("libraries?ownerPhone=eq.$digitsOnly&select=ownerEmail,id,name")
+            if (lOk && lArr != null && lArr.length() > 0) {
+                val rec = lArr.getJSONObject(0)
+                val em = rec.optString("ownerEmail").trim()
+                if (em.isNotBlank() && em.contains("@")) {
+                    return@withContext Pair(em, rec.optString("id"))
+                }
+            }
+        }
+
+        // 2. Check student code (e.g. STU-1234)
+        val (codeOk, codeArr) = SupabaseClient.queryTable("students?studentCode=eq.$clean&select=email,mobile,libraryId,id,fullName")
+        if (codeOk && codeArr != null && codeArr.length() > 0) {
+            val rec = codeArr.getJSONObject(0)
+            val em = rec.optString("email").trim()
+            val mob = rec.optString("mobile").filter { it.isDigit() }
+            val finalEmail = if (em.isNotBlank() && em.contains("@")) em else "$mob@student.libdesk"
+            return@withContext Pair(finalEmail, rec.optString("libraryId"))
+        }
+
+        // Fallback: If 10 digits, synthesize student email; otherwise return raw clean
+        if (digitsOnly.length >= 10) {
+            Pair("$digitsOnly@student.libdesk", null)
+        } else {
+            Pair(clean, null)
+        }
+    }
+
+    suspend fun resolveTenantForUser(
+        email: String,
+        role: UserRole,
+        explicitTenantCode: String? = null
+    ): TenantResolutionResult = withContext(Dispatchers.IO) {
+        try {
+            val cleanEmail = email.trim().lowercase()
+            val cleanTenantCode = explicitTenantCode?.trim()?.uppercase() ?: ""
+
+            var targetLibId = ""
+            var targetLibName = ""
+
+            // If explicit tenant code was provided (e.g. LIB-1001 or ID), lookup library first
+            if (cleanTenantCode.isNotBlank()) {
+                val (libFound, libArr) = SupabaseClient.queryTable("libraries?or=(id.eq.$cleanTenantCode,code.eq.$cleanTenantCode)&select=id,name,code")
+                if (libFound && libArr != null && libArr.length() > 0) {
+                    targetLibId = libArr.getJSONObject(0).optString("id", "")
+                    targetLibName = libArr.getJSONObject(0).optString("name", "")
+                } else {
+                    return@withContext TenantResolutionResult(
+                        verified = false,
+                        errorMessage = "Library tenant '$cleanTenantCode' not found. Please verify your library code."
+                    )
+                }
+            }
+
+            // 1. If role is STUDENT, query students table
+            if (role == UserRole.STUDENT) {
+                val (sOk, sArr) = SupabaseClient.queryTable("students?email=eq.$cleanEmail&select=id,libraryId,fullName,studentCode,status,mobile")
+                if (sOk && sArr != null && sArr.length() > 0) {
+                    val studentObj = sArr.getJSONObject(0)
+                    val studentLibId = studentObj.optString("libraryId", "")
+                    val studentId = studentObj.optString("id", "")
+                    val studentCode = studentObj.optString("studentCode", "")
+                    val status = studentObj.optString("status", "ACTIVE")
+
+                    if (targetLibId.isNotBlank() && studentLibId != targetLibId) {
+                        return@withContext TenantResolutionResult(
+                            verified = false,
+                            errorMessage = "This student account is enrolled in another library tenant, not '$targetLibName'."
+                        )
+                    }
+
+                    if (targetLibName.isBlank() && studentLibId.isNotBlank()) {
+                        val (lOk, lArr) = SupabaseClient.queryTable("libraries?id=eq.$studentLibId&select=id,name,code")
+                        if (lOk && lArr != null && lArr.length() > 0) {
+                            targetLibName = lArr.getJSONObject(0).optString("name", "")
+                        }
+                    }
+
+                    return@withContext TenantResolutionResult(
+                        libraryId = studentLibId,
+                        libraryName = targetLibName,
+                        studentId = studentId,
+                        studentCode = studentCode,
+                        membershipStatus = status,
+                        verified = true
+                    )
+                }
+            }
+
+            // 2. If role is OWNER or ADMIN (or fallback check for library owner)
+            if (role == UserRole.OWNER || role == UserRole.ADMIN) {
+                val (lOk, lArr) = SupabaseClient.queryTable("libraries?ownerEmail=eq.$cleanEmail&select=id,name,code")
+                if (lOk && lArr != null && lArr.length() > 0) {
+                    val libObj = lArr.getJSONObject(0)
+                    val adminLibId = libObj.optString("id", "")
+                    val libName = libObj.optString("name", "")
+
+                    if (targetLibId.isNotBlank() && adminLibId != targetLibId) {
+                        return@withContext TenantResolutionResult(
+                            verified = false,
+                            errorMessage = "This administrator account owns a different library tenant ($libName), not '$targetLibName'."
+                        )
+                    }
+
+                    return@withContext TenantResolutionResult(
+                        libraryId = adminLibId,
+                        libraryName = libName,
+                        verified = true
+                    )
+                }
+
+                val (uOk, uArr) = SupabaseClient.queryTable("users?email=eq.$cleanEmail&select=id,libraryId,name,role")
+                if (uOk && uArr != null && uArr.length() > 0) {
+                    val userObj = uArr.getJSONObject(0)
+                    val userLibId = userObj.optString("libraryId", "")
+                    if (userLibId.isNotBlank()) {
+                        var libName = ""
+                        val (lOk2, lArr2) = SupabaseClient.queryTable("libraries?id=eq.$userLibId&select=name")
+                        if (lOk2 && lArr2 != null && lArr2.length() > 0) {
+                            libName = lArr2.getJSONObject(0).optString("name", "")
+                        }
+                        return@withContext TenantResolutionResult(
+                            libraryId = userLibId,
+                            libraryName = libName,
+                            verified = true
+                        )
+                    }
+                }
+            }
+
+            // If explicit tenant code was valid and found
+            if (targetLibId.isNotBlank()) {
+                return@withContext TenantResolutionResult(
+                    libraryId = targetLibId,
+                    libraryName = targetLibName,
+                    verified = true
+                )
+            }
+
+            TenantResolutionResult(
+                libraryId = "",
+                libraryName = "",
+                verified = false,
+                errorMessage = "No library tenant found for this account."
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resolving tenant", e)
+            TenantResolutionResult(
+                verified = false,
+                errorMessage = e.localizedMessage
+            )
+        }
+    }
+
     suspend fun signInWithPassword(
         context: Context,
         email: String,
-        password: String
+        password: String,
+        tenantCode: String? = null,
+        expectedRole: String? = null
     ): Result<UserSession> = withContext(Dispatchers.IO) {
         try {
             val cleanEmail = email.trim().lowercase()
@@ -272,30 +455,68 @@ object SupabaseAuthService {
                     val appMetadata = userObj.optJSONObject("app_metadata")
                     val userMetadata = userObj.optJSONObject("user_metadata")
 
-                    val roleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
+                    val rawRoleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("role")
-                        ?: "STUDENT"
 
-                    val role = UserRole.fromString(roleStr)
-                    val name = userMetadata?.optString("full_name")
+                    var role = if (!rawRoleStr.isNullOrBlank()) {
+                        UserRole.fromString(rawRoleStr)
+                    } else if (expectedRole == "MANAGER") {
+                        UserRole.ADMIN
+                    } else {
+                        UserRole.STUDENT
+                    }
+
+                    // Role validation if expectedRole was specified
+                    if (expectedRole == "STUDENT" && (role == UserRole.ADMIN || role == UserRole.OWNER)) {
+                        // User is an administrator trying to log in under Student tab
+                        return@withContext Result.failure(
+                            Exception("This account is registered as a Library Administrator. Please select the 'Library Owner' tab.")
+                        )
+                    } else if (expectedRole == "MANAGER" && role == UserRole.STUDENT) {
+                        // User is a student trying to log in under Manager tab
+                        return@withContext Result.failure(
+                            Exception("This account is registered as a Student Member. Please select the 'Student' tab to access your student pass.")
+                        )
+                    }
+
+                    var name = userMetadata?.optString("full_name")
                         ?: userMetadata?.optString("name")
                         ?: cleanEmail.substringBefore("@")
 
-                    val libraryId = appMetadata?.optString("library_id")
+                    val metaLibId = appMetadata?.optString("library_id")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("library_id")
                         ?: ""
 
-                    val studentId = appMetadata?.optString("student_id")
+                    val metaStudentId = appMetadata?.optString("student_id")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("student_id")
                         ?: ""
+
+                    // Perform Tenant Resolution & Verification
+                    var finalLibId = metaLibId
+                    var finalStudentId = metaStudentId
+
+                    if (role != UserRole.OWNER || !tenantCode.isNullOrBlank()) {
+                        val tenantResolution = resolveTenantForUser(cleanEmail, role, tenantCode)
+                        if (tenantResolution.verified) {
+                            if (tenantResolution.libraryId.isNotBlank()) {
+                                finalLibId = tenantResolution.libraryId
+                            }
+                            if (tenantResolution.studentId.isNotBlank()) {
+                                finalStudentId = tenantResolution.studentId
+                            }
+                        } else if (!tenantCode.isNullOrBlank() && tenantResolution.errorMessage != null) {
+                            // Explicit tenant code was specified but failed validation
+                            return@withContext Result.failure(Exception(tenantResolution.errorMessage))
+                        }
+                    }
 
                     val session = UserSession(
                         userId = userId,
                         email = cleanEmail,
                         name = name,
                         role = role,
-                        libraryId = libraryId,
-                        studentId = studentId,
+                        libraryId = finalLibId,
+                        studentId = finalStudentId,
                         accessToken = accessToken,
                         refreshToken = refreshToken,
                         expiresAt = System.currentTimeMillis() + (expiresIn * 1000)

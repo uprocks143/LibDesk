@@ -199,7 +199,7 @@ class LibDeskRepository(val database: AppDatabase) {
                     price = 999.0,
                     durationMonths = 1,
                     maxSeats = 160,
-                    features = "Up to 160 Dedicated & Flexible Seats\n3 Shifts Support (Morning/Evening/Full Day)\nDirect WhatsApp Fee Slips & Reminders\nStudent Self-Service Portal Access\nDigital E-Book Catalog & Issues\nFull Daily P&L Expense Tracking\nOffline-First Room Persistence",
+                    features = "Up to 160 Dedicated & Flexible Seats\n3 Shifts Support (Morning/Evening/Full Day)\nDirect WhatsApp Fee Slips & Reminders\nStudent Self-Service Portal Access\nDigital E-Book Catalog & Issues\nFull Daily P&L Expense Tracking\nCloud-Synchronized Multi-Tenant Security",
                     badge = "Most Popular",
                     discountPercentage = 15.0,
                     upiId = "libdesk.billing@upi",
