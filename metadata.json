@@ -1,0 +1,7 @@
+{
+  "name": "LibDesk",
+  "description": "Library & Seat Manager - Multi-tenant SaaS platform for physical libraries, study halls, seat allocation, digital library, and student memberships",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
