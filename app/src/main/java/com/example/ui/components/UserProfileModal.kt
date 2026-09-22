@@ -938,7 +938,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
                                         profileFormError = null
                                         isSaving = true
                                         val curLib = library ?: LibraryEntity(
-                                            id = "LIB-001",
+                                            id = java.util.UUID.randomUUID().toString(),
                                             name = libName,
                                             code = "LIB-${(1000..9999).random()}"
                                         )

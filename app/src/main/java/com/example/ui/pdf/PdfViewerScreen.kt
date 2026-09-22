@@ -567,7 +567,7 @@ private fun getStudyMaterialChapters(
                         "Strategic Analysis & Question Trends:\n• Previous Year Questions (PYQs) trends and topic distribution.\n• High-frequency questions and common pitfalls to avoid.\n• Step-by-step methodologies to maximize descriptive scores.",
 
                 "Section 3: Formula Sheets & Memory Tables" to
-                        "Quick Revision Tables:\n• Essential points to remember for instant recall.\n• Cross-subject linkage and comparative assessment charts.\n• Digital Library verified resource for student offline access."
+                        "Quick Revision Tables:\n• Essential points to remember for instant recall.\n• Cross-subject linkage and comparative assessment charts.\n• Digital Library verified academic resource."
             )
         }
     }

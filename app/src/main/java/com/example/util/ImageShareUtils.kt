@@ -1293,7 +1293,7 @@ object ImageShareUtils {
         canvas.drawText("LIBDESK SMART LIBRARY ACCESS", width / 2f, margin + 70f, brandPaint)
 
         
-        val libName = library?.name?.ifBlank { "VANGUARD STUDY LIBRARY" } ?: "VANGUARD STUDY LIBRARY"
+        val libName = library?.name?.ifBlank { "SMART LIBRARY" } ?: "SMART LIBRARY"
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AndroidColor.WHITE
             textSize = 48f
@@ -1302,7 +1302,9 @@ object ImageShareUtils {
         }
         canvas.drawText(libName.uppercase(), width / 2f, margin + 140f, titlePaint)
 
-        val addressText = "${library?.address ?: "Sector 14, Main Road"}, ${library?.city ?: "New Delhi"}"
+        val addressText = listOfNotNull(library?.address?.takeIf { it.isNotBlank() }, library?.city?.takeIf { it.isNotBlank() })
+            .joinToString(", ")
+            .ifBlank { "Official Access Pass" }
         val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AndroidColor.parseColor("#E2E8F0")
             textSize = 26f
@@ -1350,7 +1352,9 @@ object ImageShareUtils {
         canvas.drawText("Open LibDesk App on your mobile • Scan code at Entry and Exit", width / 2f, margin + headerHeight + 165f, subInstrPaint)
 
         
-        val qrPayload = "LIBDESK_GATE_ATTENDANCE:${library?.id ?: "LIB-001"}:${library?.code ?: "UNKNOWN-LIBRARY"}:${library?.name ?: "Your Library"}"
+        val libId = library?.id ?: ""
+        val libCode = library?.code ?: ""
+        val qrPayload = "LIBDESK_GATE_ATTENDANCE:$libId:$libCode:$libName"
         val qrBitmap = generateQrBitmap(qrPayload, 620)
 
         val qrBoxSize = 660f
@@ -1370,11 +1374,9 @@ object ImageShareUtils {
         canvas.drawRoundRect(qrRect, 28f, 28f, qrFrameBg)
         canvas.drawRoundRect(qrRect, 28f, 28f, qrFrameBorder)
 
-        if (qrBitmap != null) {
-            val qrLeft = qrBoxLeft + 20f
-            val qrTop = qrBoxTop + 20f
-            canvas.drawBitmap(qrBitmap, qrLeft, qrTop, null)
-        }
+        val qrLeft = qrBoxLeft + 20f
+        val qrTop = qrBoxTop + 20f
+        canvas.drawBitmap(qrBitmap, qrLeft, qrTop, null)
 
         
         val featTop = qrBoxTop + qrBoxSize + 40f

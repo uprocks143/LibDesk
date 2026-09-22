@@ -1316,6 +1316,6 @@ fun buildAttendanceReport(
     }
 
     sb.appendLine("----------------------------------")
-    sb.appendLine("Powered by LibDesk SaaS • Vanguard Smart Library Systems")
+    sb.appendLine("Powered by LibDesk SaaS • Smart Library Cloud Platform")
     return sb.toString()
 }

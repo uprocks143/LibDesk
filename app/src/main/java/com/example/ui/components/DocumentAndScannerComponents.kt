@@ -1241,99 +1241,6 @@ fun QrScannerModal(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                
-                Text(
-                    text = if (isStudentMode) "Quick Attendance Shortcuts:" else "Quick Demo Scans (Member & Seat Stickers):",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.align(Alignment.Start)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    SuggestionChip(
-                        onClick = {
-                            handleScannedCode("LIBDESK_GATE_ATTENDANCE:LIB-001:LIB-8042:${libraryName}")
-                        },
-                        label = { Text("Reception Gate QR", fontSize = 14.sp) }
-                    )
-                    SuggestionChip(
-                        onClick = {
-                            handleScannedCode("SEAT-A-01")
-                        },
-                        label = { Text("Seat A-01", fontSize = 14.sp) }
-                    )
-                    if (!isStudentMode) {
-                        SuggestionChip(
-                            onClick = {
-                                handleScannedCode("STU-1001")
-                            },
-                            label = { Text("STU-1001", fontSize = 14.sp) }
-                        )
-                    }
-                }
-
-                if (isStudentMode) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.FlashOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Instant Library Check-in & Out",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Scan physical QR or tap instant gate punch using both front/rear camera:",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        handleScannedCode("LIBDESK_GATE_ATTENDANCE:LIB-001:LIB-8042:${libraryName}")
-                                    },
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(15.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Instant In", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        handleScannedCode("LIBDESK_GATE_ATTENDANCE:LIB-001:LIB-8042:${libraryName}")
-                                    },
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(15.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Instant Out", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 OutlinedTextField(
                     value = manualInput,
                     onValueChange = { manualInput = it },
@@ -1369,10 +1276,11 @@ fun LibraryEnrollmentQrModal(
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) } 
 
-    val libCode = library?.code ?: "UNKNOWN-LIBRARY"
-    val libName = library?.name ?: "Your Library"
-    val gateQrPayload = "LIBDESK_GATE_ATTENDANCE:${library?.id ?: "LIB-001"}:$libCode:$libName"
-    val enrollQrPayload = "LIBDESK:${library?.id ?: "LIB-001"}:$libCode:$libName"
+    val libCode = library?.code ?: ""
+    val libName = library?.name ?: ""
+    val libId = library?.id ?: ""
+    val gateQrPayload = "LIBDESK_GATE_ATTENDANCE:$libId:$libCode:$libName"
+    val enrollQrPayload = "LIBDESK:$libId:$libCode:$libName"
 
     val activePayload = if (selectedTab == 0) gateQrPayload else enrollQrPayload
 

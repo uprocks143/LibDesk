@@ -268,7 +268,7 @@ fun NotificationsAlertsModal(
                                             isExpired = isExpired,
                                             hasDues = hasDues,
                                             onSendReminder = {
-                                                val msg = "Dear ${student.fullName}, your library seat membership (${student.seatNumber.ifBlank { "Seat" }}) at Vanguard Study Hall is due for renewal. Expiry: ${student.expiryDate}. Due: ₹${student.dueAmount.toInt()}. Kindly renew to secure your seat."
+                                                val msg = "Dear ${student.fullName}, your library seat membership (${student.seatNumber.ifBlank { "Seat" }}) is due for renewal. Expiry: ${student.expiryDate.ifBlank { "N/A" }}. Due: ₹${student.dueAmount.toInt()}. Kindly renew to secure your seat."
                                                 clipboardManager.setText(AnnotatedString(msg))
                                                 // Toast.makeText(context, "Reminder copied to clipboard!", Toast.LENGTH_SHORT).show()
                                             },
@@ -509,8 +509,7 @@ private fun RenewalAlertCard(
                 ) {
                     Column {
                         Text("Expiry Date", fontSize = 9.5.sp, color = MaterialTheme.colorScheme.onSurface)
-                        val fallbackDate = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
-                        Text(student.expiryDate.ifBlank { fallbackDate }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(student.expiryDate.ifBlank { "Not Set" }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                     if (student.dueAmount > 0) {
                         Column(horizontalAlignment = Alignment.End) {

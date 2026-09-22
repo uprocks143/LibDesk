@@ -160,7 +160,32 @@ object LocationVerificationUtils {
                 }
 
                 val provider = if (isGpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
-                locationManager.requestSingleUpdate(provider, locationListener, Looper.getMainLooper())
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    locationManager.getCurrentLocation(
+                        provider,
+                        null,
+                        { it.run() },
+                        { loc ->
+                            if (loc != null) {
+                                val dist = calculateDistanceMeters(loc.latitude, loc.longitude, targetLat, targetLng)
+                                onResult(
+                                    LocationVerificationResult(
+                                        isVerified = true,
+                                        distanceMeters = dist,
+                                        userLat = loc.latitude,
+                                        userLng = loc.longitude,
+                                        libraryLat = targetLat,
+                                        libraryLng = targetLng,
+                                        locationLabel = "Verified at Gate (${dist.toInt()}m)"
+                                    )
+                                )
+                            }
+                        }
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    locationManager.requestSingleUpdate(provider, locationListener, Looper.getMainLooper())
+                }
 
                 
                 android.os.Handler(Looper.getMainLooper()).postDelayed({

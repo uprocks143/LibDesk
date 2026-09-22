@@ -3,10 +3,14 @@ name: Build Android APK
 on:
   push:
     branches:
-      - main
-      - master
+      - '**'
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -16,35 +20,52 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up JDK 17
+    - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
+        java-version: '21'
         distribution: 'temurin'
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Restore debug keystore if needed
+    - name: Ensure Debug Keystore
       run: |
-        if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-          base64 -d debug.keystore.base64 > debug.keystore
+        if [ ! -f debug.keystore ]; then
+          if [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || true
+          fi
+          if [ ! -f debug.keystore ] || [ ! -s debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
         fi
 
-    - name: Ensure .env exists
+    - name: Setup environment files
       run: |
-        if [ ! -f .env ]; then
-          cp .env.example .env 2>/dev/null || touch .env
+        touch .env.example
+        if [ -f .env.example ]; then
+          cp .env.example .env
         fi
+        touch .env
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-    - name: Upload APK
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: LibDesk-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: LibDesk-Debug-APK
+        path: app/build/outputs/apk/**/*.apk
+        if-no-files-found: error
+
+    - name: Create Release for Tags
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: app/build/outputs/apk/**/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

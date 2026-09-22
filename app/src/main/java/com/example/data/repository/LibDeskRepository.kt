@@ -33,94 +33,12 @@ class LibDeskRepository(val database: AppDatabase) {
     private val saasPlanDao = database.saasSubscriptionPlanDao()
     private val librarySubDao = database.librarySubscriptionDao()
     private val superAdminDao = database.superAdminUserDao()
-    private val userBookingCacheDao = database.userBookingCacheDao()
     private val subscriptionPlansDao = database.subscriptionPlansDao()
     private val userSubscriptionDao = database.userSubscriptionDao()
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
 
-    // Room Database User Booking Cache for 100% Offline Access
-    fun getCachedUserBooking(studentId: String): Flow<UserBookingCacheEntity?> =
-        userBookingCacheDao.getBookingCache(studentId)
-
-    fun getAnyCachedUserBooking(): Flow<UserBookingCacheEntity?> =
-        userBookingCacheDao.getAnyBookingCache()
-
-    fun getAllCachedUserBookings(): Flow<List<UserBookingCacheEntity>> =
-        userBookingCacheDao.getAllBookingCaches()
-
-    suspend fun getCachedUserBookingDirect(studentId: String): UserBookingCacheEntity? = withContext(Dispatchers.IO) {
-        userBookingCacheDao.getBookingCacheDirect(studentId)
-    }
-
-    suspend fun cacheUserBooking(studentId: String) = withContext(Dispatchers.IO) {
-        if (studentId.isBlank()) return@withContext
-        val student = studentDao.findStudentById(studentId) ?: return@withContext
-        val library = libraryDao.getLibraryByIdDirect(student.libraryId)
-        val seat = if (student.seatId.isNotBlank()) {
-            seatDao.getSeatByIdDirect(student.seatId)
-        } else if (student.seatNumber.isNotBlank()) {
-            seatDao.findSeatByNumberOrId(student.libraryId, student.seatNumber)
-        } else null
-
-        val shift = if (student.shiftId.isNotBlank()) {
-            shiftDao.getShiftByIdDirect(student.shiftId)
-        } else if (student.shiftName.isNotBlank()) {
-            shiftDao.getShiftsDirect(student.libraryId).find { it.name.equals(student.shiftName, ignoreCase = true) }
-        } else null
-
-        val hall = if (seat != null && seat.hallId.isNotBlank()) {
-            hallDao.getHallByIdDirect(seat.hallId)
-        } else {
-            hallDao.getHallsByLibrary(student.libraryId).firstOrNull()?.firstOrNull()
-        }
-
-        val plan = if (student.planId.isNotBlank()) {
-            planDao.getPlanByIdDirect(student.planId)
-        } else if (student.planName.isNotBlank()) {
-            planDao.getPlansByLibrary(student.libraryId).firstOrNull()?.find { it.name.equals(student.planName, ignoreCase = true) }
-        } else null
-
-        val today = dateFormat.format(Date())
-        val activeCheckIn = attendanceDao.getActiveCheckIn(student.libraryId, student.id, today)
-
-        val cache = UserBookingCacheEntity(
-            studentId = student.id,
-            studentCode = student.studentCode,
-            fullName = student.fullName,
-            email = student.email,
-            phone = student.mobile,
-            seatId = seat?.id ?: student.seatId,
-            seatNumber = student.seatNumber.ifBlank { seat?.seatNumber ?: "" },
-            seatType = seat?.seatType ?: "Reserved AC Study Desk",
-            hallId = hall?.id ?: "",
-            hallName = hall?.name ?: seat?.hallName ?: "Main Study Hall",
-            floor = seat?.floor ?: hall?.floor ?: "Ground Floor",
-            shiftId = shift?.id ?: student.shiftId,
-            shiftName = student.shiftName.ifBlank { shift?.name ?: "Full Day Shift" },
-            shiftTimings = if (shift != null) "${shift.startTime} – ${shift.endTime}" else "08:00 AM – 08:00 PM",
-            planId = plan?.id ?: student.planId,
-            planName = student.planName.ifBlank { plan?.name ?: "Monthly Standard" },
-            membershipStatus = student.status,
-            startDate = student.joiningDate,
-            expiryDate = student.expiryDate,
-            rfidQrCode = student.rfidQrCode.ifBlank { student.studentCode },
-            libraryId = student.libraryId,
-            libraryName = library?.name ?: "LibDesk Study Hub",
-            libraryAddress = library?.address ?: "Campus Library",
-            lastCheckInTime = activeCheckIn?.checkInTime ?: "",
-            isCheckedIn = activeCheckIn != null && activeCheckIn.status == "CHECKED_IN",
-            hasAc = true,
-            hasPowerSocket = true,
-            hasReadingLamp = true,
-            hasLocker = false,
-            cachedTimestamp = System.currentTimeMillis()
-        )
-        userBookingCacheDao.insertOrUpdateCache(cache)
-    }
-
-    
     fun getAllSaasPlans(): Flow<List<SaaSSubscriptionPlanEntity>> = saasPlanDao.getAllPlans()
     suspend fun saveSaasPlan(plan: SaaSSubscriptionPlanEntity) = withContext(Dispatchers.IO) {
         saasPlanDao.insertPlan(plan)
@@ -545,7 +463,6 @@ class LibDeskRepository(val database: AppDatabase) {
     fun getStudentById(studentId: String): Flow<StudentEntity?> = studentDao.getStudentById(studentId)
     suspend fun saveStudent(student: StudentEntity) = withContext(Dispatchers.IO) {
         studentDao.insertStudent(student)
-        cacheUserBooking(student.id)
         logAudit(student.libraryId, "Manager", "SAVE_STUDENT", "Student", student.id, "Saved student ${student.fullName}")
     }
     suspend fun deleteStudent(student: StudentEntity) = withContext(Dispatchers.IO) {
@@ -611,12 +528,54 @@ class LibDeskRepository(val database: AppDatabase) {
     fun getStudentAttendance(studentId: String): Flow<List<AttendanceEntity>> =
         attendanceDao.getAttendanceForStudent(studentId)
 
+    suspend fun pushAttendanceToSupabase(att: AttendanceEntity): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        try {
+            val jsonArray = org.json.JSONArray().apply {
+                put(org.json.JSONObject().apply {
+                    put("id", att.id)
+                    put("libraryId", att.libraryId)
+                    put("studentId", att.studentId)
+                    put("studentName", att.studentName)
+                    put("seatNumber", att.seatNumber)
+                    put("hallName", att.hallName)
+                    put("shiftName", att.shiftName)
+                    put("date", att.date)
+                    put("checkInTime", att.checkInTime)
+                    put("checkOutTime", att.checkOutTime)
+                    put("durationMinutes", att.durationMinutes)
+                    put("status", att.status)
+                    put("mode", att.mode)
+                    put("notes", att.notes)
+                    put("timestamp", att.timestamp)
+                })
+            }
+            com.example.data.remote.SupabaseClient.upsertRecords("attendance", jsonArray)
+        } catch (e: Exception) {
+            Pair(false, "Server connection error: ${e.localizedMessage ?: "Unreachable"}")
+        }
+    }
+
     suspend fun processQrAttendance(
         libraryId: String,
         qrCodeOrStudentCode: String,
         studentIdContext: String? = null,
         locationNote: String? = null
     ): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        // 1. Live Organization Subscription Check (Fail-Closed, zero offline bypass)
+        val liveCheck = com.example.data.remote.AuthGuardService.verifyLibrarySubscription(libraryId)
+        if (liveCheck !is com.example.viewmodel.LiveSubscriptionCheck.Active) {
+            val reason = when (liveCheck) {
+                com.example.viewmodel.LiveSubscriptionCheck.Inactive -> "Organization subscription is inactive"
+                com.example.viewmodel.LiveSubscriptionCheck.Expired -> "Organization subscription has expired"
+                com.example.viewmodel.LiveSubscriptionCheck.Suspended -> "Organization account is suspended"
+                com.example.viewmodel.LiveSubscriptionCheck.PendingVerification -> "Organization subscription is pending verification"
+                com.example.viewmodel.LiveSubscriptionCheck.NoSubscription -> "No active organization subscription found"
+                com.example.viewmodel.LiveSubscriptionCheck.NetworkError -> "Real-time cloud authentication required"
+                else -> "Access restricted"
+            }
+            return@withContext Pair(false, "⛔ Access Blocked: $reason")
+        }
+
         val trimmed = qrCodeOrStudentCode.trim()
         val isGateAttendanceQr = trimmed.startsWith("LIBDESK_GATE_ATTENDANCE:") ||
                 trimmed.startsWith("LIBDESK_GATE:") ||
@@ -625,66 +584,93 @@ class LibDeskRepository(val database: AppDatabase) {
 
         val cleanCode = when {
             isGateAttendanceQr -> trimmed
-            trimmed.startsWith("QR-") -> trimmed.removePrefix("QR-")
-            trimmed.startsWith("LIBDESK:SEAT:") -> trimmed.removePrefix("LIBDESK:SEAT:")
-            trimmed.startsWith("SEAT:") -> trimmed.removePrefix("SEAT:")
-            trimmed.contains(":") -> trimmed.substringAfterLast(":")
+            trimmed.startsWith("LIBDESK:SEAT:") -> trimmed.removePrefix("LIBDESK:SEAT:").trim()
+            trimmed.startsWith("SEAT:") -> trimmed.removePrefix("SEAT:").trim()
+            trimmed.startsWith("SEAT-") -> trimmed.removePrefix("SEAT-").trim()
+            trimmed.startsWith("QR-SEAT-") -> trimmed.removePrefix("QR-SEAT-").trim()
+            trimmed.startsWith("QR-") -> trimmed.removePrefix("QR-").trim()
+            trimmed.contains(":") -> trimmed.substringAfterLast(":").trim()
             else -> trimmed
         }
 
-        
-        var student: StudentEntity? = null
-        if (isGateAttendanceQr && !studentIdContext.isNullOrBlank()) {
-            student = studentDao.findStudentById(studentIdContext)
-        }
+        // 2. Resolve Student Context
+        var student: StudentEntity? = if (!studentIdContext.isNullOrBlank()) {
+            studentDao.findStudentById(studentIdContext)
+        } else null
 
-        
-        if (student == null) {
+        if (student == null && !isGateAttendanceQr) {
             student = studentDao.findStudentByMobileOrCode(libraryId, cleanCode)
                 ?: studentDao.findStudentByMobileOrCode(libraryId, trimmed)
         }
 
-        
-        if (student == null && !studentIdContext.isNullOrBlank()) {
-            val candidateStudent = studentDao.findStudentById(studentIdContext)
-            if (candidateStudent != null) {
+        if (student == null && !isGateAttendanceQr) {
+            val seat = seatDao.findSeatByNumberOrId(libraryId, cleanCode)
+            if (seat != null && seat.assignedStudentId.isNotBlank()) {
+                student = studentDao.findStudentById(seat.assignedStudentId)
+                    ?: studentDao.findStudentByMobileOrCode(libraryId, seat.assignedStudentId)
+            }
+        }
+
+        if (student == null) {
+            return@withContext Pair(false, "❌ Invalid QR Code: No member or allocated seat record found for '$qrCodeOrStudentCode'")
+        }
+
+        // 3. Rule-Based Membership Status & Expiry Validation
+        if (!student.status.equals("ACTIVE", ignoreCase = true)) {
+            return@withContext Pair(false, "❌ Account Inactive: Membership status is '${student.status}'. Please contact library desk.")
+        }
+
+        val today = dateFormat.format(Date())
+        if (student.expiryDate.isNotBlank() && student.expiryDate < today) {
+            return@withContext Pair(false, "❌ Membership Expired: Expired on ${student.expiryDate}. Please renew to check in.")
+        }
+
+        // 4. Strict Seat Allocation Rule Check
+        if (!isGateAttendanceQr) {
+            val scannedSeatUpper = cleanCode.uppercase()
+            val allocatedSeatUpper = student.seatNumber.trim().uppercase()
+
+            if (allocatedSeatUpper.isNotBlank()) {
+                if (scannedSeatUpper != allocatedSeatUpper) {
+                    return@withContext Pair(
+                        false,
+                        "❌ Seat Allocation Mismatch: Scanned Seat '$cleanCode' does not match your assigned Seat '${student.seatNumber}'. Please scan your allocated seat sticker."
+                    )
+                }
+            } else {
+                // If student has no assigned seat, verify this seat is not already allocated to someone else
                 val seat = seatDao.findSeatByNumberOrId(libraryId, cleanCode)
-                if (seat != null) {
-                    student = candidateStudent
+                if (seat != null && seat.assignedStudentId.isNotBlank() && seat.assignedStudentId != student.id) {
+                    return@withContext Pair(
+                        false,
+                        "❌ Seat Reserved: Seat '$cleanCode' is allocated to another library member."
+                    )
+                }
+            }
+        } else {
+            // Gate QR branch validation
+            if (trimmed.contains("LIBDESK_GATE_ATTENDANCE:") || trimmed.contains("GATE_ATTENDANCE:")) {
+                val parts = trimmed.split(":")
+                if (parts.size >= 2) {
+                    val gateLibId = parts[1]
+                    if (gateLibId.isNotBlank() && gateLibId != libraryId && student.libraryId != gateLibId) {
+                        return@withContext Pair(false, "❌ Branch Mismatch: This entrance gate belongs to another library facility.")
+                    }
                 }
             }
         }
 
-        
-        if (student == null) {
-            val seat = seatDao.findSeatByNumberOrId(libraryId, cleanCode)
-            if (seat != null && seat.assignedStudentId.isNotBlank()) {
-                student = studentDao.findStudentByMobileOrCode(libraryId, seat.assignedStudentId)
-            }
-        }
-
-        
-        if (student == null && !studentIdContext.isNullOrBlank()) {
-            student = studentDao.findStudentById(studentIdContext)
-        }
-
-        if (student == null) {
-            return@withContext Pair(false, "No member or seat record found for code: $qrCodeOrStudentCode")
-        }
-
-        val today = dateFormat.format(Date())
         val nowTime = timeFormat.format(Date())
-
         val activeCheckIn = attendanceDao.getActiveCheckIn(libraryId, student.id, today)
 
         val modeLabel = if (isGateAttendanceQr) {
             if (!locationNote.isNullOrBlank()) "GATE_QR (GPS Verified)" else "GATE_QR"
         } else {
-            if (!locationNote.isNullOrBlank()) "SEAT_QR (GPS Verified)" else "QR_SCAN"
+            if (!locationNote.isNullOrBlank()) "SEAT_QR (GPS Verified)" else "SEAT_QR"
         }
 
         if (activeCheckIn != null) {
-
+            // Process CHECK-OUT
             val duration = try {
                 val t1 = timeFormat.parse(activeCheckIn.checkInTime)
                 val t2 = timeFormat.parse(nowTime)
@@ -698,48 +684,64 @@ class LibDeskRepository(val database: AppDatabase) {
                 checkOutTime = nowTime,
                 status = "CHECKED_OUT",
                 durationMinutes = duration,
-                notes = if (locationNote != null) "${activeCheckIn.notes} | Out: $locationNote".trimStart(' ', '|') else activeCheckIn.notes
+                notes = if (locationNote != null) "${activeCheckIn.notes} | Out: $locationNote".trimStart(' ', '|') else activeCheckIn.notes,
+                timestamp = System.currentTimeMillis()
             )
-            attendanceDao.updateAttendance(checkOutUpdated)
-            cacheUserBooking(student.id)
-            logAudit(libraryId, "QR Scanner", "QR_CHECK_OUT", "Attendance", checkOutUpdated.id, "Check-out for ${student.fullName} at $nowTime [${modeLabel}]")
-            Pair(true, "✅ Checked OUT: ${student.fullName} at $nowTime.\nSession logged: ${duration / 60}h ${duration % 60}m (${modeLabel})")
-        } else {
 
+            // Real-time Cloud Push: Industrial-grade rule enforcement, fail if cloud rejected
+            val (cloudOk, cloudMsg) = pushAttendanceToSupabase(checkOutUpdated)
+            if (!cloudOk) {
+                return@withContext Pair(false, "❌ Cloud Check-out Failed: Real-time server sync failed ($cloudMsg). Cloud connectivity required.")
+            }
+
+            attendanceDao.updateAttendance(checkOutUpdated)
+            logAudit(libraryId, "QR Scanner", "QR_CHECK_OUT", "Attendance", checkOutUpdated.id, "Check-out for ${student.fullName} at $nowTime [${modeLabel}]")
+            Pair(true, "✅ Checked OUT: ${student.fullName} at $nowTime.\nSession: ${duration / 60}h ${duration % 60}m (${modeLabel}) • Cloud Synced")
+        } else {
+            // Process CHECK-IN
             val newCheckIn = AttendanceEntity(
                 id = UUID.randomUUID().toString(),
                 libraryId = libraryId,
                 studentId = student.id,
                 studentName = student.fullName,
-                seatNumber = student.seatNumber,
-                hallName = student.hallName,
-                shiftName = student.shiftName,
+                seatNumber = if (!isGateAttendanceQr) cleanCode else student.seatNumber.ifEmpty { "General Desk" },
+                hallName = student.hallName.ifEmpty { "Main Study Hall" },
+                shiftName = student.shiftName.ifEmpty { "Full Day Shift" },
                 date = today,
                 checkInTime = nowTime,
                 checkOutTime = "",
                 status = "CHECKED_IN",
                 mode = modeLabel,
-                notes = locationNote ?: "Verified Attendance"
+                notes = locationNote ?: "Verified Seat QR Attendance",
+                timestamp = System.currentTimeMillis()
             )
+
+            // Real-time Cloud Push: Industrial-grade rule enforcement, fail if cloud rejected
+            val (cloudOk, cloudMsg) = pushAttendanceToSupabase(newCheckIn)
+            if (!cloudOk) {
+                return@withContext Pair(false, "❌ Cloud Check-in Failed: Real-time server sync failed ($cloudMsg). Cloud connectivity required.")
+            }
+
             attendanceDao.insertAttendance(newCheckIn)
-            cacheUserBooking(student.id)
             logAudit(libraryId, "QR Scanner", "QR_CHECK_IN", "Attendance", newCheckIn.id, "Check-in for ${student.fullName} at $nowTime [${modeLabel}]")
-            Pair(true, "✅ Checked IN: ${student.fullName} at $nowTime.\nSeat: ${student.seatNumber.ifEmpty { "General Desk" }} (${modeLabel})")
+            Pair(true, "✅ Checked IN: ${student.fullName} at $nowTime.\nSeat: ${newCheckIn.seatNumber} (${modeLabel}) • Cloud Synced")
         }
     }
 
     suspend fun manualAttendance(attendance: AttendanceEntity) = withContext(Dispatchers.IO) {
         attendanceDao.insertAttendance(attendance)
+        pushAttendanceToSupabase(attendance)
         logAudit(attendance.libraryId, "Manager", "MANUAL_ATTENDANCE", "Attendance", attendance.id, "Manual attendance recorded for ${attendance.studentName} on ${attendance.date}")
     }
 
     suspend fun checkoutAttendance(attendanceId: String, checkOutTime: String? = null) = withContext(Dispatchers.IO) {
         val now = checkOutTime ?: timeFormat.format(Date())
-        val records = attendanceDao.getAttendanceByLibrary("").firstOrNull() // fallback query or update
+        val records = attendanceDao.getAttendanceByLibrary("").firstOrNull()
     }
 
     suspend fun updateAttendance(attendance: AttendanceEntity) = withContext(Dispatchers.IO) {
         attendanceDao.updateAttendance(attendance)
+        pushAttendanceToSupabase(attendance)
     }
 
     suspend fun deleteAttendance(attendanceId: String) = withContext(Dispatchers.IO) {

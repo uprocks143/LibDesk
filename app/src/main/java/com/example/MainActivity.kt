@@ -33,6 +33,7 @@ import com.example.ui.components.*
 import com.example.ui.manager.*
 import com.example.ui.onboarding.OnboardingWizardScreen
 import com.example.ui.profile.ProfileScreen
+import com.example.ui.scanner.SeatCheckInScannerModal
 import com.example.ui.student.StudentPortalScreen
 import com.example.ui.superadmin.SuperAdminScreen
 import com.example.ui.superadmin.RestrictedPlatformOwnerGate
@@ -138,7 +139,6 @@ fun LibDeskApp(
     val userMessage by viewModel.userMessage.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
-    val cachedUserBooking by viewModel.cachedUserBooking.collectAsStateWithLifecycle()
     val checkInConfirmation by viewModel.checkInConfirmation.collectAsStateWithLifecycle()
 
     var currentManagerTab by remember { mutableStateOf(0) }
@@ -1011,18 +1011,24 @@ onOpenSyncBackup = { showBackupScreen = true },
         val libLat = if (activeLib != null && activeLib.latitude != 0.0) activeLib.latitude else 28.6139
         val libLng = if (activeLib != null && activeLib.longitude != 0.0) activeLib.longitude else 77.2090
         val libName = activeLib?.name ?: "Your Library"
-        QrScannerModal(
-            title = if (isStudent) "Student Attendance Punch (In / Out)" else "QR Seat & Member Check-in",
-            subtitle = if (isStudent) "Scan Library Gate Poster or Assigned Seat QR" else "Scan student pass or assigned seat QR sticker",
+        val targetStudent = activeStudent ?: students.firstOrNull()
+
+        SeatCheckInScannerModal(
+            allocatedSeatNumber = if (isStudent) (targetStudent?.seatNumber ?: "") else "",
+            allocatedHallName = if (isStudent) (targetStudent?.hallName?.ifBlank { "Main Study Hall" } ?: "Main Study Hall") else "Main Study Hall",
+            allocatedShiftName = if (isStudent) (targetStudent?.shiftName?.ifBlank { "Full Day Shift" } ?: "Full Day Shift") else "Full Day Shift",
+            studentName = if (isStudent) (targetStudent?.fullName ?: "Member") else "Manager / Staff",
             isStudentMode = isStudent,
             libraryLatitude = libLat,
             libraryLongitude = libLng,
             libraryName = libName,
-            onScanCode = { code ->
-                viewModel.scanQrAttendance(code)
-            },
-            onScanWithLocation = { code, locNote ->
-                viewModel.scanQrAttendance(code, locationNote = locNote)
+            onScanCode = { code, locNote, onResult ->
+                viewModel.scanQrAttendance(
+                    code = code,
+                    studentIdContext = if (isStudent) targetStudent?.id else null,
+                    locationNote = locNote,
+                    onResult = onResult
+                )
             },
             onClose = { showQrScannerModal = false }
         )
@@ -1118,7 +1124,6 @@ onOpenSyncBackup = { showBackupScreen = true },
                 plans = plans,
                 halls = halls,
                 bookIssues = bookIssues,
-                cachedUserBooking = cachedUserBooking,
                 isDarkMode = isDarkMode,
                 onToggleDarkMode = { viewModel.toggleDarkMode() },
                 onOpenEditProfile = {

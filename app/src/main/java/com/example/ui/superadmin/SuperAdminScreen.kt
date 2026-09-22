@@ -413,7 +413,7 @@ private fun LibraryDetailDialog(
                         readOnly = true,
                         label = { Text("Plan") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = planMenuExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                     )
                     ExposedDropdownMenu(expanded = planMenuExpanded, onDismissRequest = { planMenuExpanded = false }) {
                         plans.forEach { plan ->
@@ -904,7 +904,7 @@ private fun BroadcastTab(libraries: List<LibraryEntity>, viewModel: LibDeskViewM
                             readOnly = true,
                             label = { Text("Select Target Library") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = libraryDropdownExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth()
                         )
                         ExposedDropdownMenu(
                             expanded = libraryDropdownExpanded,

@@ -60,6 +60,17 @@ data class MembershipExpirationInfo(
 )
 
 /**
+ * Helper to calculate days remaining, expiry date formatting, and color-coded alert attributes from a StudentEntity.
+ */
+fun calculateMembershipExpiration(student: com.example.data.local.entities.StudentEntity): MembershipExpirationInfo {
+    return calculateMembershipExpiration(
+        startDateStr = student.joiningDate,
+        expiryDateStr = student.expiryDate,
+        rawStatus = student.status
+    )
+}
+
+/**
  * Helper to calculate days remaining, expiry date formatting, and color-coded alert attributes.
  */
 fun calculateMembershipExpiration(

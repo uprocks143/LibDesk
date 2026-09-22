@@ -32,11 +32,10 @@ import com.example.data.local.entities.*
         SaaSSubscriptionPlanEntity::class,
         LibrarySubscriptionEntity::class,
         SuperAdminUserEntity::class,
-        UserBookingCacheEntity::class,
         SubscriptionPlans::class,
         UserSubscription::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -63,7 +62,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun saasSubscriptionPlanDao(): SaaSSubscriptionPlanDao
     abstract fun librarySubscriptionDao(): LibrarySubscriptionDao
     abstract fun superAdminUserDao(): SuperAdminUserDao
-    abstract fun userBookingCacheDao(): UserBookingCacheDao
     abstract fun subscriptionPlansDao(): SubscriptionPlansDao
     abstract fun userSubscriptionDao(): UserSubscriptionDao
 

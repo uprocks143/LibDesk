@@ -167,6 +167,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
      * a reconnect prompt) if there's no signed-in Google account at all or
      * the silent refresh itself fails (e.g. revoked access, no internet).
      */
+    @Suppress("DEPRECATION")
     suspend fun getFreshDriveToken(): String {
         val cached = getSavedDriveToken()
         if (cached.isNotBlank()) return cached

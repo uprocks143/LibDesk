@@ -35,7 +35,6 @@ import com.example.data.local.entities.LibraryEntity
 import com.example.data.local.entities.SeatEntity
 import com.example.data.local.entities.ShiftEntity
 import com.example.data.local.entities.StudentEntity
-import com.example.data.local.entities.UserBookingCacheEntity
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -67,7 +66,6 @@ fun DynamicEntranceQrCard(
     library: LibraryEntity?,
     assignedSeat: SeatEntity? = null,
     assignedShift: ShiftEntity? = null,
-    cachedUserBooking: UserBookingCacheEntity? = null,
     onPresentPass: () -> Unit = {},
     onPerformCheckIn: () -> Unit = {},
     onTriggerCheckInAnimation: () -> Unit = {},
@@ -385,7 +383,7 @@ fun DynamicEntranceQrCard(
                     )
                 }
 
-                // Room Database Offline Persistence Pill
+                // Live Cloud Security Pill
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = LibDeskColors.successSoft.copy(alpha = 0.6f),
@@ -420,22 +418,6 @@ fun DynamicEntranceQrCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        }
-
-                        // Demo Lottie Animation chip
-                        Surface(
-                            onClick = onTriggerCheckInAnimation,
-                            shape = RoundedCornerShape(6.dp),
-                            color = LibDeskColors.success,
-                            modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                        ) {
-                            Text(
-                                text = "Preview Animation",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
                         }
                     }
                 }

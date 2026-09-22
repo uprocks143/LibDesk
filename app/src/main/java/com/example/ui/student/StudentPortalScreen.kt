@@ -285,7 +285,8 @@ fun StudentPortalScreen(
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             edgePadding = 12.dp
         ) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("My Pass", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) })
+            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Dashboard", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) })
+            Tab(selected = selectedTab == 6, onClick = { selectedTab = 6 }, text = { Text("Seat Layout", fontWeight = if (selectedTab == 6) FontWeight.Bold else FontWeight.Normal) })
             Tab(selected = selectedTab == 5, onClick = { selectedTab = 5 }, text = { Text("Profile & Seat", fontWeight = if (selectedTab == 5) FontWeight.Bold else FontWeight.Normal) })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("E-Resources", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) })
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("My Books", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) })
@@ -295,307 +296,21 @@ fun StudentPortalScreen(
 
         when (selectedTab) {
             0 -> {
-
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    item {
-
-                        StudentStatusDashboardCards(
-                            student = student,
-                            libraryName = library?.name ?: "Your Library",
-                            studentShift = currentShift,
-                            daysRemaining = daysRemaining,
-                            onGoToFeeTab = { selectedTab = 3 },
-                            onOpenQrScanner = onOpenQrScanner
-                        )
-                    }
-
-                    item {
-
-                        Card(
-                            shape = RoundedCornerShape(24.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(library?.name ?: "LIBDESK LIBRARY", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                                        Text("DIGITAL ATTENDANCE PASS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 0.5.sp)
-                                    }
-                                    StatusBadge(status = student?.status ?: "ACTIVE")
-                                }
-
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                QrCodeView(
-                                    data = student?.rfidQrCode ?: "QR-DEMO",
-                                    size = 140.dp
-                                )
-
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text("Student ID: ${student?.studentCode}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                                Text("Scan at door kiosk or library desk", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceAround
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Assigned Seat", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(student?.seatNumber?.ifEmpty { "None" } ?: "None", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                                    }
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Shift Timings", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(student?.shiftName?.take(14) ?: "Full Day", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                                    }
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("Target Exam", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text(student?.targetExam?.take(12) ?: "UPSC", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                Button(
-                                    onClick = onOpenQrScanner,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    ),
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("student_quick_check_in_button")
-                                ) {
-                                    Icon(Icons.Default.QrCodeScanner, contentDescription = "Quick Check-in QR Scanner", modifier = Modifier.size(20.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Quick Check-in (Scan QR)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                }
-                            }
-                        }
-                    }
-
-                    
-                    if (notices.isNotEmpty()) {
-                        item {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(LibDeskColors.warningSoft),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Campaign,
-                                                contentDescription = null,
-                                                tint = LibDeskColors.warning,
-                                                modifier = Modifier.size(17.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Library Announcements",
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.onBackground
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = if (notices.any { it.priority.equals("URGENT", ignoreCase = true) }) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-                                        ) {
-                                            Text(
-                                                text = "${notices.size} Active",
-                                                fontSize = 9.5.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = if (notices.any { it.priority.equals("URGENT", ignoreCase = true) }) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    TextButton(
-                                        onClick = { selectedTab = 4 },
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text("View All", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                val sortedNotices = remember(notices) {
-                                    notices.sortedWith(
-                                        compareByDescending<NoticeEntity> { it.priority.equals("URGENT", ignoreCase = true) }
-                                            .thenByDescending { it.priority.equals("HIGH", ignoreCase = true) }
-                                    )
-                                }
-
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    sortedNotices.take(2).forEach { notice ->
-                                        val isUrgent = notice.priority.equals("URGENT", ignoreCase = true)
-                                        val isHigh = notice.priority.equals("HIGH", ignoreCase = true)
-                                        Card(
-                                            shape = RoundedCornerShape(16.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = when {
-                                                    isUrgent -> MaterialTheme.colorScheme.errorContainer
-                                                    isHigh -> LibDeskColors.warningSoft
-                                                    else -> MaterialTheme.colorScheme.surface
-                                                }
-                                            ),
-                                            border = BorderStroke(
-                                                1.dp,
-                                                when {
-                                                    isUrgent -> MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
-                                                    isHigh -> LibDeskColors.warning.copy(alpha = 0.4f)
-                                                    else -> MaterialTheme.colorScheme.outlineVariant
-                                                }
-                                            ),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .clickable { selectedNoticeForDetail = notice }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(38.dp)
-                                                        .clip(RoundedCornerShape(12.dp))
-                                                        .background(
-                                                            when {
-                                                                isUrgent -> MaterialTheme.colorScheme.errorContainer
-                                                                isHigh -> LibDeskColors.warningSoft
-                                                                else -> MaterialTheme.colorScheme.primaryContainer
-                                                            }
-                                                        ),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (isUrgent) Icons.Default.Warning else Icons.Default.Campaign,
-                                                        contentDescription = null,
-                                                        tint = when {
-                                                            isUrgent -> MaterialTheme.colorScheme.error
-                                                            isHigh -> LibDeskColors.warning
-                                                            else -> MaterialTheme.colorScheme.onPrimaryContainer
-                                                        },
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(10.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = notice.title,
-                                                            fontWeight = FontWeight.Bold,
-                                                            fontSize = 16.sp,
-                                                            color = MaterialTheme.colorScheme.onSurface,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis,
-                                                            modifier = Modifier.weight(1f, fill = false)
-                                                        )
-                                                        if (isUrgent || isHigh) {
-                                                            Surface(
-                                                                shape = RoundedCornerShape(4.dp),
-                                                                color = if (isUrgent) MaterialTheme.colorScheme.error else LibDeskColors.warning
-                                                            ) {
-                                                                Text(
-                                                                    text = notice.priority.uppercase(),
-                                                                    fontSize = 8.5.sp,
-                                                                    fontWeight = FontWeight.ExtraBold,
-                                                                    color = Color.White,
-                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    Text(
-                                                        text = notice.content,
-                                                        fontSize = 14.sp,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Icon(
-                                                    imageVector = Icons.Default.ChevronRight,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-
-                        Text("My Recent Check-ins:", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        if (studentAttendance.isEmpty()) {
-                            Text("No check-in entries logged yet this week.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            studentAttendance.take(4).forEach { att ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("Date: ${att.date}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                    Text("In: ${att.checkInTime} • Out: ${att.checkOutTime.ifEmpty { "Active" }}", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                        }
-                    }
-                }
+                StudentMemberDashboard(
+                    student = student,
+                    library = library,
+                    attendanceList = attendanceList,
+                    seats = seats,
+                    shifts = shifts,
+                    plans = plans,
+                    halls = halls,
+                    onOpenQrScanner = onOpenQrScanner,
+                    onViewIdCard = onViewIdCard,
+                    onGoToFeeTab = { selectedTab = 3 },
+                    onGoToProfileTab = { selectedTab = 5 },
+                    onGoToSeatLayout = { selectedTab = 6 },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
             1 -> {
 
@@ -1274,10 +989,30 @@ fun StudentPortalScreen(
                     bookIssues = bookIssues,
                     daysRemaining = daysRemaining,
                     onOpenEditProfile = onOpenProfile,
-                    onViewIdCard = { if (student != null) onViewIdCard(student) },
+                    onViewIdCard = { onViewIdCard(student) },
                     onGoToFeeTab = { selectedTab = 3 },
                     onOpenQrScanner = onOpenQrScanner,
-                    onRequestLogout = onRequestLogout
+                    onRequestLogout = onRequestLogout,
+                    onGoToSeatLayout = { selectedTab = 6 }
+                )
+            }
+            6 -> {
+                StudentSeatLayoutView(
+                    student = student,
+                    seats = seats,
+                    halls = halls,
+                    library = library,
+                    shifts = shifts,
+                    onOpenQrScanner = onOpenQrScanner,
+                    onViewIdCard = { if (student != null) onViewIdCard(student) },
+                    onRequestSeatChange = { seat, msg ->
+                        onSubmitComplaint(
+                            "Seat Request: Desk #${seat.seatNumber}",
+                            "Seat change/assignment request for Desk #${seat.seatNumber} (${seat.hallName}, ${seat.seatType}): $msg",
+                            "SEAT"
+                        )
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

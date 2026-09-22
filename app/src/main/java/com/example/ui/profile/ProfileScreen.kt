@@ -59,7 +59,6 @@ fun ProfileScreen(
     plans: List<MembershipPlanEntity> = emptyList(),
     halls: List<HallEntity> = emptyList(),
     bookIssues: List<BookIssueEntity> = emptyList(),
-    cachedUserBooking: UserBookingCacheEntity? = null,
     isDarkMode: Boolean = false,
     onToggleDarkMode: (() -> Unit)? = null,
     onOpenEditProfile: () -> Unit = {},
@@ -311,7 +310,6 @@ fun ProfileScreen(
                         assignedSeat = assignedSeat,
                         assignedShift = assignedShift,
                         assignedHall = assignedHall,
-                        cachedUserBooking = cachedUserBooking,
                         onPerformCheckIn = onPerformCheckIn,
                         onTriggerCheckInAnimation = onTriggerCheckInAnimation,
                         onOpenQrScanner = onOpenQrScanner
@@ -341,7 +339,6 @@ fun ProfileScreen(
                         library = library,
                         assignedSeat = assignedSeat,
                         assignedShift = assignedShift,
-                        cachedUserBooking = cachedUserBooking,
                         onPresentPass = { showExpandedGatePassModal = true },
                         onPerformCheckIn = onPerformCheckIn,
                         onTriggerCheckInAnimation = onTriggerCheckInAnimation,
@@ -845,7 +842,6 @@ private fun ActiveSeatBookingCard(
     assignedSeat: SeatEntity?,
     assignedShift: ShiftEntity?,
     assignedHall: HallEntity?,
-    cachedUserBooking: UserBookingCacheEntity? = null,
     onPerformCheckIn: () -> Unit = {},
     onTriggerCheckInAnimation: () -> Unit = {},
     onOpenQrScanner: () -> Unit

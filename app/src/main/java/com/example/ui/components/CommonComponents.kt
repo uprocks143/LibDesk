@@ -180,13 +180,13 @@ fun LibDeskHeader(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(CircleShape)
-                                .background(if (isOnline) (if (isDark) LibDeskColors.warning else MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                .background(if (isOnline) LibDeskColors.success else MaterialTheme.colorScheme.error)
                         )
                         Text(
-                            text = if (isOnline) "SYNC" else "OFFLINE",
+                            text = if (isOnline) "CLOUD LIVE" else "DISCONNECTED",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.ExtraBold,
-                                color = syncText,
+                                color = if (isOnline) LibDeskColors.success else MaterialTheme.colorScheme.error,
                                 fontSize = 10.sp
                             )
                         )

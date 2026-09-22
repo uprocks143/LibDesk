@@ -37,6 +37,7 @@ sealed class LiveSubscriptionCheck {
     object NetworkError : LiveSubscriptionCheck()
 }
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class LibDeskViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getInstance(application)
     val repository = LibDeskRepository(database)
@@ -145,10 +146,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     val activeStudent: StateFlow<StudentEntity?> = _activeStudentId
         .flatMapLatest { stId -> repository.getStudentById(stId) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val cachedUserBooking: StateFlow<UserBookingCacheEntity?> = _activeStudentId
-        .flatMapLatest { stId -> repository.getCachedUserBooking(stId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _checkInConfirmation = MutableStateFlow<SeatCheckInDetails?>(null)
@@ -1374,9 +1371,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 notes = "Direct Seat Punch via App"
             )
             repository.manualAttendance(att)
-            if (student != null) {
-                repository.cacheUserBooking(student.id)
-            }
             _checkInConfirmation.value = SeatCheckInDetails(
                 studentName = studentName,
                 studentCode = student?.studentCode ?: "STU-001",
@@ -1390,17 +1384,22 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun scanQrAttendance(code: String, studentIdContext: String? = null, locationNote: String? = null) {
+    fun scanQrAttendance(
+        code: String,
+        studentIdContext: String? = null,
+        locationNote: String? = null,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
         viewModelScope.launch {
             val effectiveStudentId = studentIdContext ?: _activeStudentId.value
             val (success, message) = repository.processQrAttendance(_currentLibraryId.value, code, effectiveStudentId, locationNote)
             _userMessage.value = message
+            onResult?.invoke(success, message)
             if (success) {
-                // SnackbarController.showSuccess(message)
                 if (message.contains("Checked IN", ignoreCase = true)) {
                     val student = repository.getStudentById(effectiveStudentId).firstOrNull()
                         ?: students.value.find { it.id == effectiveStudentId }
-                    val seatNumber = student?.seatNumber?.ifBlank { "A-14" } ?: "A-14"
+                    val seatNumber = student?.seatNumber?.ifBlank { "General Desk" } ?: "General Desk"
                     _checkInConfirmation.value = SeatCheckInDetails(
                         studentName = student?.fullName ?: "Library Scholar",
                         studentCode = student?.studentCode ?: effectiveStudentId,
@@ -1408,7 +1407,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                         hallName = student?.hallName?.ifBlank { "Main Study Hall" } ?: "Main Study Hall",
                         shiftName = student?.shiftName?.ifBlank { "Full Day Shift" } ?: "Full Day Shift",
                         checkInTime = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date()),
-                        mode = if (code.startsWith("GATE") || code.startsWith("LIBDESK_GATE")) "Turnstile Gate Scan" else "Desk Seat QR Verified"
+                        mode = if (code.startsWith("GATE") || code.startsWith("LIBDESK_GATE")) "Turnstile Gate Scan" else "Allocated Seat QR Verified"
                     )
                 }
             } else {
@@ -2220,24 +2219,19 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 repository.saveLibrarySubscription(updated)
                 pushSubscriptionToSupabase(updated)
             } else {
-                val cal = Calendar.getInstance()
-                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                val startDate = sdf.format(cal.time)
-                cal.add(Calendar.MONTH, 1)
-                val expiryDate = sdf.format(cal.time)
-                val fallbackSub = LibrarySubscriptionEntity(
-                    id = "SUB-$libraryId",
-                    libraryId = libraryId,
-                    libraryName = libraryName,
-                    planId = "PLAN-STARTER",
-                    planName = "Starter Launch (1 Mo)",
-                    status = newStatus,
-                    startDate = startDate,
-                    expiryDate = expiryDate,
-                    price = 699.0
-                )
-                repository.saveLibrarySubscription(fallbackSub)
-                pushSubscriptionToSupabase(fallbackSub)
+                // If not cached locally, attempt to update remote subscription directly in Supabase
+                try {
+                    val (success, records) = com.example.data.remote.SupabaseClient.fetchRecords("library_subscriptions", libraryId)
+                    if (success && records != null && records.length() > 0) {
+                        val subObj = records.getJSONObject(0)
+                        subObj.put("status", newStatus)
+                        subObj.put("subscription_active", !isSuspended)
+                        subObj.put("updatedAt", System.currentTimeMillis())
+                        com.example.data.remote.SupabaseClient.upsertRecords("library_subscriptions", org.json.JSONArray().put(subObj))
+                    }
+                } catch (e: Exception) {
+                    // Best-effort remote update
+                }
             }
 
             // Sync 'subscription_active' flag directly to Supabase libraries organization table

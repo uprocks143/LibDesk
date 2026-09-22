@@ -53,6 +53,7 @@ fun StudentProfileSection(
     onOpenQrScanner: () -> Unit = {},
     onRequestLogout: () -> Unit = {},
     onChangeStudent: () -> Unit = {},
+    onGoToSeatLayout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -501,6 +502,19 @@ fun StudentProfileSection(
                         Icon(imageVector = Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Scan Gate / Seat Attendance QR", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onGoToSeatLayout,
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("profile_view_seat_layout_btn")
+                    ) {
+                        Icon(imageVector = Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Explore Branch Floor Map & Seat Matrix", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
