@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.example.BuildConfig
 import com.example.data.remote.SessionManager
+import com.example.data.remote.SupabaseClient
 import com.example.data.remote.UserRole
 import com.example.data.remote.UserSession
 import kotlinx.coroutines.CoroutineScope
@@ -68,8 +69,8 @@ object EmailOtpService {
             var message = ""
 
             try {
-                val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
-                val supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
+                val supabaseUrl = SupabaseClient.getEffectiveUrl()
+                val supabaseAnonKey = SupabaseClient.getEffectiveApiKey()
 
                 val targetEndpoint = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> "$supabaseUrl/auth/v1/recover"
@@ -78,7 +79,7 @@ object EmailOtpService {
 
                 val payload = JSONObject().apply {
                     put("email", cleanEmail)
-                    if (purpose == OtpPurpose.SIGNUP_VERIFICATION) {
+                    if (purpose == OtpPurpose.SIGNUP_VERIFICATION || purpose == OtpPurpose.SUPER_ADMIN_2FA) {
                         put("create_user", true)
                     }
                 }
@@ -146,8 +147,8 @@ object EmailOtpService {
             var errorMessage: String? = null
 
             try {
-                val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
-                val supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
+                val supabaseUrl = SupabaseClient.getEffectiveUrl()
+                val supabaseAnonKey = SupabaseClient.getEffectiveApiKey()
 
                 val typesToTest = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> listOf("recovery", "email")
@@ -237,8 +238,8 @@ object EmailOtpService {
 
         return try {
             kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-                val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
-                val supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
+                val supabaseUrl = SupabaseClient.getEffectiveUrl()
+                val supabaseAnonKey = SupabaseClient.getEffectiveApiKey()
 
                 val typesToTest = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> listOf("recovery", "email")

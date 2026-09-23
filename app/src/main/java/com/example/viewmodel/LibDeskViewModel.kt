@@ -480,8 +480,22 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             )
             
             if (signUpResult.isFailure) {
-                onError(signUpResult.exceptionOrNull()?.message ?: "Registration failed")
-                return@launch
+                val errMsg = signUpResult.exceptionOrNull()?.message ?: ""
+                val isAlreadyRegistered = errMsg.contains("already registered", ignoreCase = true) ||
+                        errMsg.contains("already exists", ignoreCase = true) ||
+                        errMsg.contains("user_already_exists", ignoreCase = true)
+
+                if (!isAlreadyRegistered) {
+                    val userFriendlyError = if (errMsg.contains("weak_password", ignoreCase = true) ||
+                        errMsg.contains("Password should contain", ignoreCase = true)
+                    ) {
+                        "Supabase requires a password with uppercase, lowercase, number, and symbol (e.g. Admin@2026)."
+                    } else {
+                        errMsg.ifBlank { "Registration failed. Please check internet connection." }
+                    }
+                    onError(userFriendlyError)
+                    return@launch
+                }
             }
 
             val newAdmin = SuperAdminUserEntity(

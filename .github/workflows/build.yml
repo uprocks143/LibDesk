@@ -42,11 +42,19 @@ jobs:
 
     - name: Setup environment files
       run: |
-        touch .env.example
         if [ -f .env.example ]; then
           cp .env.example .env
         fi
-        touch .env
+        if [ -n "${{ secrets.SUPABASE_URL }}" ]; then
+          echo "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" > .env
+        fi
+        if [ -n "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+          echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
+        fi
+        if ! grep -q "SUPABASE_URL=" .env 2>/dev/null || grep -q "your-project.supabase.co" .env 2>/dev/null; then
+          echo "SUPABASE_URL=https://rfhqbdwctqulvwwjcsgt.supabase.co" > .env
+          echo "SUPABASE_ANON_KEY=sb_publishable_ZOtDEvWWBgdFJfaqe8fKfQ_-YMshS6S" >> .env
+        fi
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew

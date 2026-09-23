@@ -31,8 +31,8 @@ object SupabaseAuthService {
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    private fun getBaseUrl(): String = BuildConfig.SUPABASE_URL.trimEnd('/')
-    private fun getAnonKey(): String = BuildConfig.SUPABASE_ANON_KEY
+    fun getBaseUrl(): String = SupabaseClient.getEffectiveUrl()
+    fun getAnonKey(): String = SupabaseClient.getEffectiveApiKey()
 
     /**
      * Exchanges the stored refresh_token for a new access_token.

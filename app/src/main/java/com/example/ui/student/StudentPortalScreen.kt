@@ -111,23 +111,19 @@ fun StudentPortalScreen(
     }
 
     val studentAttendance = remember(attendanceList, student) {
-        if (student == null) emptyList()
-        else attendanceList.filter { it.studentId == student.id || it.studentName == student.fullName }
+        attendanceList.filter { it.studentId == student.id || it.studentName == student.fullName }
     }
 
     val studentPayments = remember(payments, student) {
-        if (student == null) emptyList()
-        else payments.filter { it.studentId == student.id || it.studentName == student.fullName }
+        payments.filter { it.studentId == student.id || it.studentName == student.fullName }
     }
 
     val studentComplaints = remember(complaints, student) {
-        if (student == null) emptyList()
-        else complaints.filter { it.studentId == student.id }
+        complaints.filter { it.studentId == student.id }
     }
 
     val studentBookIssues = remember(bookIssues, student) {
-        if (student == null) emptyList()
-        else bookIssues.filter { it.studentId == student.id || it.studentName.equals(student.fullName, ignoreCase = true) }
+        bookIssues.filter { it.studentId == student.id || it.studentName.equals(student.fullName, ignoreCase = true) }
     }
 
     val filteredBooks = remember(books, bookCatalogQuery) {
@@ -140,32 +136,29 @@ fun StudentPortalScreen(
         }
     }
 
-    val daysRemaining = remember(student?.studentCode, student?.expiryDate, student?.status) {
-        if (student == null) 30
-        else calculateMembershipExpiration(student.joiningDate, student.expiryDate, student.status).daysRemaining
+    val daysRemaining = remember(student.studentCode, student.expiryDate, student.status) {
+        calculateMembershipExpiration(student.joiningDate, student.expiryDate, student.status).daysRemaining
     }
 
     val currentShift = remember(shifts, student) {
-        shifts.find { it.name.equals(student?.shiftName, ignoreCase = true) }
+        shifts.find { it.name.equals(student.shiftName, ignoreCase = true) }
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
-    LaunchedEffect(student?.id) {
+    LaunchedEffect(student.id) {
         StudentNotificationHelper.initChannels(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (student != null) {
-            StudentNotificationHelper.scheduleSeatShiftReminderAlarm(context, student, currentShift)
-            StudentNotificationHelper.sendMembershipExpiryReminder(
-                context = context,
-                student = student,
-                libraryName = library?.name ?: "Your Library"
-            )
-        }
+        StudentNotificationHelper.scheduleSeatShiftReminderAlarm(context, student, currentShift)
+        StudentNotificationHelper.sendMembershipExpiryReminder(
+            context = context,
+            student = student,
+            libraryName = library?.name ?: "Your Library"
+        )
     }
 
     val shouldInterceptStudentBack = selectedNoticeForDetail != null ||
@@ -243,11 +236,10 @@ fun StudentPortalScreen(
                     }
                 }
 
-                if (student != null) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                         IconButton(
                             onClick = onOpenProfile,
                             modifier = Modifier
@@ -276,7 +268,6 @@ fun StudentPortalScreen(
                     }
                 }
             }
-        }
 
         
         ScrollableTabRow(
@@ -1004,7 +995,7 @@ fun StudentPortalScreen(
                     library = library,
                     shifts = shifts,
                     onOpenQrScanner = onOpenQrScanner,
-                    onViewIdCard = { if (student != null) onViewIdCard(student) },
+                    onViewIdCard = { onViewIdCard(student) },
                     onRequestSeatChange = { seat, msg ->
                         onSubmitComplaint(
                             "Seat Request: Desk #${seat.seatNumber}",

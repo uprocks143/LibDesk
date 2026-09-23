@@ -184,8 +184,8 @@ object SessionManager {
         if (!token.isNullOrBlank()) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
-                    val anonKey = BuildConfig.SUPABASE_ANON_KEY
+                    val supabaseUrl = SupabaseClient.getEffectiveUrl()
+                    val anonKey = SupabaseClient.getEffectiveApiKey()
                     val request = Request.Builder()
                         .url("$supabaseUrl/auth/v1/logout")
                         .post("{}".toRequestBody(JSON_MEDIA_TYPE))
@@ -209,8 +209,8 @@ object SessionManager {
                     return@withContext Result.failure(IllegalStateException("No active access token"))
                 }
 
-                val supabaseUrl = BuildConfig.SUPABASE_URL.trimEnd('/')
-                val anonKey = BuildConfig.SUPABASE_ANON_KEY
+                val supabaseUrl = SupabaseClient.getEffectiveUrl()
+                val anonKey = SupabaseClient.getEffectiveApiKey()
 
                 val request = Request.Builder()
                     .url("$supabaseUrl/auth/v1/user")

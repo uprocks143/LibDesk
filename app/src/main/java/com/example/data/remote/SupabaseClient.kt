@@ -23,6 +23,43 @@ object SupabaseClient {
     const val DEFAULT_PROJECT_URL = "https://rfhqbdwctqulvwwjcsgt.supabase.co"
     const val DEFAULT_PUBLISHABLE_KEY = "sb_publishable_ZOtDEvWWBgdFJfaqe8fKfQ_-YMshS6S"
 
+    fun isValidUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val trimmed = url.trim().lowercase()
+        return !trimmed.contains("your-project") &&
+                !trimmed.contains("example.com") &&
+                !trimmed.contains("placeholder") &&
+                (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
+    }
+
+    fun isValidKey(key: String?): Boolean {
+        if (key.isNullOrBlank()) return false
+        val trimmed = key.trim().lowercase()
+        return !trimmed.contains("your-anon-key") &&
+                !trimmed.contains("placeholder") &&
+                trimmed.length > 10
+    }
+
+    fun getEffectiveUrl(): String {
+        val configured = projectUrl
+        if (isValidUrl(configured)) return configured.trimEnd('/')
+
+        val buildUrl = try { BuildConfig.SUPABASE_URL } catch (_: Throwable) { "" }
+        if (isValidUrl(buildUrl)) return buildUrl.trimEnd('/')
+
+        return DEFAULT_PROJECT_URL
+    }
+
+    fun getEffectiveApiKey(): String {
+        val configured = apiKey
+        if (isValidKey(configured)) return configured
+
+        val buildKey = try { BuildConfig.SUPABASE_ANON_KEY } catch (_: Throwable) { "" }
+        if (isValidKey(buildKey)) return buildKey
+
+        return DEFAULT_PUBLISHABLE_KEY
+    }
+
     var projectUrl: String = DEFAULT_PROJECT_URL
         private set
 
@@ -50,22 +87,29 @@ object SupabaseClient {
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
     init {
-
         try {
             val urlField = BuildConfig::class.java.getDeclaredField("SUPABASE_URL")
             val urlVal = urlField.get(null) as? String
-            if (!urlVal.isNullOrBlank()) {
-                projectUrl = urlVal
+            if (isValidUrl(urlVal)) {
+                projectUrl = urlVal!!.trim().removeSuffix("/")
+            } else {
+                projectUrl = DEFAULT_PROJECT_URL
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            projectUrl = DEFAULT_PROJECT_URL
+        }
 
         try {
             val keyField = BuildConfig::class.java.getDeclaredField("SUPABASE_ANON_KEY")
             val keyVal = keyField.get(null) as? String
-            if (!keyVal.isNullOrBlank()) {
-                apiKey = keyVal
+            if (isValidKey(keyVal)) {
+                apiKey = keyVal!!.trim()
+            } else {
+                apiKey = DEFAULT_PUBLISHABLE_KEY
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            apiKey = DEFAULT_PUBLISHABLE_KEY
+        }
     }
 
     fun updateConfig(url: String, key: String) {
