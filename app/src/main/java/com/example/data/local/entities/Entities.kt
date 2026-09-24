@@ -1,11 +1,8 @@
 package com.example.data.local.entities
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
 
-@Entity(tableName = "libraries")
 data class LibraryEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val name: String,
     val code: String, 
     val logoUrl: String = "",
@@ -43,9 +40,8 @@ data class LibraryEntity(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "users")
 data class UserAccountEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val email: String,
     val password: String = "password123",
     val role: String, 
@@ -58,9 +54,8 @@ data class UserAccountEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "halls")
 data class HallEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val name: String,
     val type: String, 
@@ -73,9 +68,8 @@ data class HallEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "cabins")
 data class CabinEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val cabinNumber: String,
     val name: String,
@@ -88,9 +82,8 @@ data class CabinEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "sections")
 data class SectionEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val name: String, 
     val description: String = "",
@@ -100,9 +93,8 @@ data class SectionEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "shifts")
 data class ShiftEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val name: String, 
     val startTime: String,
@@ -112,9 +104,8 @@ data class ShiftEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "membership_plans")
 data class MembershipPlanEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val name: String, 
     val durationMonths: Int = 1,
@@ -131,9 +122,8 @@ data class MembershipPlanEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "seats")
 data class SeatEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val seatNumber: String, 
     val hallId: String = "",
@@ -156,9 +146,8 @@ data class SeatEntity(
     val floorZone: String = "General Study Zone"
 )
 
-@Entity(tableName = "students")
 data class StudentEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val studentCode: String, 
     val fullName: String,
@@ -195,9 +184,8 @@ data class StudentEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "seat_assignments")
 data class SeatAssignmentEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val seatId: String,
     val seatNumber: String,
@@ -213,9 +201,8 @@ data class SeatAssignmentEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "attendance")
 data class AttendanceEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val studentId: String,
     val studentName: String,
@@ -232,9 +219,8 @@ data class AttendanceEntity(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "physical_books")
 data class PhysicalBookEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val title: String,
     val author: String,
@@ -252,9 +238,8 @@ data class PhysicalBookEntity(
     val coverUrl: String = ""
 )
 
-@Entity(tableName = "book_issues")
 data class BookIssueEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val bookId: String,
     val bookTitle: String,
@@ -270,9 +255,8 @@ data class BookIssueEntity(
     val notes: String = ""
 )
 
-@Entity(tableName = "digital_materials")
 data class DigitalMaterialEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val title: String,
     val description: String = "",
@@ -289,9 +273,8 @@ data class DigitalMaterialEntity(
     val isBookmarked: Boolean = false
 )
 
-@Entity(tableName = "payments")
 data class PaymentEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val receiptNumber: String,
     val studentId: String,
@@ -308,9 +291,8 @@ data class PaymentEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "expenses")
 data class ExpenseEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val category: String, 
     val amount: Double,
@@ -321,9 +303,8 @@ data class ExpenseEntity(
     val receiptRef: String = ""
 )
 
-@Entity(tableName = "fines")
 data class FineEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val studentId: String,
     val studentName: String,
@@ -335,9 +316,8 @@ data class FineEntity(
     val date: String = ""
 )
 
-@Entity(tableName = "notices")
 data class NoticeEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val title: String,
     val content: String,
@@ -349,9 +329,8 @@ data class NoticeEntity(
     val isActive: Boolean = true
 )
 
-@Entity(tableName = "feedback_complaints")
 data class FeedbackComplaintEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val studentId: String,
     val studentName: String,
@@ -365,9 +344,8 @@ data class FeedbackComplaintEntity(
     val resolvedDate: String = ""
 )
 
-@Entity(tableName = "audit_logs")
 data class AuditLogEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val performedBy: String,
     val action: String,
@@ -377,9 +355,8 @@ data class AuditLogEntity(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "saas_plans")
 data class SaaSSubscriptionPlanEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val name: String,
     val durationMonths: Int, 
     val price: Double,
@@ -389,9 +366,8 @@ data class SaaSSubscriptionPlanEntity(
     val badge: String = "" 
 )
 
-@Entity(tableName = "library_subscriptions")
 data class LibrarySubscriptionEntity(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val libraryName: String,
     val planId: String,
@@ -409,9 +385,8 @@ data class LibrarySubscriptionEntity(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "super_admin_users")
 data class SuperAdminUserEntity(
-    @PrimaryKey val id: String = "SUPER-ADMIN-MASTER",
+    val id: String = "SUPER-ADMIN-MASTER",
     val email: String = "",
     val name: String = "",
     val mobile: String = "",

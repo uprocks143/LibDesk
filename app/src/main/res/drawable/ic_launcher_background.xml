@@ -13,16 +13,10 @@
                 android:endX="108"
                 android:endY="108"
                 android:type="linear">
-                <item android:offset="0.0" android:color="#0F172A" />
-                <item android:offset="0.5" android:color="#1E1B4B" />
-                <item android:offset="1.0" android:color="#312E81" />
+                <item android:offset="0.0" android:color="#073DC4" />
+                <item android:offset="0.5" android:color="#042787" />
+                <item android:offset="1.0" android:color="#00114F" />
             </gradient>
         </aapt:attr>
     </path>
-    <!-- Subtle architectural desk grid accent -->
-    <path
-        android:pathData="M18,34 L90,34 M18,54 L90,54 M18,74 L90,74 M36,18 L36,90 M54,18 L54,90 M72,18 L72,90"
-        android:strokeColor="#18FFFFFF"
-        android:strokeWidth="1" />
 </vector>
-

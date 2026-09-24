@@ -1,7 +1,6 @@
 package com.example.data.backup
 
 import android.content.Context
-import com.example.data.local.database.AppDatabase
 import com.example.ui.backup.BackupState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,10 +10,9 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 
 class BackupManager(
-    private val context: Context,
-    private val database: AppDatabase
+    private val context: Context
 ) {
-    private val backupCreator = BackupCreator(context, database)
+    private val backupCreator = BackupCreator(context)
     val backupState = MutableStateFlow<BackupState>(BackupState.Idle)
 
     suspend fun createEncryptedBackup(

@@ -1,7 +1,6 @@
 package com.example.data.backup
 
 import android.content.Context
-import com.example.data.local.database.AppDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -10,8 +9,7 @@ import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 
 class BackupRestorer(
-    private val context: Context,
-    private val currentDb: AppDatabase
+    private val context: Context
 ) {
     suspend fun restoreEncryptedBackup(
         encryptedFile: File,
@@ -43,7 +41,6 @@ class BackupRestorer(
 
             val dbFile = File(restoreDir, "database.sqlite")
             if (dbFile.exists()) {
-                currentDb.close()
                 val currentDbFile = context.getDatabasePath("libdesk_v4.db")
                 if (currentDbFile.exists()) {
                     currentDbFile.delete()

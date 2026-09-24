@@ -3,7 +3,9 @@ package com.example.notification
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.example.data.local.database.AppDatabase
+import com.example.data.local.entities.StudentEntity
+import com.example.data.local.entities.ShiftEntity
+import com.example.data.remote.SupabaseClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,61 +28,55 @@ class StudentReminderAlarmReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val db = AppDatabase.getInstance(context)
-
                 when (action) {
                     Intent.ACTION_BOOT_COMPLETED,
                     Intent.ACTION_MY_PACKAGE_REPLACED,
                     "android.intent.action.QUICKBOOT_POWERON" -> {
                         // Re-schedule alarms after device reboot
-                        val students = db.studentDao().getAllStudentsDirect()
-                        students.take(5).forEach { st ->
-                            val shift = db.shiftDao().getShiftsDirect(st.libraryId)
-                                .find { it.name.equals(st.shiftName, ignoreCase = true) }
-                            StudentNotificationHelper.scheduleSeatShiftReminderAlarm(context, st, shift)
-                        }
                     }
 
                     ACTION_STUDENT_SHIFT_REMINDER -> {
-                        if (StudentNotificationHelper.isSeatReminderEnabled(context)) {
-                            val student = if (!studentId.isNullOrBlank()) {
-                                db.studentDao().findStudentById(studentId)
-                            } else {
-                                db.studentDao().getAllStudentsDirect().firstOrNull()
-                            }
-
-                            if (student != null) {
-                                val library = db.libraryDao().getLibraryByIdDirect(student.libraryId)
-                                val libraryName = library?.name ?: "Your Library"
-                                val shift = db.shiftDao().getShiftsDirect(student.libraryId)
-                                    .find { it.name.equals(student.shiftName, ignoreCase = true) }
-
+                        if (StudentNotificationHelper.isSeatReminderEnabled(context) && !studentId.isNullOrBlank()) {
+                            val (_, sArray) = SupabaseClient.queryTable("students?id=eq.$studentId&select=*")
+                            val sObj = sArray?.optJSONObject(0)
+                            if (sObj != null) {
+                                val student = StudentEntity(
+                                    id = sObj.optString("id", studentId),
+                                    libraryId = sObj.optString("libraryId", ""),
+                                    fullName = sObj.optString("fullName", "Student"),
+                                    studentCode = sObj.optString("studentCode", ""),
+                                    mobile = sObj.optString("mobile", ""),
+                                    seatNumber = sObj.optString("seatNumber", ""),
+                                    shiftName = sObj.optString("shiftName", "")
+                                )
                                 StudentNotificationHelper.sendSeatReservationStartReminder(
                                     context = context,
                                     student = student,
-                                    shift = shift,
-                                    libraryName = libraryName,
+                                    shift = null,
+                                    libraryName = "Your Library",
                                     force = false
                                 )
-
-                                // Reschedule for next day
-                                StudentNotificationHelper.scheduleSeatShiftReminderAlarm(context, student, shift)
                             }
                         }
                     }
 
                     ACTION_STUDENT_EXPIRY_CHECK -> {
-                        if (StudentNotificationHelper.isExpiryReminderEnabled(context)) {
-                            val student = if (!studentId.isNullOrBlank()) {
-                                db.studentDao().findStudentById(studentId)
-                            } else null
-
-                            if (student != null) {
-                                val library = db.libraryDao().getLibraryByIdDirect(student.libraryId)
+                        if (StudentNotificationHelper.isExpiryReminderEnabled(context) && !studentId.isNullOrBlank()) {
+                            val (_, sArray) = SupabaseClient.queryTable("students?id=eq.$studentId&select=*")
+                            val sObj = sArray?.optJSONObject(0)
+                            if (sObj != null) {
+                                val student = StudentEntity(
+                                    id = sObj.optString("id", studentId),
+                                    libraryId = sObj.optString("libraryId", ""),
+                                    fullName = sObj.optString("fullName", "Student"),
+                                    studentCode = sObj.optString("studentCode", ""),
+                                    mobile = sObj.optString("mobile", ""),
+                                    expiryDate = sObj.optString("expiryDate", "")
+                                )
                                 StudentNotificationHelper.sendMembershipExpiryReminder(
                                     context = context,
                                     student = student,
-                                    libraryName = library?.name ?: "Your Library",
+                                    libraryName = "Your Library",
                                     force = false
                                 )
                             }

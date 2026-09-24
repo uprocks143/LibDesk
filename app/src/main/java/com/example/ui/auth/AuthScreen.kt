@@ -58,6 +58,7 @@ fun AuthScreen(
     onLogin: (email: String, role: String, name: String) -> Unit,
     onAuthenticate: (identifier: String, password: String, role: String, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _, _ -> },
     onRegister: (name: String, email: String, libraryName: String, phone: String, password: String) -> Unit,
+    onCheckLibraryTrialEligibility: ((email: String, phone: String, onResult: (Boolean, String?) -> Unit) -> Unit)? = null,
     onStudentQrSignup: (libraryId: String, name: String, mobile: String, email: String, exam: String, shift: ShiftEntity?, plan: MembershipPlanEntity?, password: String) -> Unit = { _, _, _, _, _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
@@ -783,7 +784,7 @@ fun AuthScreen(
                                     )
 
                                     
-                                    if (otpErrorMessage != null) {
+                                    if (!otpErrorMessage.isNullOrBlank()) {
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
                                             color = MaterialTheme.colorScheme.errorContainer,
@@ -794,12 +795,17 @@ fun AuthScreen(
                                                 modifier = Modifier.padding(10.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.ErrorOutline,
+                                                    contentDescription = "Error",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = otpErrorMessage ?: "",
+                                                    text = otpErrorMessage ?: "गलत ईमेल या पासवर्ड। कृपया दोबारा जांचें।",
                                                     color = MaterialTheme.colorScheme.error,
-                                                    fontSize = 14.sp,
+                                                    fontSize = 13.5.sp,
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             }
@@ -1436,20 +1442,46 @@ fun AuthScreen(
                                             }
 
                                             signupValidationError = null
-                                            val code = (100000..999999).random().toString()
-                                            signupVerificationCode = code
-                                            signupVerificationEmail = trimmedEmail
-                                            signupPendingMode = 1
-                                            signupOtpInput = ""
-                                            signupOtpError = null
-                                            signupOtpTimerSeconds = 60
-                                            isVerifyingSignupEmail = true
-                                            com.example.util.EmailOtpService.dispatchEmailOtp(
-                                                email = trimmedEmail,
-                                                recipientName = regName.ifBlank { "Library Admin" },
-                                                purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
-                                                scope = coroutineScope
-                                            ) {}
+                                            val fullOwnerPhone = combineCountryCodeAndPhone(regCountryCode, trimmedPhone).trim()
+
+                                            // Pre-check Supabase & local DB for previous trial on this email or phone
+                                            if (onCheckLibraryTrialEligibility != null) {
+                                                onCheckLibraryTrialEligibility(trimmedEmail, fullOwnerPhone) { isEligible, trialErrMsg ->
+                                                    if (!isEligible) {
+                                                        signupValidationError = trialErrMsg ?: "इस Email या Phone Number पर पहले से एक Library रजिस्टर्ड है। 15-Day Free Trial केवल एक बार ही मिलता है।"
+                                                    } else {
+                                                        val code = (100000..999999).random().toString()
+                                                        signupVerificationCode = code
+                                                        signupVerificationEmail = trimmedEmail
+                                                        signupPendingMode = 1
+                                                        signupOtpInput = ""
+                                                        signupOtpError = null
+                                                        signupOtpTimerSeconds = 60
+                                                        isVerifyingSignupEmail = true
+                                                        com.example.util.EmailOtpService.dispatchEmailOtp(
+                                                            email = trimmedEmail,
+                                                            recipientName = regName.ifBlank { "Library Admin" },
+                                                            purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
+                                                            scope = coroutineScope
+                                                        ) {}
+                                                    }
+                                                }
+                                            } else {
+                                                val code = (100000..999999).random().toString()
+                                                signupVerificationCode = code
+                                                signupVerificationEmail = trimmedEmail
+                                                signupPendingMode = 1
+                                                signupOtpInput = ""
+                                                signupOtpError = null
+                                                signupOtpTimerSeconds = 60
+                                                isVerifyingSignupEmail = true
+                                                com.example.util.EmailOtpService.dispatchEmailOtp(
+                                                    email = trimmedEmail,
+                                                    recipientName = regName.ifBlank { "Library Admin" },
+                                                    purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
+                                                    scope = coroutineScope
+                                                ) {}
+                                            }
                                         },
                                         shape = RoundedCornerShape(14.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -1904,6 +1936,15 @@ fun AuthScreen(
     
     if (showMasterAdminModal) {
         val isSlotClaimed = superAdminProfile?.isClaimed == true
+
+        LaunchedEffect(isSlotClaimed, showMasterAdminModal) {
+            if (isSlotClaimed) {
+                adminModalMode = 1
+                if (adminLoginEmail.isBlank() && !superAdminProfile?.email.isNullOrBlank()) {
+                    adminLoginEmail = superAdminProfile!!.email
+                }
+            }
+        }
 
         BackHandler { showMasterAdminModal = false }
 

@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.local.database.AppDatabase
 import com.example.data.local.entities.*
 import com.example.data.remote.SessionManager
 import com.example.data.remote.SupabaseAuthService
@@ -39,11 +38,10 @@ sealed class LiveSubscriptionCheck {
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class LibDeskViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = AppDatabase.getInstance(application)
-    val repository = LibDeskRepository(database)
+    val repository = LibDeskRepository(application)
     val networkMonitor = com.example.util.NetworkConnectivityMonitor(application)
     val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
-    val supabaseSyncManager = com.example.data.remote.SupabaseSyncManager(database)
+    val supabaseSyncManager = com.example.data.remote.SupabaseSyncManager(repository)
 
     private val _isSupabaseSyncing = MutableStateFlow(false)
     val isSupabaseSyncing: StateFlow<Boolean> = _isSupabaseSyncing.asStateFlow()
@@ -924,8 +922,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     )
                     
                     if (_currentLibraryId.value.isNotBlank()) {
-                        com.example.data.remote.SupabaseSyncManager(repository.database).pullSupabaseToLocal(_currentLibraryId.value)
-                        // If student session and studentId was blank, try to resolve from local repository
+                        supabaseSyncManager.pullSupabaseToLocal(_currentLibraryId.value)
+                        // If student session and studentId was blank, try to resolve from repository
                         if (_currentRole.value == "STUDENT" && _activeStudentId.value.isBlank()) {
                             val localStudent = repository.findStudentByIdentifier(session.email)
                                 ?: repository.findStudentByIdentifier(trimmedIdentifier)
@@ -971,7 +969,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
             
-            val errorMsg = supabaseResult.exceptionOrNull()?.message ?: "Authentication failed. Please verify your credentials or check internet connection."
+            val errorMsg = supabaseResult.exceptionOrNull()?.message?.takeIf { it.isNotBlank() }
+                ?: "गलत ईमेल या पासवर्ड (Invalid email or password). कृपया दोबारा जांचें।"
             onError(errorMsg)
         }
     }
@@ -1000,8 +999,36 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun registerAndLogin(name: String, email: String, libraryName: String, phone: String, password: String) {
+    fun checkLibraryTrialEligibility(
+        email: String,
+        phone: String,
+        onResult: (isEligible: Boolean, errorMsg: String?) -> Unit
+    ) {
         viewModelScope.launch {
+            val res = repository.checkLibraryTrialEligibility(email, phone)
+            onResult(res.first, res.second)
+        }
+    }
+
+    fun registerAndLogin(
+        name: String,
+        email: String,
+        libraryName: String,
+        phone: String,
+        password: String,
+        onError: ((String) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            // Strict duplicate check: 15-day trial is only permitted ONCE per email and phone number
+            val (isEligible, trialErrMsg) = repository.checkLibraryTrialEligibility(email, phone)
+            if (!isEligible) {
+                val err = trialErrMsg ?: "इस Email या Mobile Number पर पहले से एक Library रजिस्टर्ड है। 15 दिनों का Free Trial केवल एक बार ही मिलता है।"
+                com.example.ui.components.SnackbarController.showError(err)
+                _userMessage.value = err
+                onError?.invoke(err)
+                return@launch
+            }
+
             val libId = "LIB-${UUID.randomUUID().toString().take(6).uppercase()}"
             
             val signUpResult = SupabaseAuthService.signUp(
@@ -1039,6 +1066,16 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 upiPayeeName = libraryName.ifBlank { "My Library" }
             )
             repository.saveLibrary(newLib)
+
+            val localUserAccount = UserAccountEntity(
+                id = "USER-${UUID.randomUUID().toString().take(6)}",
+                email = email,
+                password = password,
+                name = name,
+                role = "MANAGER",
+                libraryId = libId
+            )
+            repository.saveUser(localUserAccount)
 
             val hallId = "HALL-MAIN"
             repository.saveHall(
@@ -1103,7 +1140,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 studentId = _activeStudentId.value
             )
             
-            com.example.data.remote.SupabaseSyncManager(repository.database).syncLocalToSupabase(libId)
+            supabaseSyncManager.syncLocalToSupabase(libId)
         }
     }
 
@@ -1506,7 +1543,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 studentId = student.id
             )
             
-            com.example.data.remote.SupabaseSyncManager(repository.database).pushStudent(student)
+            supabaseSyncManager.pushStudent(student)
         }
     }
 
@@ -2164,8 +2201,20 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun updateLibraryProfile(updatedLibrary: LibraryEntity) {
+    fun updateLibraryProfile(updatedLibrary: LibraryEntity, onError: ((String) -> Unit)? = null) {
         viewModelScope.launch {
+            val (isEligible, trialErrMsg) = repository.checkLibraryTrialEligibility(
+                updatedLibrary.ownerEmail,
+                updatedLibrary.ownerPhone,
+                excludeLibraryId = updatedLibrary.id
+            )
+            if (!isEligible) {
+                val err = trialErrMsg ?: "इस Email या Phone Number पर पहले से दूसरी Library रजिस्टर्ड है।"
+                com.example.ui.components.SnackbarController.showError(err)
+                _userMessage.value = err
+                onError?.invoke(err)
+                return@launch
+            }
             repository.saveLibrary(updatedLibrary)
             if (_currentRole.value == "MANAGER" && updatedLibrary.ownerName.isNotBlank()) {
                 _currentUserName.value = updatedLibrary.ownerName
@@ -2178,6 +2227,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     studentId = _activeStudentId.value
                 )
             }
+            supabaseSyncManager.syncLocalToSupabase(updatedLibrary.id)
             _userMessage.value = "Library & Manager profile updated successfully!"
         }
     }
@@ -2446,19 +2496,22 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         email: String,
         name: String,
         accessCode: String = "",
-        is2Fa: Boolean,
+        is2Fa: Boolean = true,
         upiId: String = "",
-        upiPayeeName: String = ""
+        upiPayeeName: String = "",
+        mobile: String = ""
     ) {
         viewModelScope.launch {
             val current = superAdminProfile.value
             val effectiveUpiId = if (upiId.isNotBlank()) upiId.trim() else current?.upiId ?: "libdesk.billing@upi"
             val effectivePayee = if (upiPayeeName.isNotBlank()) upiPayeeName.trim() else current?.upiPayeeName ?: (if (name.isNotBlank()) name.trim() else "LibDesk Subscriptions")
+            val effectiveMobile = if (mobile.isNotBlank()) mobile.trim() else current?.mobile ?: ""
             
             val updated = SuperAdminUserEntity(
                 id = "SUPER-ADMIN-MASTER",
                 email = email.trim().lowercase(),
                 name = name.trim(),
+                mobile = effectiveMobile,
                 accessCode = "",
                 is2FaEnabled = is2Fa,
                 isClaimed = true,
@@ -2468,6 +2521,18 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             repository.saveSuperAdmin(updated)
             // Synchronize UPI ID across all subscription plans in database
             repository.updateAllPlansUpi(effectiveUpiId, effectivePayee)
+            if (_currentRole.value == "SUPER_ADMIN") {
+                if (name.isNotBlank()) _currentUserName.value = name.trim()
+                if (email.isNotBlank()) _currentUserEmail.value = email.trim().lowercase()
+                persistAuthSession(
+                    authenticated = _isAuthenticated.value,
+                    email = _currentUserEmail.value,
+                    name = _currentUserName.value,
+                    role = "SUPER_ADMIN",
+                    libraryId = "",
+                    studentId = ""
+                )
+            }
             _userMessage.value = "Super Admin settings & UPI billing details updated across all plans!"
         }
     }

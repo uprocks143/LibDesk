@@ -1,90 +1,62 @@
-# LibDesk - Multi-Tenant Library & Study Space SaaS
+# LibDesk - Multi-Tenant Library & Study Space SaaS Platform
 
-LibDesk is an offline-first, enterprise-ready Android application designed for running and scaling library and study-center businesses on a unified platform. It delivers a comprehensive multi-tier architecture:
+LibDesk is an offline-first, enterprise-grade Android application engineered for operating and scaling modern study spaces, reading rooms, and library chains. It delivers a unified, role-governed multi-tier architecture:
 
-1. **👑 Super Admin (SaaS Platform Owner)** — Manage subscriptions, plans, payment approvals, system metrics, and institute lifecycles with mandatory 2-Factor Authentication (2FA).
-2. **🏢 Library Owner / Manager** — Operate day-to-day library operations including visual seat layouts, multiple shifts, student records, fee collection, dynamic QR attendance, and digital materials.
-3. **🧑‍🎓 Student Portal** — Self-enrollment, real-time desk availability, dynamic 30-second rotating entrance pass, PDF reader with NCERT catalog, fee receipts, and complaint tracking.
+1. **👑 Super Admin (SaaS Platform Governance)** — Oversees subscription tiers, plan approvals, revenue analytics (MRR), and institute lifecycles with strict, non-bypassable Supabase authentication and 2-Factor Authentication (2FA).
+2. **🏢 Library Owner / Manager Operations** — End-to-end administration including interactive seat matrices, shift scheduling, student enrollment, fee collections, real-time attendance registers, and automated WhatsApp communication.
+3. **🧑‍🎓 Student Self-Service Portal** — Real-time seat availability, dynamic 30-second rotating entrance pass, PDF reader with NCERT catalog, fee receipts, and digital ID cards.
 
-Built natively with **Kotlin** and **Jetpack Compose (Material 3)**.
+Built natively with **Kotlin**, **Jetpack Compose (Material Design 3)**, **Room Database**, and **Supabase**.
 
 ---
 
 ## ✨ Key Features
 
-### 👑 Super Admin (SaaS Management)
-* **Single-Slot Protected Governance**: Exactly one Super Admin account is permitted per deployment to ensure total platform security.
-* **Mandatory 2FA Authentication**: Email OTP verification is enforced for Super Admin account access and sensitive operations.
-* **Subscription Management**: Oversee library tiers (Free Trial, Standard, Pro, Enterprise), review activation requests, and handle payment proofs.
-* **Global Analytics**: High-level telemetry covering active institutions, total seats deployed, system occupancy, and MRR.
+### 👑 Super Admin (SaaS Management & Security)
+* **Single-Slot Protected Governance**: Exactly one Super Admin account is permitted per deployment to ensure absolute platform control.
+* **Strict Supabase Authentication**: Eliminates hardcoded master PINs and backdoors. Super Admin logins are validated strictly against cloud authentication credentials.
+* **Mandatory 2FA Email OTP Verification**: High-security two-factor authentication enforced via Supabase Auth email tokens (`auth/v1/verify`) before granting administrative access.
+* **SaaS Subscription Lifecycle**: Review institution tiers (15-Day Free Trial, Standard, Pro, Enterprise), verify UPI payment proofs, and activate licenses.
+* **Network Telemetry & MRR Analytics**: Instant visibility into active libraries, total seats deployed, occupancy rates, and recurring revenue.
 
 ### 🏢 Library Owner & Manager Suite
 * **Interactive Seat Matrix**: Visual desk allocation with custom zones, real-time occupancy status (Occupied, Available, Reserved, Maintenance), and instant desk assignments.
-* **Flexible Shifts**: Full support for morning, evening, night, and full-day shifts with auto-calculated pricing and slot limits.
-* **Fee Collection & UPI Integration**: Track dues, collect monthly fees via dynamic UPI QR code intents, record partial payments, and issue downloadable/shareable payment receipts.
-* **Dynamic Attendance & Scanner**: Embedded CameraX QR scanner for instantaneous student check-in/check-out with geolocation validation and haptic feedback.
-* **Digital Library**: Manage study materials, mock tests, and PDFs with persistent Android Storage Access Framework (SAF) URI support.
-* **Notice Board & Complaints**: Broadcast urgent updates to all enrolled students and resolve desk/facility complaints in real time.
-* **Data Backup & Restore**: Offline-first Room persistence with one-tap Local Zip export/import and automated cloud backup capabilities.
+* **Multi-Shift Management**: Flexible configurations for morning, evening, night, and full-day shifts with auto-calculated seat allocations.
+* **Fee Collection & Payment Tracking**: Comprehensive fee ledgers, partial payment handling, dynamic UPI QR generation, and detailed payment history.
+* **Direct WhatsApp Integration**:
+  * **Zero Contact Picker Interruption**: Directly opens chat with the student's registered mobile number using normalized `91` country code formatting (`api.whatsapp.com` and direct WhatsApp intent package targeting).
+  * **Fee Receipts & Reminders**: Instantly share itemized payment receipts and overdue fee alerts directly to the student's WhatsApp.
+  * **Attendance Alerts**: One-tap attendance alerts (check-in / check-out timestamps) sent straight to the registered student or parent.
+  * **Daily Shift Reports**: Share comprehensive morning, evening, and daily attendance summaries via WhatsApp.
+* **Attendance Register & Scanner**: Embedded CameraX QR scanner for fast student check-in/check-out with anti-fraud rolling validation and manual punch overrides.
+* **Digital Library & Resource Hub**: Manage study materials, mock tests, and PDFs with persistent Android Storage Access Framework (SAF) URI support.
+* **Notice Board & Student Helpdesk**: Broadcast urgent notices and resolve student desk/facility complaints in real time.
+
+### ☁️ Enterprise Google Drive Cloud & Local Data Backup
+* **AES-256 GCM Cloud Encryption**: Every snapshot is securely encrypted locally before upload so that only authorized administrators can restore it.
+* **Google Drive Cloud Vault**: Seamless OAuth2 integration to back up and restore database snapshots directly to/from Google Drive.
+* **Automated & Manual Sync**: Configurable auto-backup frequencies (Daily, Weekly, Monthly) and network constraints (Wi-Fi Only vs Cellular).
+* **One-Tap Cloud & Device Restore**: Restore complete database snapshots in seconds with automatic migration, ensuring zero data loss during device replacements or resets.
+* **Standalone Encrypted Export**: Export standalone `.enc` database archives for air-gapped storage or archival.
 
 ### 🧑‍🎓 Student Self-Service Portal
-* **Easy Self-Enrollment**: Discover libraries, scan entrance QR codes, and sign up with email OTP verification.
-* **Anti-Fraud Entrance QR Pass**: Rolling-token dynamic QR code that regenerates every 30 seconds to prevent unauthorized entry via screenshots.
-* **Real-time Desk Status**: Check available seats, current shifts, and submit seat change or locker requests.
-* **Built-in PDF Viewer & NCERT Catalog**: Offline study material reader with native zooming, night mode, page bookmarking, and official NCERT textbook imports.
-* **Fee & ID Card Management**: Digital identity card with membership status, renewal reminders, and payment history.
+* **Instant Self-Enrollment**: Scan library entrance posters, complete profiles, and verify identity via email OTP.
+* **Anti-Fraud Rolling QR Pass**: Dynamic entrance QR code regenerating every 30 seconds to prevent unauthorized entry via screenshots.
+* **Live Desk & Shift Status**: Check allocated desk numbers, view shift timings, and submit seat change or locker requests.
+* **Integrated Study Material & NCERT Catalog**: In-app PDF reader featuring night mode, zoom support, page bookmarks, and direct NCERT textbook imports.
+* **Digital ID Card**: Tamper-evident digital student ID with library branding, membership status, and QR verification.
 
 ---
 
 ## 🛠 Tech Stack
 
-* **Language**: [Kotlin](https://kotlinlang.org/) (100% Coroutines & Flow)
-* **UI Toolkit**: [Jetpack Compose](https://developer.android.com/jetpack/compose) (Material 3 with semantic theming)
-* **Architecture**: MVVM with Clean Architecture principles & Repository pattern
-* **Local Persistence**: [Room Database](https://developer.android.com/training/data-storage/room) with SQLite (Offline-First)
-* **Cloud & Auth**: [Supabase](https://supabase.com/) (PostgreSQL backend, Auth with auto-token refresh, OTP services)
-* **Camera & QR**: CameraX & ZXing Core (30-second TOTP dynamic QR generation and scanning)
+* **Language**: [Kotlin](https://kotlinlang.org/) (Coroutines, Flow, StateFlow)
+* **UI Framework**: [Jetpack Compose](https://developer.android.com/jetpack/compose) (Material Design 3 with custom semantic theming)
+* **Local Persistence**: [Room Database](https://developer.android.com/training/data-storage/room) with SQLite (Full Offline-First capability)
+* **Cloud & Auth**: [Supabase](https://supabase.com/) (PostgreSQL, Auth API with secure OTP verification)
+* **Cloud Storage**: Google Drive REST API v3 with Google Sign-In OAuth2 tokens
+* **Camera & Scanner**: Android CameraX with ZXing Core (30-second rolling TOTP QR generation & scanning)
 * **Networking**: OkHttp 4 & Kotlinx Serialization
-
----
-
-## ⚙️ Configuration & Environment
-
-LibDesk uses modern Android build configuration with fallback defaults to ensure zero-configuration development:
-
-1. Create a `.env` file in the project root (or copy `.env.example`):
-   ```properties
-   SUPABASE_URL=https://<your-project-id>.supabase.co
-   SUPABASE_ANON_KEY=<your-supabase-publishable-or-anon-key>
-   ```
-
-2. **Built-in Resilience**:
-   * If `.env` contains placeholders (e.g. `your-project.supabase.co`), the app automatically falls back to configured production endpoints via `SupabaseClient.getEffectiveUrl()` and `SupabaseClient.getEffectiveApiKey()`.
-   * DNS resolution and network timeouts are guarded with graceful fallback error messages.
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-* Android Studio Iguana / Jellyfish / Koala (or newer)
-* Android SDK 34 (compileSdk: 34, minSdk: 26)
-* JDK 17 or JDK 21
-
-### Build & Run
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/your-org/libdesk.git
-   ```
-2. **Open in Android Studio** and let Gradle synchronize dependencies.
-3. **Run Unit Tests:**
-   ```bash
-   ./gradlew testDebugUnitTest
-   ```
-4. **Build APK:**
-   ```bash
-   ./gradlew assembleDebug
-   ```
 
 ---
 
@@ -93,25 +65,50 @@ LibDesk uses modern Android build configuration with fallback defaults to ensure
 ```text
 app/src/main/java/com/example/
 ├── data/
-│   ├── backup/         # Local Zip & Cloud Drive backup engines
-│   ├── local/          # Room Entities, DAOs, and AppDatabase
+│   ├── backup/         # Google Drive Cloud API, AES-256 GCM Encrypted Vault, Local Manager
+│   ├── local/          # Room Entities, DAOs, TypeConverters, and AppDatabase
 │   ├── remote/         # Supabase Client, Auth Service, and Session Manager
-│   └── repository/     # Single source of truth data repository
+│   └── repository/     # Unified Repository coordinating Room and Supabase sync
 ├── ui/
-│   ├── auth/           # Login, Signup, OTP, and Super Admin claim gates
-│   ├── manager/        # Owner dashboard, seat matrix, fees, students, notices
-│   ├── student/        # Student portal, dynamic QR pass, digital library, profile
-│   ├── superadmin/     # SaaS subscription management, plan builder, audit log
-│   ├── scanner/        # CameraX QR check-in modal with vibration & feedback
-│   └── theme/          # M3 color schemes, typography, and semantic LibDeskColors
-├── util/               # TOTP generator, PDF helpers, UPI intent handler, OTP service
-└── viewmodel/          # LibDeskViewModel and BackupViewModel
+│   ├── auth/           # Login, Role Selection, Supabase Auth, and Super Admin Claim Gate
+│   ├── backup/         # Enterprise Google Drive & Local Backup Settings Screen
+│   ├── components/     # TopAppBar, Navigation Drawer, RoleGate, and Status Badges
+│   ├── manager/        # Dashboard, Visual Seat Matrix, Finance, Students, Attendance
+│   ├── student/        # Dynamic Rolling QR Pass, Digital ID, PDF Study Viewer
+│   ├── superadmin/     # SaaS Subscriptions, Plan Management, Revenue Metrics
+│   └── scanner/        # CameraX QR Attendance Scanner
+├── util/
+│   ├── ImageShareUtils.kt  # Direct WhatsApp message and receipt sharing engine
+│   ├── payment/            # UPI QR and Payment Gateway Helpers
+│   ├── EmailOtpService.kt  # Supabase 2FA & OTP verification service
+│   └── TotpGenerator.kt    # Rolling dynamic QR code security generator
+└── viewmodel/              # LibDeskViewModel & BackupViewModel
 ```
 
 ---
 
-## 🛡️ Security & Privacy
-* Passwords and PINs are hashed using cryptographic one-way digests before storage.
-* QR access tokens expire every 30 seconds using synchronized timestamp hashes.
-* Storage Access Framework permissions are persisted to maintain offline document availability without requesting dangerous storage permissions.
+## 🚀 Getting Started
 
+### Prerequisites
+* Android Studio Jellyfish / Koala (or newer)
+* Android SDK 34 (compileSdk: 34, minSdk: 26)
+* JDK 17 or JDK 21
+
+### Build & Run
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-org/libdesk.git
+   ```
+2. **Open in Android Studio** and synchronize Gradle dependencies.
+3. **Verify compilation:**
+   ```bash
+   gradle assembleDebug
+   ```
+
+---
+
+## 🛡️ Security & Integrity
+* **No Authentication Backdoors**: Super Admin and administrative sessions are strictly verified via Supabase Auth and mandatory 2FA email codes.
+* **AES-256 GCM Cloud Snapshots**: Database backups uploaded to Google Drive are encrypted at the client level before transmission.
+* **Direct Targeting WhatsApp Communication**: Alerts and payment receipts are sent directly to the student's validated mobile number, eliminating human routing errors.
+* **Ephemeral TOTP Credentials**: Gate check-in QR codes expire every 30 seconds to prohibit credential sharing and screenshot forgery.

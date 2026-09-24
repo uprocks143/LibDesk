@@ -242,6 +242,29 @@ object SupabaseClient {
         }
     }
 
+    suspend fun deleteRecord(tableName: String, id: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        try {
+            val url = "$projectUrl/rest/v1/$tableName?id=eq.$id"
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("apikey", apiKey)
+                .addHeader("Authorization", "Bearer ${currentAuthToken ?: apiKey}")
+                .delete()
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    Pair(true, "Deleted successfully")
+                } else {
+                    val respBody = response.body?.string() ?: ""
+                    Pair(false, "Delete failed (${response.code}): $respBody")
+                }
+            }
+        } catch (e: Exception) {
+            Pair(false, "Exception deleting record: ${e.message}")
+        }
+    }
+
     
     fun getRecommendedSqlSchema(): String {
         return """

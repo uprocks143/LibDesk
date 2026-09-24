@@ -40,6 +40,7 @@ import com.example.data.local.entities.StudentEntity
 import com.example.data.local.entities.SeatEntity
 import com.example.data.local.entities.ShiftEntity
 import com.example.data.local.entities.MembershipPlanEntity
+import com.example.data.local.entities.SuperAdminUserEntity
 import com.example.ui.theme.*
 
 
@@ -48,6 +49,7 @@ fun UserProfileModal(
     currentRole: String, 
     library: LibraryEntity? = null,
     student: StudentEntity? = null,
+    superAdminProfile: SuperAdminUserEntity? = null,
     userName: String = "",
     userEmail: String = "",
     seats: List<SeatEntity> = emptyList(),
@@ -55,13 +57,29 @@ fun UserProfileModal(
     plans: List<MembershipPlanEntity> = emptyList(),
     onUpdateLibrary: (LibraryEntity) -> Unit = {},
     onUpdateStudent: (StudentEntity) -> Unit = {},
+    onUpdateSuperAdmin: (name: String, email: String, mobile: String, upiId: String, upiPayeeName: String) -> Unit = { _, _, _, _, _ -> },
     isMandatory: Boolean = false,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    
+    var adminName by remember(superAdminProfile, userName) {
+        mutableStateOf(superAdminProfile?.name?.takeIf { it.isNotBlank() } ?: userName.ifBlank { "Super Admin" })
+    }
+    var adminEmail by remember(superAdminProfile, userEmail) {
+        mutableStateOf(superAdminProfile?.email?.takeIf { it.isNotBlank() } ?: userEmail)
+    }
+    val initialAdminPhone = remember(superAdminProfile) { splitCountryCodeAndPhone(superAdminProfile?.mobile ?: "") }
+    var adminCountryCode by remember(superAdminProfile) { mutableStateOf(initialAdminPhone.first) }
+    var adminPhone by remember(superAdminProfile) { mutableStateOf(initialAdminPhone.second) }
+    var adminUpiId by remember(superAdminProfile) {
+        mutableStateOf(superAdminProfile?.upiId ?: "libdesk.billing@upi")
+    }
+    var adminUpiPayeeName by remember(superAdminProfile) {
+        mutableStateOf(superAdminProfile?.upiPayeeName ?: "LibDesk Subscriptions")
+    }
+
     var libName by remember(library) { mutableStateOf(library?.name ?: "") }
     var ownerName by remember(library, userName) {
         mutableStateOf(library?.ownerName?.takeIf { it.isNotBlank() } ?: userName)
@@ -211,7 +229,11 @@ fun UserProfileModal(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = if (currentRole == "MANAGER") Icons.Default.AccountBalance else Icons.Default.Person,
+                                        imageVector = when (currentRole) {
+                                            "SUPER_ADMIN" -> Icons.Default.Shield
+                                            "MANAGER" -> Icons.Default.AccountBalance
+                                            else -> Icons.Default.Person
+                                        },
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onSurface,
                                         modifier = Modifier.size(24.dp)
@@ -220,14 +242,22 @@ fun UserProfileModal(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = if (currentRole == "MANAGER") "Library & Manager Profile" else "Student Member Profile",
+                                        text = when (currentRole) {
+                                            "SUPER_ADMIN" -> "Super Admin (SaaS Manager) Profile"
+                                            "MANAGER" -> "Library & Manager Profile"
+                                            else -> "Student Member Profile"
+                                        },
                                         style = MaterialTheme.typography.titleMedium.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                     )
                                     Text(
-                                        text = if (currentRole == "MANAGER") "Manage institute details & billing" else "Update personal & study info",
+                                        text = when (currentRole) {
+                                            "SUPER_ADMIN" -> "Platform governance & SaaS billing settings"
+                                            "MANAGER" -> "Manage institute details & billing"
+                                            else -> "Update personal & study info"
+                                        },
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             fontSize = 14.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -282,7 +312,162 @@ fun UserProfileModal(
                             .padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        if (currentRole == "MANAGER") {
+                        if (currentRole == "SUPER_ADMIN") {
+                            Text(
+                                text = "PLATFORM GOVERNANCE & ACCOUNT",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                letterSpacing = 0.5.sp
+                            )
+
+                            OutlinedTextField(
+                                value = adminName,
+                                onValueChange = { adminName = it },
+                                label = { Text("Super Admin Full Name") },
+                                leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = adminEmail,
+                                onValueChange = { adminEmail = it },
+                                label = { Text("Super Admin Master Email") },
+                                leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            CountryCodePhoneField(
+                                mobile = adminPhone,
+                                onMobileChange = { adminPhone = it },
+                                countryCode = adminCountryCode,
+                                onCountryCodeChange = { adminCountryCode = it },
+                                label = "Admin Contact / WhatsApp Phone",
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
+
+                            Text(
+                                text = "SAAS UPI PAYMENT GATEWAY & BILLING",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                letterSpacing = 0.5.sp
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = "All registered libraries send their SaaS subscription fees directly to this UPI ID. Saving here synchronizes across all subscription plans automatically.",
+                                        fontSize = 12.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = adminUpiId,
+                                onValueChange = { adminUpiId = it },
+                                label = { Text("Master UPI ID (VPA)") },
+                                placeholder = { Text("e.g. libdesk.billing@upi") },
+                                leadingIcon = { Icon(Icons.Default.Payment, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = adminUpiPayeeName,
+                                onValueChange = { adminUpiPayeeName = it },
+                                label = { Text("Payee Business / Platform Name") },
+                                placeholder = { Text("e.g. LibDesk Subscriptions") },
+                                leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
+
+                            Text(
+                                text = "SECURITY & ACCESS STATUS",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                letterSpacing = 0.5.sp
+                            )
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                            Icon(Icons.Default.Shield, contentDescription = null, tint = LibDeskColors.success, modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text("2-Factor Email OTP", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                Text("Mandatory for Super Admin login", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Surface(
+                                            color = LibDeskColors.successSoft,
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text("ACTIVE", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontWeight = FontWeight.Bold, color = LibDeskColors.success, fontSize = 10.sp)
+                                        }
+                                    }
+
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                            Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text("Single-Slot Platform Access", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                Text("Strict 1-Super-Admin system policy", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text("ENFORCED", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (currentRole == "MANAGER") {
 
                             Text(
                                 text = "INSTITUTE & STUDY HALL DETAILS",
@@ -927,7 +1112,31 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             Button(
                                 onClick = {
-                                    if (currentRole == "MANAGER") {
+                                    if (currentRole == "SUPER_ADMIN") {
+                                        if (adminName.isBlank()) {
+                                            profileFormError = "Please enter Super Admin name before saving."
+                                            return@Button
+                                        }
+                                        if (adminEmail.isBlank() || !adminEmail.contains("@")) {
+                                            profileFormError = "Please enter a valid Super Admin email address."
+                                            return@Button
+                                        }
+                                        if (adminUpiId.isBlank()) {
+                                            profileFormError = "Please enter the Super Admin UPI ID for subscription billing."
+                                            return@Button
+                                        }
+                                        profileFormError = null
+                                        isSaving = true
+                                        val fullAdminPhone = combineCountryCodeAndPhone(adminCountryCode, adminPhone).trim()
+                                        onUpdateSuperAdmin(
+                                            adminName.trim(),
+                                            adminEmail.trim().lowercase(),
+                                            fullAdminPhone,
+                                            adminUpiId.trim(),
+                                            adminUpiPayeeName.trim().ifBlank { "LibDesk Subscriptions" }
+                                        )
+                                        onClose()
+                                    } else if (currentRole == "MANAGER") {
                                         val fullOwnerPhone = combineCountryCodeAndPhone(ownerCountryCode, ownerPhone).trim()
                                         if (libName.isBlank() || ownerName.isBlank() || fullOwnerPhone.isBlank() ||
                                             address.isBlank() || city.isBlank() || state.isBlank() || upiId.isBlank()

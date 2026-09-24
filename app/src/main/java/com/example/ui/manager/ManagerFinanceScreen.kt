@@ -1278,7 +1278,7 @@ fun PaymentHistorySection(
                             // Branded WhatsApp Action Button (Image Format)
                             Surface(
                                 onClick = {
-                                    val studentPhone = students.find { it.id == payment.studentId }?.mobile
+                                    val studentPhone = students.find { it.id == payment.studentId || it.fullName.equals(payment.studentName, ignoreCase = true) }?.mobile
                                     ImageShareUtils.shareReceiptViaWhatsApp(
                                         context = context,
                                         library = library,

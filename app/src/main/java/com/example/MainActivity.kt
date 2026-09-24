@@ -254,6 +254,9 @@ fun LibDeskApp(
             onRegister = { name, email, libName, phone, password ->
                 viewModel.registerAndLogin(name, email, libName, phone, password)
             },
+            onCheckLibraryTrialEligibility = { email, phone, onResult ->
+                viewModel.checkLibraryTrialEligibility(email, phone, onResult)
+            },
             onStudentQrSignup = { libId, fullName, mobile, email, exam, shift, plan, password ->
                 viewModel.registerStudentViaQr(libId, fullName, mobile, email, exam, shift, plan, password)
             }
@@ -1167,6 +1170,7 @@ onOpenSyncBackup = { showBackupScreen = true },
             currentRole = currentRole,
             library = library,
             student = activeStudent,
+            superAdminProfile = superAdminProfile,
             userName = currentUserName,
             userEmail = currentUserEmail,
             seats = seats,
@@ -1177,6 +1181,17 @@ onOpenSyncBackup = { showBackupScreen = true },
             },
             onUpdateStudent = { updatedSt ->
                 viewModel.updateStudentProfile(updatedSt)
+            },
+            onUpdateSuperAdmin = { name, email, mobile, upiId, upiPayeeName ->
+                viewModel.updateSuperAdminProfile(
+                    name = name,
+                    email = email,
+                    mobile = mobile,
+                    accessCode = "",
+                    is2Fa = true,
+                    upiId = upiId,
+                    upiPayeeName = upiPayeeName
+                )
             },
             onClose = { showUserProfileModal = false }
         )

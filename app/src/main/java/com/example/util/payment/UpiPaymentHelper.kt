@@ -350,8 +350,14 @@ object UpiPaymentHelper {
         receiptImageUri: Uri? = null
     ) {
         val dateFormatted = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
-        val cleanPhone = (whatsappNumber ?: "").filter { it.isDigit() }.let {
-            if (it.length == 10) "91$it" else it
+        var rawDigits = (whatsappNumber ?: "").filter { it.isDigit() }
+        while (rawDigits.startsWith("0")) {
+            rawDigits = rawDigits.drop(1)
+        }
+        val cleanPhone = when {
+            rawDigits.length == 10 -> "91$rawDigits"
+            rawDigits.length == 12 && rawDigits.startsWith("91") -> rawDigits
+            else -> rawDigits
         }
 
         val messageText = """
@@ -370,43 +376,18 @@ object UpiPaymentHelper {
 
         try {
             if (receiptImageUri != null) {
-                // Share receipt with image
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/*"
-                    putExtra(Intent.EXTRA_STREAM, receiptImageUri)
-                    clipData = ClipData.newRawUri("Payment Receipt", receiptImageUri)
-                    putExtra(Intent.EXTRA_TEXT, messageText)
-                    if (cleanPhone.isNotBlank()) {
-                        putExtra("jid", "$cleanPhone@s.whatsapp.net")
-                    }
-                    setPackage("com.whatsapp")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-
                 try {
-                    context.startActivity(sendIntent)
-                } catch (_: Exception) {
-                    try {
-                        val w4bIntent = Intent(sendIntent).apply {
-                            setPackage("com.whatsapp.w4b")
-                        }
-                        context.startActivity(w4bIntent)
-                    } catch (_: Exception) {
-                        val chooser = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/*"
-                            putExtra(Intent.EXTRA_STREAM, receiptImageUri)
-                            clipData = ClipData.newRawUri("Payment Receipt", receiptImageUri)
-                            putExtra(Intent.EXTRA_TEXT, messageText)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(Intent.createChooser(chooser, "Send Receipt via WhatsApp or other apps"))
-                    }
-                }
-            } else {
-                // Direct WhatsApp Web API / Send Text Intent
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    val clip = ClipData.newUri(context.contentResolver, "Payment Receipt", receiptImageUri)
+                    clipboard?.setPrimaryClip(clip)
+                } catch (_: Exception) {}
+            }
+
+            if (cleanPhone.isNotBlank()) {
                 val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${Uri.encode(messageText)}"
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                     setPackage("com.whatsapp")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 try {
                     context.startActivity(intent)
@@ -414,17 +395,30 @@ object UpiPaymentHelper {
                     try {
                         val w4bIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                             setPackage("com.whatsapp.w4b")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         context.startActivity(w4bIntent)
                     } catch (_: Exception) {
-                        val genericIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        val genericIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
                         context.startActivity(genericIntent)
                     }
                 }
+            } else {
+                val chooser = Intent(Intent.ACTION_SEND).apply {
+                    type = if (receiptImageUri != null) "image/*" else "text/plain"
+                    if (receiptImageUri != null) {
+                        putExtra(Intent.EXTRA_STREAM, receiptImageUri)
+                        clipData = ClipData.newRawUri("Payment Receipt", receiptImageUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    putExtra(Intent.EXTRA_TEXT, messageText)
+                }
+                context.startActivity(Intent.createChooser(chooser, "Send Receipt via WhatsApp or other apps"))
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Toast.makeText(context, "Error launching WhatsApp: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 

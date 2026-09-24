@@ -397,8 +397,8 @@ fun LibDeskDrawerContent(
                     )
                     DrawerNavItem(
                         icon = Icons.Outlined.CloudSync,
-                        title = "Backup & Restore",
-                        subtitle = "Protect your LibDesk data locally and in Google Drive",
+                        title = "Cloud & Local Data Backup",
+                        subtitle = "Protect your library database in Google Drive & local storage",
                         onClick = {
                             onOpenSyncBackup()
                             onCloseDrawer()

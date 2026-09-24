@@ -1120,6 +1120,20 @@ object ImageShareUtils {
     }
 
     
+    fun cleanWhatsAppPhone(phone: String?): String {
+        if (phone.isNullOrBlank()) return ""
+        var digits = phone.filter { it.isDigit() }
+        while (digits.startsWith("0")) {
+            digits = digits.drop(1)
+        }
+        return when {
+            digits.length == 10 -> "91$digits"
+            digits.length == 12 && digits.startsWith("91") -> digits
+            digits.length > 10 -> digits
+            else -> digits
+        }
+    }
+
     fun sendImageToWhatsApp(
         context: Context,
         bitmap: Bitmap,
@@ -1129,76 +1143,73 @@ object ImageShareUtils {
     ) {
         try {
             val uri = saveBitmapToCache(context, bitmap, fileName)
-            if (uri == null) {
-                // Toast.makeText(context, "Could not render image file for sharing.", Toast.LENGTH_SHORT).show()
+            if (uri != null) {
+                try {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    val clip = android.content.ClipData.newUri(context.contentResolver, "Image Asset", uri)
+                    clipboard?.setPrimaryClip(clip)
+                } catch (_: Exception) {}
+            }
+
+            val cleanPhone = cleanWhatsAppPhone(phoneNumber)
+            if (cleanPhone.isNotBlank()) {
+                // Direct WhatsApp chat to the registered phone number without contact picker
+                sendTextToWhatsApp(context, cleanPhone, captionText)
                 return
             }
 
-            val cleanPhone = phoneNumber
-                ?.replace(Regex("[^0-9]"), "")
-                ?.let { raw ->
-                    if (raw.length == 10) "91$raw" else raw
-                }
-
-            val whatsappIntent = Intent(Intent.ACTION_SEND).apply {
+            // Fallback when no registered phone number exists
+            if (uri == null) return
+            val chooserIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                clipData = android.content.ClipData.newRawUri("Fee Receipt", uri)
+                clipData = android.content.ClipData.newRawUri("Document", uri)
                 putExtra(Intent.EXTRA_TEXT, captionText)
-                if (!cleanPhone.isNullOrBlank()) {
-                    putExtra("jid", "$cleanPhone@s.whatsapp.net")
-                }
-                setPackage("com.whatsapp")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-
-            try {
-                context.startActivity(whatsappIntent)
-            } catch (_: Exception) {
-
-                try {
-                    val w4bIntent = Intent(whatsappIntent).apply { 
-                        setPackage("com.whatsapp.w4b") 
-                        clipData = android.content.ClipData.newRawUri("Fee Receipt", uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(w4bIntent)
-                } catch (_: Exception) {
-
-                    val chooserIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/png"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        clipData = android.content.ClipData.newRawUri("Fee Receipt", uri)
-                        putExtra(Intent.EXTRA_TEXT, captionText)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    context.startActivity(Intent.createChooser(chooserIntent, "Send via WhatsApp or other apps"))
-                }
-            }
+            context.startActivity(Intent.createChooser(chooserIntent, "Share Document"))
         } catch (e: Exception) {
             e.printStackTrace()
-            // Toast.makeText(context, "Error launching WhatsApp: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
     fun sendTextToWhatsApp(context: Context, mobile: String, message: String) {
-        val cleanMobile = mobile.filter { it.isDigit() }.let {
-            if (it.length == 10) "91$it" else it
-        }
-        try {
-            val uri = Uri.parse("https://api.whatsapp.com/send?phone=$cleanMobile&text=${Uri.encode(message)}")
-            val intent = Intent(Intent.ACTION_VIEW, uri)
-            context.startActivity(intent)
-        } catch (e: Exception) {
+        val cleanMobile = cleanWhatsAppPhone(mobile)
+        if (cleanMobile.isBlank()) {
             try {
                 val genericIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
                     putExtra(Intent.EXTRA_TEXT, message)
                 }
-                context.startActivity(Intent.createChooser(genericIntent, "Send Message / Offer"))
-            } catch (ex: Exception) {
-                // Toast.makeText(context, "Could not open messaging app", Toast.LENGTH_SHORT).show()
+                context.startActivity(Intent.createChooser(genericIntent, "Share Message"))
+            } catch (_: Exception) {}
+            return
+        }
+
+        try {
+            val uri = Uri.parse("https://api.whatsapp.com/send?phone=$cleanMobile&text=${Uri.encode(message)}")
+            val waIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage("com.whatsapp")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
+            try {
+                context.startActivity(waIntent)
+            } catch (_: Exception) {
+                try {
+                    val w4bIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                        setPackage("com.whatsapp.w4b")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(w4bIntent)
+                } catch (_: Exception) {
+                    val genericIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(genericIntent)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

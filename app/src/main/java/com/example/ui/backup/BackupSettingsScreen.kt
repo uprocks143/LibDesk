@@ -46,10 +46,12 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
-private val WhatsAppGreen = Color(0xFF00A884)
-private val WhatsAppGreenDark = Color(0xFF075E54)
+private val EnterpriseTeal = Color(0xFF0F766E)
+private val EnterpriseTealDark = Color(0xFF115E59)
+private val WhatsAppGreen = EnterpriseTeal
+private val WhatsAppGreenDark = EnterpriseTealDark
 
-private fun formatWhatsAppDate(timestamp: Long): String {
+private fun formatBackupDate(timestamp: Long): String {
     if (timestamp <= 0L) return "Never"
     val now = Calendar.getInstance()
     val timeCal = Calendar.getInstance().apply { timeInMillis = timestamp }
@@ -63,9 +65,11 @@ private fun formatWhatsAppDate(timestamp: Long): String {
     }
 }
 
+private fun formatWhatsAppDate(timestamp: Long): String = formatBackupDate(timestamp)
+
 /**
- * WhatsApp-style Google Drive & Local Backup Settings Screen.
- * Provides intuitive, authentic backup experience matching WhatsApp's Chat Backup UI.
+ * Enterprise Google Drive Cloud & Local Vault Backup Settings Screen.
+ * Provides secure, enterprise-grade cloud data protection and one-tap restore.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -669,7 +673,7 @@ fun BackupSettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Google Drive backup",
+                        "Cloud & Local Data Backup",
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 20.sp
@@ -699,7 +703,7 @@ fun BackupSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
 
-            // 1. TOP EXPLANATORY PARAGRAPH (Exact WhatsApp style)
+            // 1. TOP EXPLANATORY PARAGRAPH
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -708,14 +712,14 @@ fun BackupSettingsScreen(
                     Icon(
                         imageVector = Icons.Default.CloudSync,
                         contentDescription = null,
-                        tint = WhatsAppGreen,
+                        tint = EnterpriseTeal,
                         modifier = Modifier
                             .size(36.dp)
                             .padding(top = 2.dp)
                     )
                     Spacer(modifier = Modifier.width(14.dp))
                     Text(
-                        text = "Back up your library data and student records to Google Drive. You can restore them when you reinstall LibDesk or switch to a new phone. Your data will also back up to your phone's internal storage.",
+                        text = "Back up your library data, student records, fee transactions, and seat configurations securely to Google Drive Cloud Vault and device local storage. If you reinstall LibDesk or switch devices, your entire institute database can be restored in seconds with zero data loss.",
                         fontSize = 13.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 20.sp
@@ -723,7 +727,7 @@ fun BackupSettingsScreen(
                 }
             }
 
-            // 2. LAST BACKUP STATUS CARD (Exact WhatsApp style)
+            // 2. BACKUP STATUS CARD
             item {
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -733,7 +737,7 @@ fun BackupSettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Last Backup",
+                            text = "Cloud & Local Data Protection Status",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -744,19 +748,19 @@ fun BackupSettingsScreen(
                         val driveTime = lastDriveBackupTime
 
                         Text(
-                            text = "Local: ${formatWhatsAppDate(localTime)}",
+                            text = "Local Device: ${formatBackupDate(localTime)}",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Google Drive: ${if (driveTime > 0) formatWhatsAppDate(driveTime) else "Never"}",
+                            text = "Google Drive Cloud: ${if (driveTime > 0) formatBackupDate(driveTime) else if (googleAccountEmail.isNotBlank()) "Connected • Sync ready" else "Not configured"}",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = "Size: ${Formatter.formatShortFileSize(context, lastBackupSizeBytes)}",
+                            text = "Snapshot Size: ${Formatter.formatShortFileSize(context, lastBackupSizeBytes)}",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -766,14 +770,14 @@ fun BackupSettingsScreen(
                             Text(
                                 text = "Auto-backup: $backupFrequency at 2:00 AM (${if (backupNetwork == "Wi-Fi") "Wi-Fi only" else "Wi-Fi or cellular"})${if (savedDriveToken.isNotBlank()) " • Synced to Drive" else ""}",
                                 fontSize = 13.sp,
-                                color = WhatsAppGreenDark,
+                                color = EnterpriseTealDark,
                                 fontWeight = FontWeight.Medium
                             )
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Big WhatsApp Green "BACK UP" Button
+                        // Primary "BACK UP TO CLOUD" Button
                         Button(
                             onClick = {
                                 if (onPerformWhatsAppBackup != {}) {
@@ -785,7 +789,7 @@ fun BackupSettingsScreen(
                             modifier = Modifier
                                 .testTag("whatsapp_backup_button")
                                 .height(46.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen),
+                            colors = ButtonDefaults.buttonColors(containerColor = EnterpriseTeal),
                             shape = RoundedCornerShape(24.dp),
                             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 10.dp)
                         ) {
@@ -811,7 +815,7 @@ fun BackupSettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "BACK UP",
+                                    text = "BACK UP TO CLOUD NOW",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
@@ -841,21 +845,21 @@ fun BackupSettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
 
-            // 3. GOOGLE DRIVE SETTINGS SECTION (WhatsApp Style)
+            // 3. GOOGLE DRIVE SETTINGS SECTION
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Google Drive settings",
+                        text = "Google Drive Cloud Vault Settings",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = WhatsAppGreenDark,
+                        color = EnterpriseTealDark,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
 
                     // Item: Back up to Google Drive (Frequency)
                     WhatsAppSettingItem(
                         icon = Icons.Default.Schedule,
-                        title = "Back up to Google Drive",
+                        title = "Auto-Backup Frequency",
                         subtitle = backupFrequency,
                         onClick = { showFrequencyDialog = true },
                         testTag = "backup_frequency_setting"
@@ -869,7 +873,7 @@ fun BackupSettingsScreen(
                     }
                     WhatsAppSettingItem(
                         icon = Icons.Default.AccountCircle,
-                        title = "Google Account",
+                        title = "Google Drive Account",
                         subtitle = if (isSigningIntoGoogle) "Connecting…" else accountSubtitle,
                         onClick = {
                             if (googleAccountEmail.isBlank() && savedDriveToken.isBlank()) {
@@ -894,7 +898,7 @@ fun BackupSettingsScreen(
                     // Item: Back up over
                     WhatsAppSettingItem(
                         icon = Icons.Default.Wifi,
-                        title = "Back up over",
+                        title = "Backup Network Connection",
                         subtitle = backupNetwork,
                         onClick = { showNetworkDialog = true },
                         testTag = "backup_network_setting"
@@ -945,14 +949,14 @@ fun BackupSettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
 
-            // 4. END-TO-END ENCRYPTED BACKUP (WhatsApp Style)
+            // 4. AES-256 GCM ENCRYPTED BACKUP
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "End-to-end encrypted backup",
+                        text = "AES-256 GCM Cloud Encryption",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = WhatsAppGreenDark,
+                        color = EnterpriseTealDark,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
 
@@ -1020,18 +1024,18 @@ fun BackupSettingsScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Restore & Export",
+                        text = "Database Restore & Portability",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = WhatsAppGreenDark,
+                        color = EnterpriseTealDark,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
 
                     // Restore from Google Drive
                     WhatsAppSettingItem(
                         icon = Icons.Default.CloudDownload,
-                        title = "Restore from Google Drive",
-                        subtitle = if (savedDriveToken.isNotBlank()) "View cloud backups and restore" else "Connect Google account to browse backups",
+                        title = "Restore from Google Drive Cloud",
+                        subtitle = if (savedDriveToken.isNotBlank()) "Browse cloud snapshots and restore" else "Connect Google account to browse backups",
                         onClick = {
                             if (savedDriveToken.isNotBlank()) {
                                 onRefreshDriveFiles(savedDriveToken)
@@ -1044,8 +1048,8 @@ fun BackupSettingsScreen(
                     // Restore from local storage
                     WhatsAppSettingItem(
                         icon = Icons.Default.FolderOpen,
-                        title = "Restore from internal storage",
-                        subtitle = "Select an encrypted .libdeskbackup file from phone storage",
+                        title = "Restore from Device Storage",
+                        subtitle = "Select an encrypted .libdeskbackup file from internal storage",
                         onClick = {
                             importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
                         },
@@ -1055,8 +1059,8 @@ fun BackupSettingsScreen(
                     // Export backup file
                     WhatsAppSettingItem(
                         icon = Icons.Default.FileDownload,
-                        title = "Export backup file",
-                        subtitle = "Save a copy of encrypted backup to Downloads or SD card",
+                        title = "Export Encrypted Backup File",
+                        subtitle = "Save a secure standalone snapshot (.enc) to Downloads or external storage",
                         onClick = {
                             val timeTag = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
                             exportLauncher.launch("libdesk_backup_$timeTag.enc")
@@ -1074,10 +1078,10 @@ fun BackupSettingsScreen(
 
                 item {
                     Text(
-                        text = "Recent Backup History",
+                        text = "Cloud & Local Backup History",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = WhatsAppGreenDark,
+                        color = EnterpriseTealDark,
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                 }

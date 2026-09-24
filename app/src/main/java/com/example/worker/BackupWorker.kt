@@ -7,7 +7,6 @@ import com.example.data.backup.BackupManager
 import com.example.data.backup.BackupResult
 import com.example.data.backup.DriveApiResult
 import com.example.data.backup.GoogleDriveBackupManager
-import com.example.data.local.database.AppDatabase
 import com.example.viewmodel.BackupHistoryItem
 import org.json.JSONArray
 import org.json.JSONObject
@@ -25,8 +24,7 @@ class BackupWorker(
         Log.i(TAG, "Executing scheduled automated WhatsApp-style backup...")
         return try {
             val prefs = applicationContext.getSharedPreferences("libdesk_backup_prefs", Context.MODE_PRIVATE)
-            val database = AppDatabase.getInstance(applicationContext)
-            val backupManager = BackupManager(applicationContext, database)
+            val backupManager = BackupManager(applicationContext)
             val googleDriveManager = GoogleDriveBackupManager()
 
             val includeDocs = prefs.getBoolean("gdrive_include_docs", true)

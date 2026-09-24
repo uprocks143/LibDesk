@@ -1,7 +1,6 @@
 package com.example.data.backup
 
 import android.content.Context
-import com.example.data.local.database.AppDatabase
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import kotlinx.coroutines.Dispatchers
@@ -13,8 +12,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class BackupCreator(
-    private val context: Context,
-    private val database: AppDatabase
+    private val context: Context
 ) {
     
     suspend fun createLocalBackup(
@@ -29,12 +27,6 @@ class BackupCreator(
         }
 
         progress.value = 20
-        // 1. Flush & Export Database
-        try {
-            database.openHelper.writableDatabase.query("PRAGMA wal_checkpoint(FULL)").close()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
 
         val dbFile = context.getDatabasePath("libdesk_v4.db")
         val backupDbFile = File(backupDir, "database.sqlite")

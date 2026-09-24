@@ -535,14 +535,31 @@ object SupabaseAuthService {
                     Result.success(session)
                 } else {
                     val errJson = try { JSONObject(respStr) } catch (_: Exception) { null }
-                    val msg = errJson?.optString("error_description")
-                        ?: errJson?.optString("message")
-                        ?: "Authentication failed (${response.code})"
+                    val rawMsg = errJson?.optString("error_description")?.takeIf { it.isNotBlank() }
+                        ?: errJson?.optString("message")?.takeIf { it.isNotBlank() }
+                        ?: errJson?.optString("msg")?.takeIf { it.isNotBlank() }
+                        ?: errJson?.optString("error")?.takeIf { it.isNotBlank() }
+
+                    val msg = when {
+                        rawMsg?.contains("Invalid login credentials", ignoreCase = true) == true ->
+                            "गलत ईमेल या पासवर्ड (Invalid email or password). कृपया दोबारा जांचें।"
+                        rawMsg?.contains("Email not confirmed", ignoreCase = true) == true ->
+                            "ईमेल सत्यापित नहीं है। कृपया ईमेल इनबॉक्स चेक करें या पासवर्ड रीसेट करें।"
+                        !rawMsg.isNullOrBlank() -> rawMsg
+                        response.code == 400 -> "गलत ईमेल या पासवर्ड। कृपया अपनी जानकारी दोबारा जांचें।"
+                        response.code == 429 -> "Too many attempts. Please wait a moment and try again."
+                        else -> "Authentication failed (${response.code}). Please verify your credentials."
+                    }
                     Result.failure(Exception(msg))
                 }
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            val netMsg = if (e is java.net.UnknownHostException || e is java.io.IOException) {
+                "इंटरनेट कनेक्शन में समस्या है। कृपया नेटवर्क चेक करें।"
+            } else {
+                e.localizedMessage?.takeIf { it.isNotBlank() } ?: "Authentication error. Please try again."
+            }
+            Result.failure(Exception(netMsg))
         }
     }
 

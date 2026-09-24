@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.backup.*
-import com.example.data.local.database.AppDatabase
 import com.example.ui.backup.BackupState
 import com.example.worker.BackupWorker
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,10 +25,9 @@ data class BackupHistoryItem(
 )
 
 class BackupViewModel(application: Application) : AndroidViewModel(application) {
-    private val database = AppDatabase.getInstance(application)
-    private val backupManager = BackupManager(application, database)
+    private val backupManager = BackupManager(application)
     private val localBackupManager = LocalBackupManager(application)
-    private val restorer = BackupRestorer(application, database)
+    private val restorer = BackupRestorer(application)
     private val googleDriveManager = GoogleDriveBackupManager()
     private val prefs = application.getSharedPreferences("libdesk_backup_prefs", Application.MODE_PRIVATE)
 
@@ -235,6 +233,10 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
                 saveHistory(listOf(item) + _history.value)
             }
         }
+    }
+
+    fun performEnterpriseBackup(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        performWhatsAppStyleBackup(onComplete)
     }
 
     fun performWhatsAppStyleBackup(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {

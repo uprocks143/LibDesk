@@ -1,14 +1,11 @@
 package com.example.data.local.entities
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
 
 /**
  * Room database entity storing SaaS subscription plan details for libraries.
  */
-@Entity(tableName = "subscription_plans")
 data class SubscriptionPlans(
-    @PrimaryKey val id: String,
+    val id: String,
     val name: String,
     val description: String = "",
     val price: Double,
@@ -30,9 +27,8 @@ data class SubscriptionPlans(
 /**
  * Room database entity to track active library owner memberships and manual payments.
  */
-@Entity(tableName = "user_subscriptions")
 data class UserSubscription(
-    @PrimaryKey val id: String,
+    val id: String,
     val libraryId: String,
     val userId: String = "", // Library owner user ID or email
     val ownerName: String = "",

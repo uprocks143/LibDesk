@@ -34,6 +34,7 @@ import com.example.data.local.entities.StudentEntity
 import com.example.ui.components.ActionConfirmationDialog
 import com.example.ui.components.EditAttendanceModal
 import com.example.ui.theme.*
+import com.example.util.ImageShareUtils
 import com.example.viewmodel.LibDeskViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -344,21 +345,11 @@ fun ManagerAttendanceHistoryScreen(
                                 dateFilter = selectedDateFilter
                             )
                             clipboardManager.setText(AnnotatedString(report))
-                            try {
-                                val sendIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, report)
-                                    type = "text/plain"
-                                    `package` = "com.whatsapp"
-                                }
-                                context.startActivity(sendIntent)
-                            } catch (e: Exception) {
-                                val shareIntent = Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    putExtra(Intent.EXTRA_TEXT, report)
-                                    type = "text/plain"
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share Attendance Register"))
+                            val ownerPhone = currentLib?.ownerPhone ?: ""
+                            if (ownerPhone.isNotBlank()) {
+                                ImageShareUtils.sendTextToWhatsApp(context, ownerPhone, report)
+                            } else {
+                                ImageShareUtils.sendTextToWhatsApp(context, "", report)
                             }
                             // Toast.makeText(context, "Attendance report copied & opened for sharing", Toast.LENGTH_SHORT).show()
                         },
@@ -590,6 +581,22 @@ fun ManagerAttendanceHistoryScreen(
                             """.trimIndent()
                             clipboardManager.setText(AnnotatedString(slip))
                             // Toast.makeText(context, "Slip copied to clipboard", Toast.LENGTH_SHORT).show()
+                        },
+                        onSendWhatsAppAlert = {
+                            val student = students.find { it.id == log.studentId || it.fullName.equals(log.studentName, ignoreCase = true) }
+                            val studentMobile = student?.mobile ?: ""
+                            val punchStatus = if (log.status == "CHECKED_IN") "Checked In ✓" else "Punch Out Completed ✓"
+                            val punchTime = if (log.status == "CHECKED_IN") log.checkInTime else log.checkOutTime.ifEmpty { log.checkInTime }
+                            val alertMsg = "📋 *LIBDESK ATTENDANCE ALERT* — *${currentLib?.name ?: "Study Hub"}*\n\n" +
+                                "Dear *${log.studentName}*,\n" +
+                                "Your library attendance punch has been recorded.\n\n" +
+                                "• *Status:* $punchStatus\n" +
+                                "• *Date:* ${log.date}\n" +
+                                "• *Punch Time:* $punchTime\n" +
+                                "• *Seat:* Seat ${log.seatNumber.ifEmpty { "General Desk" }} (${log.shiftName})\n" +
+                                "• *Verification Mode:* ${log.mode}\n\n" +
+                                "Have a productive study session!"
+                            ImageShareUtils.sendTextToWhatsApp(context, studentMobile, alertMsg)
                         }
                     )
                 }
@@ -771,7 +778,8 @@ fun AttendanceItemCard(
     onMarkCheckOut: () -> Unit,
     onEdit: () -> Unit = {},
     onDelete: () -> Unit,
-    onCopySlip: () -> Unit
+    onCopySlip: () -> Unit,
+    onSendWhatsAppAlert: (() -> Unit)? = null
 ) {
     val isCheckedIn = log.status == "CHECKED_IN"
     val isQr = log.mode.contains("QR", ignoreCase = true)
@@ -1024,6 +1032,20 @@ fun AttendanceItemCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(15.dp)
                         )
+                    }
+
+                    if (onSendWhatsAppAlert != null) {
+                        IconButton(
+                            onClick = onSendWhatsAppAlert,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "Send WhatsApp Alert to Student",
+                                tint = LibDeskColors.success,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
 
                     // Edit wrong entry icon button
