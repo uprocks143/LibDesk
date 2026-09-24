@@ -728,46 +728,6 @@ fun AuthScreen(
                                                 )
                                             }
                                         }
-
-                                        // Super Admin Role Option
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                            border = BorderStroke(
-                                                1.5.dp,
-                                                if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                            ),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable {
-                                                    selectedRole = "SUPER_ADMIN"
-                                                    otpErrorMessage = null
-                                                }
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 4.dp),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Shield,
-                                                    contentDescription = null,
-                                                    tint = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(22.dp)
-                                                )
-                                                Spacer(modifier = Modifier.height(3.dp))
-                                                Text(
-                                                    text = "Super Admin",
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Text(
-                                                    text = "Platform",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                )
-                                            }
-                                        }
                                     }
 
                                     

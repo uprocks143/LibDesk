@@ -85,6 +85,8 @@ fun ManagerDashboardScreen(
     val isTrialExpired by (viewModel?.isTrialExpired?.collectAsState() ?: remember { mutableStateOf(false) })
     val currentSubscription by (viewModel?.currentSubscription?.collectAsState() ?: remember { mutableStateOf(null) })
     val saasPlans by (viewModel?.saasPlans?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+    val isSupabaseSyncing by (viewModel?.isSupabaseSyncing?.collectAsState() ?: remember { mutableStateOf(false) })
+    val supabaseStatusMessage by (viewModel?.supabaseStatusMessage?.collectAsState() ?: remember { mutableStateOf<String?>(null) })
     var showSaaSOffersModal by remember { mutableStateOf(false) }
 
     
@@ -370,6 +372,226 @@ fun ManagerDashboardScreen(
                                                 contentDescription = null,
                                                 tint = Color(0xFF0F172A),
                                                 modifier = Modifier.size(13.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Comprehensive Library Details & Real-Time Supabase Capacity Dashboard
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                shadowElevation = 1.dp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp)
+                                ) {
+                                    // Top Header: Library Details & Supabase Cloud Status
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Business,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = library?.name?.ifBlank { "Library Dashboard" } ?: "Library Dashboard",
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = "Code: ${library?.code ?: "LIB-01"} • ${library?.city ?: "Main Branch"}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        // Supabase Cloud Fetch / Sync Button
+                                        OutlinedButton(
+                                            onClick = { viewModel?.pullFromSupabaseCloud() },
+                                            enabled = !isSupabaseSyncing,
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.height(34.dp)
+                                        ) {
+                                            if (isSupabaseSyncing) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(14.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "Syncing...",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.Default.CloudSync,
+                                                    contentDescription = "Sync Supabase",
+                                                    modifier = Modifier.size(15.dp),
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.width(5.dp))
+                                                Text(
+                                                    text = "Fetch Supabase",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    // Occupancy Status & Capacity Header
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.EventSeat,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Real-Time Occupancy & Capacity",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        val occupancyStatusColor = when {
+                                            occupancyPercent >= 95 -> MaterialTheme.colorScheme.error
+                                            occupancyPercent >= 75 -> Color(0xFFF59E0B)
+                                            else -> LibDeskColors.success
+                                        }
+                                        val occupancyStatusText = when {
+                                            occupancyPercent >= 95 -> "At Capacity ($occupancyPercent%)"
+                                            occupancyPercent >= 75 -> "High Demand ($occupancyPercent%)"
+                                            else -> "Available ($occupancyPercent%)"
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = occupancyStatusColor.copy(alpha = 0.15f),
+                                            border = BorderStroke(1.dp, occupancyStatusColor.copy(alpha = 0.4f))
+                                        ) {
+                                            Text(
+                                                text = occupancyStatusText,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = occupancyStatusColor,
+                                                    fontWeight = FontWeight.Bold
+                                                ),
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    // Capacity Progress Bar
+                                    val progressFraction = if (totalSeats > 0) (occupiedSeats.toFloat() / totalSeats.toFloat()).coerceIn(0f, 1f) else 0f
+                                    LinearProgressIndicator(
+                                        progress = { progressFraction },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(8.dp)
+                                            .clip(RoundedCornerShape(4.dp)),
+                                        color = when {
+                                            occupancyPercent >= 90 -> MaterialTheme.colorScheme.error
+                                            occupancyPercent >= 75 -> Color(0xFFF59E0B)
+                                            else -> MaterialTheme.colorScheme.primary
+                                        },
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                    )
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Capacity Metrics Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.Start) {
+                                            Text(
+                                                text = "Total Capacity",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "$totalSeats Seats",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "Occupied",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "$occupiedSeats Assigned",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "Vacant",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "$availableSeats Free",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = LibDeskColors.success
+                                            )
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "Live In-Hall",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "$liveInHallCount Present",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = Color(0xFF0284C7)
                                             )
                                         }
                                     }
