@@ -112,9 +112,13 @@ object SupabaseClient {
         }
     }
 
+    val sdkClient: io.github.jan.supabase.SupabaseClient
+        get() = SupabaseConfig.client
+
     fun updateConfig(url: String, key: String) {
         if (url.isNotBlank()) projectUrl = url.trim().removeSuffix("/")
         if (key.isNotBlank()) apiKey = key.trim()
+        SupabaseConfig.reconfigure(projectUrl, apiKey)
     }
 
     fun setLoggedInUser(email: String, name: String, token: String) {

@@ -28,29 +28,19 @@ class BackupCreator(
 
         progress.value = 20
 
-        val dbFile = context.getDatabasePath("libdesk_v4.db")
-        val backupDbFile = File(backupDir, "database.sqlite")
-        if (dbFile.exists()) {
-            dbFile.copyTo(backupDbFile, overwrite = true)
-        }
-        
-        // Write SHM and WAL for completeness if they exist
-        val shmFile = context.getDatabasePath("libdesk_v4.db-shm")
-        if (shmFile.exists()) shmFile.copyTo(File(backupDir, "database.sqlite-shm"), overwrite = true)
-        val walFile = context.getDatabasePath("libdesk_v4.db-wal")
-        if (walFile.exists()) walFile.copyTo(File(backupDir, "database.sqlite-wal"), overwrite = true)
-
+        // Create cloud snapshot metadata and exported data
         progress.value = 40
         // 2. Export Metadata
         val metadata = BackupMetadata(
-            backupFormatVersion = 1,
+            backupFormatVersion = 2,
             appVersion = "1.0",
-            databaseVersion = 6,
+            databaseVersion = 0,
             createdAt = System.currentTimeMillis(),
             supabaseUserId = supabaseUserId,
             backupId = java.util.UUID.randomUUID().toString(),
-            containsDatabase = true,
-            containsMedia = includeMedia
+            containsDatabase = false,
+            containsMedia = includeMedia,
+            source = "SUPABASE_CLOUD"
         )
         val metadataFile = File(backupDir, "metadata.json")
         metadataFile.writeText(Json.encodeToString(metadata))

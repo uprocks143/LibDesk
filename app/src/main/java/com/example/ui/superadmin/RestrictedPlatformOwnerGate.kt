@@ -50,8 +50,19 @@ fun RestrictedPlatformOwnerGate(
     val isAwaiting2Fa by viewModel.isAwaiting2Fa.collectAsState()
     val otpTimerSeconds by viewModel.otpTimerSeconds.collectAsState()
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val rememberPrefs = remember {
+        context.getSharedPreferences("libdesk_remember_me_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    val savedSuperAdminRememberMe = remember { rememberPrefs.getBoolean("remember_me_super_admin", false) }
+    var rememberMe by remember { mutableStateOf(savedSuperAdminRememberMe) }
     var isUnlocked by rememberSaveable { mutableStateOf(currentRole == "SUPER_ADMIN") }
-    var enteredPin by remember { mutableStateOf("") }
+    var enteredEmail by remember {
+        mutableStateOf(if (savedSuperAdminRememberMe) rememberPrefs.getString("saved_super_admin_email", "") ?: "" else "")
+    }
+    var enteredPin by remember {
+        mutableStateOf(if (savedSuperAdminRememberMe) rememberPrefs.getString("saved_super_admin_password", "") ?: "" else "")
+    }
     var showPin by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
@@ -66,6 +77,13 @@ fun RestrictedPlatformOwnerGate(
     var entered2FaOtp by remember { mutableStateOf("") }
 
     val isClaimed = superAdminProfile?.isClaimed == true
+    var isClaimMode by rememberSaveable { mutableStateOf(!isClaimed) }
+
+    LaunchedEffect(isClaimed) {
+        if (isClaimed) {
+            isClaimMode = false
+        }
+    }
 
     // If unlocked or already SUPER_ADMIN, show SuperAdminScreen directly
     if (isUnlocked || currentRole == "SUPER_ADMIN") {
@@ -195,42 +213,62 @@ fun RestrictedPlatformOwnerGate(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    if (isClaimed) {
-                        // Registered Platform Owner Account
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VerifiedUser,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = "Registered Platform Owner",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = superAdminProfile?.email?.ifBlank { "Master SaaS Account" } ?: "Master SaaS Account",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
+                    // Mode Switcher (Sign In vs Claim Account)
+                    TabRow(
+                        selectedTabIndex = if (isClaimMode) 1 else 0,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                    ) {
+                        Tab(
+                            selected = !isClaimMode,
+                            onClick = {
+                                isClaimMode = false
+                                errorMessage = null
+                            },
+                            text = { Text("Direct Sign In", fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = isClaimMode,
+                            onClick = {
+                                isClaimMode = true
+                                errorMessage = null
+                            },
+                            text = { Text("Claim Account", fontWeight = FontWeight.Bold) }
+                        )
+                    }
 
+                    if (!isClaimMode) {
+                        // Sign In Flow
                         if (!isAwaiting2Fa) {
+                            OutlinedTextField(
+                                value = enteredEmail,
+                                onValueChange = {
+                                    enteredEmail = it
+                                    errorMessage = null
+                                },
+                                label = { Text("Super Admin Email / ID") },
+                                placeholder = { Text("Enter Super Admin Email / ID") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Email,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next
+                                ),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("saas_admin_email_input")
+                            )
+
                             OutlinedTextField(
                                 value = enteredPin,
                                 onValueChange = {
@@ -271,6 +309,24 @@ fun RestrictedPlatformOwnerGate(
                                     .testTag("saas_admin_pin_input")
                             )
 
+                            // Remember Me Checkbox
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = rememberMe,
+                                    onCheckedChange = { rememberMe = it },
+                                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Remember me",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
                             if (errorMessage != null) {
                                 Text(
                                     text = errorMessage ?: "",
@@ -282,17 +338,32 @@ fun RestrictedPlatformOwnerGate(
 
                             Button(
                                 onClick = {
+                                    if (enteredEmail.isBlank()) {
+                                        errorMessage = "Please enter your Super Admin email"
+                                        return@Button
+                                    }
                                     if (enteredPin.isBlank()) {
                                         errorMessage = "Please enter your Super Admin password"
                                         return@Button
                                     }
+                                    if (rememberMe) {
+                                        rememberPrefs.edit()
+                                            .putBoolean("remember_me_super_admin", true)
+                                            .putString("saved_super_admin_email", enteredEmail.trim())
+                                            .putString("saved_super_admin_password", enteredPin.trim())
+                                            .apply()
+                                    } else {
+                                        rememberPrefs.edit()
+                                            .putBoolean("remember_me_super_admin", false)
+                                            .remove("saved_super_admin_email")
+                                            .remove("saved_super_admin_password")
+                                            .apply()
+                                    }
                                     isLoading = true
                                     errorMessage = null
-                                    val profile = superAdminProfile
-                                    val targetEmail = profile?.email ?: ""
 
                                     viewModel.authenticateWithPassword(
-                                        identifier = targetEmail,
+                                        identifier = enteredEmail.trim(),
                                         passwordInput = enteredPin.trim(),
                                         role = "SUPER_ADMIN",
                                         onSuccess = {
@@ -343,7 +414,7 @@ fun RestrictedPlatformOwnerGate(
                                         color = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                     Text(
-                                        text = "A 6-digit verification code has been dispatched to ${superAdminProfile?.email}.",
+                                        text = "A 6-digit verification code has been dispatched to $enteredEmail.",
                                         fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -427,7 +498,7 @@ fun RestrictedPlatformOwnerGate(
                             }
                         }
                     } else {
-                        // Unclaimed Platform Owner Slot: Setup Form
+                        // Claim Platform Owner Slot: Setup Form
                         Text(
                             text = "Set Up Platform Owner Account",
                             fontSize = 15.sp,
@@ -435,7 +506,7 @@ fun RestrictedPlatformOwnerGate(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "The platform owner slot is currently unclaimed. Register now as the primary SaaS owner to secure master administrative rights.",
+                            text = "Register as the primary SaaS owner to secure master administrative rights for this platform.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -454,7 +525,7 @@ fun RestrictedPlatformOwnerGate(
                             value = claimEmail,
                             onValueChange = { claimEmail = it },
                             label = { Text("Owner Official Email") },
-                            placeholder = { Text("admin@libdesk.io") },
+                            placeholder = { Text("e.g. owner@example.com") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),

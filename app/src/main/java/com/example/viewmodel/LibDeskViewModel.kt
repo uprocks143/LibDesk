@@ -576,12 +576,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             val adminProfile = repository.getSuperAdmin().firstOrNull()
-            if (adminProfile == null || !adminProfile.isClaimed) {
-                onError("No Super Admin registered yet. Please claim or register Super Admin first.")
-                return@launch
-            }
-
-            val targetEmail = if (adminProfile.email.isNotBlank()) adminProfile.email else trimmedEmail
+            val targetEmail = if (adminProfile?.email?.isNotBlank() == true) adminProfile.email else trimmedEmail
 
             // If password was supplied, verify with Supabase Auth
             if (trimmedPassword.isNotBlank()) {
@@ -805,12 +800,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             // 1. Super Admin authentication branch
             if (role.equals("SUPER_ADMIN", ignoreCase = true) || role.equals("OWNER", ignoreCase = true)) {
                 val adminProfile = repository.getSuperAdmin().firstOrNull()
-                val isSlotClaimed = adminProfile != null && adminProfile.isClaimed
-
-                if (!isSlotClaimed) {
-                    onError("No Super Admin registered yet. Please click 'Claim Admin Access' to set up your Master Super Admin credentials.")
-                    return@launch
-                }
 
                 // Resolve admin target email (support login via registered email or registered mobile)
                 val targetEmail = if (adminProfile != null && (

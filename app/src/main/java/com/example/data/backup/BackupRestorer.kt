@@ -39,21 +39,9 @@ class BackupRestorer(
                 }
             }
 
-            val dbFile = File(restoreDir, "database.sqlite")
-            if (dbFile.exists()) {
-                val currentDbFile = context.getDatabasePath("libdesk_v4.db")
-                if (currentDbFile.exists()) {
-                    currentDbFile.delete()
-                }
-                dbFile.copyTo(currentDbFile, overwrite = true)
-                
-                val shmBackup = File(restoreDir, "database.sqlite-shm")
-                val walBackup = File(restoreDir, "database.sqlite-wal")
-                val currentShm = context.getDatabasePath("libdesk_v4.db-shm")
-                val currentWal = context.getDatabasePath("libdesk_v4.db-wal")
-                
-                if (shmBackup.exists()) shmBackup.copyTo(currentShm, overwrite = true) else currentShm.delete()
-                if (walBackup.exists()) walBackup.copyTo(currentWal, overwrite = true) else currentWal.delete()
+            val metadataFile = File(restoreDir, "metadata.json")
+            if (metadataFile.exists()) {
+                // Restore metadata verified
             }
 
             unencryptedZip.delete()

@@ -63,14 +63,24 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var authMode by remember { mutableStateOf(0) } 
-    var selectedRole by remember { mutableStateOf("MANAGER") } 
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val rememberPrefs = remember {
+        context.getSharedPreferences("libdesk_remember_me_prefs", android.content.Context.MODE_PRIVATE)
+    }
 
-    
-    var loginEmail by remember { mutableStateOf("") }
-    var loginPassword by remember { mutableStateOf("") }
+    val savedRememberMe = remember { rememberPrefs.getBoolean("remember_me_main", false) }
+    var rememberMe by remember { mutableStateOf(savedRememberMe) }
+    var loginEmail by remember {
+        mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_identifier", "") ?: "" else "")
+    }
+    var loginPassword by remember {
+        mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_password", "") ?: "" else "")
+    }
+    var selectedRole by remember {
+        mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_role", "MANAGER") ?: "MANAGER" else "MANAGER")
+    }
     var showLoginPassword by remember { mutableStateOf(false) }
-    var rememberMe by remember { mutableStateOf(true) }
+    var authMode by remember { mutableStateOf(0) } 
 
     
     var showForgotPasswordModal by remember { mutableStateOf(false) }
@@ -89,31 +99,26 @@ fun AuthScreen(
     
     val isSaaSAdminCreated = superAdminProfile?.isClaimed == true
     var showMasterAdminModal by remember { mutableStateOf(false) }
-    var adminModalMode by remember { mutableStateOf(if (superAdminProfile?.isClaimed == true) 1 else 0) }
-    LaunchedEffect(isSaaSAdminCreated) {
-        if (isSaaSAdminCreated) {
-            adminModalMode = 1
-        }
-    } 
+    var adminModalMode by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Claim Slot
     var adminClaimName by remember { mutableStateOf("") }
-    var adminClaimEmail by remember { mutableStateOf(superAdminProfile?.email ?: "") }
+    var adminClaimEmail by remember { mutableStateOf("") }
     var adminClaimCountryCode by remember { mutableStateOf("+91") }
     var adminClaimMobile by remember { mutableStateOf("") }
     var adminClaimPin by remember { mutableStateOf("") }
     var showAdminClaimPin by remember { mutableStateOf(false) }
     var adminClaimPinConfirm by remember { mutableStateOf("") }
     var showAdminClaimPinConfirm by remember { mutableStateOf(false) }
-        var adminLoginEmail by remember { mutableStateOf(superAdminProfile?.email ?: "") }
-    var adminLoginPin by remember { mutableStateOf("") }
+
+    val savedSuperAdminRememberMe = remember { rememberPrefs.getBoolean("remember_me_super_admin", false) }
+    var adminRememberMe by remember { mutableStateOf(savedSuperAdminRememberMe) }
+    var adminLoginEmail by remember {
+        mutableStateOf(if (savedSuperAdminRememberMe) rememberPrefs.getString("saved_super_admin_email", "") ?: "" else "")
+    }
+    var adminLoginPin by remember {
+        mutableStateOf(if (savedSuperAdminRememberMe) rememberPrefs.getString("saved_super_admin_password", "") ?: "" else "")
+    }
     var showAdminLoginPin by remember { mutableStateOf(false) }
     var adminErrorMessage by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(superAdminProfile?.email) {
-        val email = superAdminProfile?.email
-        if (!email.isNullOrBlank()) {
-            if (adminLoginEmail.isBlank()) adminLoginEmail = email
-            if (adminClaimEmail.isBlank()) adminClaimEmail = email
-        }
-    }
 
     
     var otpInput by remember { mutableStateOf("") }
@@ -660,7 +665,7 @@ fun AuthScreen(
                                                 }
                                         ) {
                                             Column(
-                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 6.dp),
+                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 4.dp),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 Icon(
@@ -671,13 +676,13 @@ fun AuthScreen(
                                                 )
                                                 Spacer(modifier = Modifier.height(3.dp))
                                                 Text(
-                                                    text = "Library Owner",
+                                                    text = "Owner",
                                                     fontWeight = FontWeight.Bold,
                                                     style = MaterialTheme.typography.labelMedium,
                                                     color = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                                 Text(
-                                                    text = "Owner / Admin",
+                                                    text = "Library",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                                 )
@@ -700,7 +705,7 @@ fun AuthScreen(
                                                 }
                                         ) {
                                             Column(
-                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 6.dp),
+                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 4.dp),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 Icon(
@@ -717,9 +722,49 @@ fun AuthScreen(
                                                     color = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                                 Text(
-                                                    text = "Aspirant Pass",
+                                                    text = "Pass",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                                )
+                                            }
+                                        }
+
+                                        // Super Admin Role Option
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                            border = BorderStroke(
+                                                1.5.dp,
+                                                if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable {
+                                                    selectedRole = "SUPER_ADMIN"
+                                                    otpErrorMessage = null
+                                                }
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 4.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Shield,
+                                                    contentDescription = null,
+                                                    tint = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                Spacer(modifier = Modifier.height(3.dp))
+                                                Text(
+                                                    text = "Super Admin",
+                                                    fontWeight = FontWeight.Bold,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "Platform",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (selectedRole == "SUPER_ADMIN") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                                 )
                                             }
                                         }
@@ -880,6 +925,21 @@ fun AuthScreen(
                                             if (loginEmail.isBlank() || loginPassword.isBlank()) {
                                                 otpErrorMessage = "Please enter both identifier and password"
                                                 return@Button
+                                            }
+                                            if (rememberMe) {
+                                                rememberPrefs.edit()
+                                                    .putBoolean("remember_me_main", true)
+                                                    .putString("saved_main_identifier", loginEmail.trim())
+                                                    .putString("saved_main_password", loginPassword.trim())
+                                                    .putString("saved_main_role", selectedRole)
+                                                    .apply()
+                                            } else {
+                                                rememberPrefs.edit()
+                                                    .putBoolean("remember_me_main", false)
+                                                    .remove("saved_main_identifier")
+                                                    .remove("saved_main_password")
+                                                    .remove("saved_main_role")
+                                                    .apply()
                                             }
                                             onAuthenticate(
                                                 loginEmail.trim(),
@@ -1267,7 +1327,7 @@ fun AuthScreen(
                                         value = regEmail,
                                         onValueChange = { regEmail = it },
                                         label = { Text("Official Email *") },
-                                        placeholder = { Text("admin@apexlibrary.com") },
+                                        placeholder = { Text("owner@example.com") },
                                         leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.primary) },
                                         singleLine = true,
                                         isError = signupValidationError != null && (regEmail.isBlank() || !regEmail.contains("@")),
@@ -1512,10 +1572,9 @@ fun AuthScreen(
             // prominently in the login flow, which made "become the platform
             // owner" look like a normal part of everyday sign-in. SaaS Admin
             // sign-up/login now lives entirely inside the modal opened below.
-            val isClaimed = isSaaSAdminCreated
             TextButton(
                 onClick = {
-                    adminModalMode = if (isClaimed) 1 else 0
+                    adminModalMode = 0
                     adminErrorMessage = null
                     showMasterAdminModal = true
                 },
@@ -1937,15 +1996,6 @@ fun AuthScreen(
     if (showMasterAdminModal) {
         val isSlotClaimed = superAdminProfile?.isClaimed == true
 
-        LaunchedEffect(isSlotClaimed, showMasterAdminModal) {
-            if (isSlotClaimed) {
-                adminModalMode = 1
-                if (adminLoginEmail.isBlank() && !superAdminProfile?.email.isNullOrBlank()) {
-                    adminLoginEmail = superAdminProfile!!.email
-                }
-            }
-        }
-
         BackHandler { showMasterAdminModal = false }
 
         Dialog(
@@ -1966,139 +2016,109 @@ fun AuthScreen(
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-
+                    // Header Bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { showMasterAdminModal = false },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(if (isSlotClaimed) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else LibDeskColors.warningSoft),
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (isSlotClaimed) Icons.Default.Shield else Icons.Default.LockPerson,
+                                    imageVector = Icons.Default.Shield,
                                     contentDescription = null,
-                                    tint = if (isSlotClaimed) MaterialTheme.colorScheme.primary else LibDeskColors.warning,
-                                    modifier = Modifier.size(20.dp)
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "SaaS Admin Account",
+                                    text = "Super Admin Access",
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 18.sp,
+                                    fontSize = 17.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (isSlotClaimed) "1 Account Active • Sign Up Disabled" else "Two Options: 1. Sign Up, 2. Login",
-                                    fontSize = 12.5.sp,
-                                    color = if (isSlotClaimed) MaterialTheme.colorScheme.error else LibDeskColors.warning,
-                                    fontWeight = FontWeight.Medium
+                                    text = "Platform Owner Console",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
 
-                        IconButton(onClick = { showMasterAdminModal = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        IconButton(
+                            onClick = { showMasterAdminModal = false },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
 
-                    // Two explicit options for SaaS Admin: 1. Sign Up, 2. Login
+                    // Mode Selection Tabs (Direct Login vs Claim Slot)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Option 1: Sign Up (Permanently disabled if 1 SaaS Admin account already exists)
-                        val isSignUpDisabled = isSlotClaimed
-                        val isSignUpSelected = adminModalMode == 0 && !isSignUpDisabled
-
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = when {
-                                isSignUpSelected -> MaterialTheme.colorScheme.surface
-                                isSignUpDisabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                                else -> Color.Transparent
-                            },
-                            shadowElevation = if (isSignUpSelected) 2.dp else 0.dp,
-                            border = if (isSignUpDisabled) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)) else null,
+                            color = if (adminModalMode == 0) MaterialTheme.colorScheme.surface else Color.Transparent,
+                            shadowElevation = if (adminModalMode == 0) 1.dp else 0.dp,
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable(enabled = !isSignUpDisabled) {
+                                .clickable {
                                     adminModalMode = 0
                                     adminErrorMessage = null
                                 }
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(vertical = 10.dp, horizontal = 6.dp)
-                                    .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                modifier = Modifier.padding(vertical = 9.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = if (isSignUpDisabled) Icons.Default.Lock else Icons.Default.PersonAdd,
-                                    contentDescription = null,
-                                    tint = when {
-                                        isSignUpDisabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                                        isSignUpSelected -> MaterialTheme.colorScheme.primary
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(16.dp)
+                                Text(
+                                    text = "Sign In",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (adminModalMode == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "1. Sign Up",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.5.sp,
-                                        color = when {
-                                            isSignUpDisabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                                            isSignUpSelected -> MaterialTheme.colorScheme.primary
-                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                        }
-                                    )
-                                    if (isSignUpDisabled) {
-                                        Text(
-                                            text = "Disabled (1/1)",
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                                        )
-                                    } else {
-                                        Text(
-                                            text = "1 Slot Open",
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                                        )
-                                    }
-                                }
                             }
                         }
 
-                        // Option 2: Login (Always available)
-                        val isLoginSelected = adminModalMode == 1 || isSlotClaimed
-
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isLoginSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                            shadowElevation = if (isLoginSelected) 2.dp else 0.dp,
+                            color = if (adminModalMode == 1) MaterialTheme.colorScheme.surface else Color.Transparent,
+                            shadowElevation = if (adminModalMode == 1) 1.dp else 0.dp,
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable {
@@ -2106,297 +2126,61 @@ fun AuthScreen(
                                     adminErrorMessage = null
                                 }
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(vertical = 10.dp, horizontal = 6.dp)
-                                    .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                modifier = Modifier.padding(vertical = 9.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Login,
-                                    contentDescription = null,
-                                    tint = if (isLoginSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "2. Login",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.5.sp,
-                                        color = if (isLoginSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    if (isSlotClaimed) {
-                                        Text(
-                                            text = "Active & Available",
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = LibDeskColors.success
-                                        )
-                                    } else {
-                                        Text(
-                                            text = "Sign In",
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Explanatory banner when Sign Up is permanently disabled
-                    if (isSlotClaimed) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = "Sign Up Option Permanently Disabled",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.5.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = "1 SaaS Admin account already exists${if (!superAdminProfile?.email.isNullOrBlank()) " (${superAdminProfile?.email})" else ""}. Only the Login option is available.",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (!isSlotClaimed && adminModalMode == 0) {
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = LibDeskColors.warningSoft,
-                                border = BorderStroke(1.dp, LibDeskColors.warning.copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Info, contentDescription = null, tint = LibDeskColors.warning, modifier = Modifier.size(20.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Single-Slot Policy: Exactly ONE Super Admin account is permitted. Once created, nobody else will be allowed to create an admin account.",
-                                        fontSize = 14.sp,
-                                        color = LibDeskColors.warning
-                                    )
-                                }
-                            }
-
-                            OutlinedTextField(
-                                value = adminClaimName,
-                                onValueChange = { adminClaimName = it },
-                                label = { Text("Admin Full Name") },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = adminClaimEmail,
-                                onValueChange = { adminClaimEmail = it },
-                                label = { Text("Master Admin Email") },
-                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            CountryCodePhoneField(
-                                mobile = adminClaimMobile,
-                                onMobileChange = { adminClaimMobile = it },
-                                countryCode = adminClaimCountryCode,
-                                onCountryCodeChange = { adminClaimCountryCode = it },
-                                label = "Mobile Number",
-                                placeholder = "98765 43210",
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = adminClaimPin,
-                                onValueChange = { adminClaimPin = it },
-                                label = { Text("Create PIN / Password") },
-                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                trailingIcon = {
-                                    IconButton(onClick = { showAdminClaimPin = !showAdminClaimPin }) {
-                                        Icon(
-                                            imageVector = if (showAdminClaimPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = if (showAdminClaimPin) "Hide Password" else "Show Password"
-                                        )
-                                    }
-                                },
-                                visualTransformation = if (showAdminClaimPin) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = adminClaimPinConfirm,
-                                onValueChange = { adminClaimPinConfirm = it },
-                                label = { Text("Confirm PIN / Password") },
-                                leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                trailingIcon = {
-                                    IconButton(onClick = { showAdminClaimPinConfirm = !showAdminClaimPinConfirm }) {
-                                        Icon(
-                                            imageVector = if (showAdminClaimPinConfirm) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = if (showAdminClaimPinConfirm) "Hide Password" else "Show Password"
-                                        )
-                                    }
-                                },
-                                visualTransformation = if (showAdminClaimPinConfirm) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.VerifiedUser,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text("2-Factor Authentication is mandatory", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Text("Every Super Admin login requires an email OTP. This cannot be turned off.", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-
-                            if (adminErrorMessage != null) {
                                 Text(
-                                    text = adminErrorMessage ?: "",
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 14.sp,
+                                    text = if (isSlotClaimed) "Claim Slot (Claimed)" else "Claim Slot",
                                     fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
+                                    fontSize = 13.sp,
+                                    color = if (adminModalMode == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-
-                            Button(
-                                onClick = {
-                                    val fullMobile = combineCountryCodeAndPhone(adminClaimCountryCode, adminClaimMobile)
-                                    if (adminClaimName.isBlank()) {
-                                        adminErrorMessage = "Please enter your full name"
-                                    } else if (adminClaimEmail.isBlank() || !adminClaimEmail.contains("@")) {
-                                        adminErrorMessage = "Please enter a valid Admin Email"
-                                    } else if (fullMobile.isBlank()) {
-                                        adminErrorMessage = "Please enter a valid mobile number"
-                                    } else if (adminClaimPin.length < 4) {
-                                        adminErrorMessage = "Password / PIN must be at least 4 characters"
-                                    } else if (adminClaimPin != adminClaimPinConfirm) {
-                                        adminErrorMessage = "PIN and Confirmation do not match"
-                                    } else {
-                                        adminErrorMessage = null
-                                        onClaimAdminSlot(
-                                            adminClaimName,
-                                            adminClaimEmail,
-                                            fullMobile,
-                                            adminClaimPin,
-                                            true, // 2FA is mandatory for the Super Admin account, always
-                                            { otp ->
-                                                showMasterAdminModal = false
-                                                otpInput = otp
-                                            },
-                                            { err ->
-                                                adminErrorMessage = err
-                                            }
-                                        )
-                                    }
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                            ) {
-                                Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("1. Sign Up as SaaS Admin", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             }
                         }
                     }
 
-                    if (isSlotClaimed || adminModalMode != 0) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text("High-Security 2FA Authentication", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Text(
-                                        if (isSlotClaimed) "Registered Admin: ${superAdminProfile?.email}" else "Sign in with configured Master credentials",
-                                        fontSize = 10.5.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-
+                    if (adminModalMode == 0) {
+                        // Direct Sign In Form
                         OutlinedTextField(
                             value = adminLoginEmail,
-                            onValueChange = { adminLoginEmail = it },
-                            label = { Text("Super Admin Email / User ID") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            onValueChange = {
+                                adminLoginEmail = it
+                                adminErrorMessage = null
+                            },
+                            label = { Text("Super Admin Email / ID") },
+                            placeholder = { Text("Enter Super Admin Email / ID") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Email,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
                         OutlinedTextField(
                             value = adminLoginPin,
-                            onValueChange = { adminLoginPin = it },
-                            label = { Text("Access PIN / Password") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            onValueChange = {
+                                adminLoginPin = it
+                                adminErrorMessage = null
+                            },
+                            label = { Text("Password / PIN") },
+                            placeholder = { Text("Enter Super Admin Password") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
                             trailingIcon = {
                                 IconButton(onClick = { showAdminLoginPin = !showAdminLoginPin }) {
                                     Icon(
@@ -2409,6 +2193,266 @@ fun AuthScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Remember Me Checkbox for Super Admin
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = adminRememberMe,
+                                onCheckedChange = { adminRememberMe = it },
+                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Remember me",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        if (adminErrorMessage != null) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = adminErrorMessage ?: "",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        // Primary Sign In Button
+                        Button(
+                            onClick = {
+                                if (adminLoginEmail.isBlank()) {
+                                    adminErrorMessage = "Please enter Super Admin Email"
+                                    return@Button
+                                }
+                                if (adminLoginPin.isBlank()) {
+                                    adminErrorMessage = "Please enter Password / PIN"
+                                    return@Button
+                                }
+                                if (adminRememberMe) {
+                                    rememberPrefs.edit()
+                                        .putBoolean("remember_me_super_admin", true)
+                                        .putString("saved_super_admin_email", adminLoginEmail.trim())
+                                        .putString("saved_super_admin_password", adminLoginPin.trim())
+                                        .apply()
+                                } else {
+                                    rememberPrefs.edit()
+                                        .putBoolean("remember_me_super_admin", false)
+                                        .remove("saved_super_admin_email")
+                                        .remove("saved_super_admin_password")
+                                        .apply()
+                                }
+                                adminErrorMessage = null
+                                onAuthenticate(
+                                    adminLoginEmail.trim(),
+                                    adminLoginPin.trim(),
+                                    "SUPER_ADMIN",
+                                    {
+                                        showMasterAdminModal = false
+                                        adminErrorMessage = null
+                                    },
+                                    { err ->
+                                        adminErrorMessage = err
+                                    }
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Login,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Sign In as Super Admin",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.5.sp
+                            )
+                        }
+
+                        // Secondary 2FA Option
+                        OutlinedButton(
+                            onClick = {
+                                if (adminLoginEmail.isBlank()) {
+                                    adminErrorMessage = "Please enter Super Admin Email"
+                                    return@OutlinedButton
+                                }
+                                if (adminLoginPin.isBlank()) {
+                                    adminErrorMessage = "Please enter Password / PIN"
+                                    return@OutlinedButton
+                                }
+                                if (adminRememberMe) {
+                                    rememberPrefs.edit()
+                                        .putBoolean("remember_me_super_admin", true)
+                                        .putString("saved_super_admin_email", adminLoginEmail.trim())
+                                        .putString("saved_super_admin_password", adminLoginPin.trim())
+                                        .apply()
+                                } else {
+                                    rememberPrefs.edit()
+                                        .putBoolean("remember_me_super_admin", false)
+                                        .remove("saved_super_admin_email")
+                                        .remove("saved_super_admin_password")
+                                        .apply()
+                                }
+                                adminErrorMessage = null
+                                onRequest2FaOtp(
+                                    adminLoginEmail.trim(),
+                                    adminLoginPin.trim(),
+                                    { _ ->
+                                        showMasterAdminModal = false
+                                        otpInput = ""
+                                        otpErrorMessage = null
+                                    },
+                                    { err ->
+                                        adminErrorMessage = err
+                                    }
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Login with 2FA Email OTP",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    } else {
+                        // Claim Platform Owner Slot Form
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = LibDeskColors.warningSoft,
+                            border = BorderStroke(1.dp, LibDeskColors.warning.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = LibDeskColors.warning,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Register as the master platform owner to activate global SaaS administration rights.",
+                                    fontSize = 12.sp,
+                                    color = LibDeskColors.warning
+                                )
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = adminClaimName,
+                            onValueChange = { adminClaimName = it },
+                            label = { Text("Admin Full Name") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = adminClaimEmail,
+                            onValueChange = { adminClaimEmail = it },
+                            label = { Text("Master Admin Email") },
+                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        CountryCodePhoneField(
+                            mobile = adminClaimMobile,
+                            onMobileChange = { adminClaimMobile = it },
+                            countryCode = adminClaimCountryCode,
+                            onCountryCodeChange = { adminClaimCountryCode = it },
+                            label = "Mobile Number",
+                            placeholder = "98765 43210",
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = adminClaimPin,
+                            onValueChange = { adminClaimPin = it },
+                            label = { Text("Create Password / PIN") },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            trailingIcon = {
+                                IconButton(onClick = { showAdminClaimPin = !showAdminClaimPin }) {
+                                    Icon(
+                                        imageVector = if (showAdminClaimPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = if (showAdminClaimPin) "Hide Password" else "Show Password"
+                                    )
+                                }
+                            },
+                            visualTransformation = if (showAdminClaimPin) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = adminClaimPinConfirm,
+                            onValueChange = { adminClaimPinConfirm = it },
+                            label = { Text("Confirm Password / PIN") },
+                            leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            trailingIcon = {
+                                IconButton(onClick = { showAdminClaimPinConfirm = !showAdminClaimPinConfirm }) {
+                                    Icon(
+                                        imageVector = if (showAdminClaimPinConfirm) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = if (showAdminClaimPinConfirm) "Hide Password" else "Show Password"
+                                    )
+                                }
+                            },
+                            visualTransformation = if (showAdminClaimPinConfirm) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -2416,7 +2460,7 @@ fun AuthScreen(
                             Text(
                                 text = adminErrorMessage ?: "",
                                 color = MaterialTheme.colorScheme.error,
-                                fontSize = 14.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center
                             )
@@ -2424,19 +2468,28 @@ fun AuthScreen(
 
                         Button(
                             onClick = {
-                                if (adminLoginEmail.isBlank()) {
-                                    adminErrorMessage = "Please enter Super Admin Email"
-                                } else if (adminLoginPin.isBlank()) {
-                                    adminErrorMessage = "Please enter PIN / Password"
+                                val fullMobile = combineCountryCodeAndPhone(adminClaimCountryCode, adminClaimMobile)
+                                if (adminClaimName.isBlank()) {
+                                    adminErrorMessage = "Please enter your full name"
+                                } else if (adminClaimEmail.isBlank() || !adminClaimEmail.contains("@")) {
+                                    adminErrorMessage = "Please enter a valid Admin Email"
+                                } else if (fullMobile.isBlank()) {
+                                    adminErrorMessage = "Please enter a valid mobile number"
+                                } else if (adminClaimPin.length < 4) {
+                                    adminErrorMessage = "Password must be at least 4 characters"
+                                } else if (adminClaimPin != adminClaimPinConfirm) {
+                                    adminErrorMessage = "Password and Confirmation do not match"
                                 } else {
                                     adminErrorMessage = null
-                                    onRequest2FaOtp(
-                                        adminLoginEmail,
-                                        adminLoginPin,
-                                        { _ ->
+                                    onClaimAdminSlot(
+                                        adminClaimName.trim(),
+                                        adminClaimEmail.trim(),
+                                        fullMobile.trim(),
+                                        adminClaimPin.trim(),
+                                        true,
+                                        { otp ->
                                             showMasterAdminModal = false
-                                            otpInput = ""
-                                            otpErrorMessage = null
+                                            otpInput = otp
                                         },
                                         { err ->
                                             adminErrorMessage = err
@@ -2450,15 +2503,15 @@ fun AuthScreen(
                                 .fillMaxWidth()
                                 .height(48.dp)
                         ) {
-                            Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.secondary)
+                            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("2. Login with 2FA Email OTP", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Claim Platform Owner Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                     }
                 }
             }
         }
-
+    }
     
     if (showForgotPasswordModal) {
         BackHandler { showForgotPasswordModal = false }
@@ -2545,7 +2598,7 @@ fun AuthScreen(
                                 forgotPasswordError = null
                             },
                             label = { Text("Registered Email or Mobile") },
-                            placeholder = { Text("e.g. admin@libdesk.io") },
+                            placeholder = { Text("e.g. user@example.com") },
                             leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
