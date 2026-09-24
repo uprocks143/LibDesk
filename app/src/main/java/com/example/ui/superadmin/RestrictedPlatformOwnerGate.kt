@@ -34,7 +34,7 @@ import com.example.viewmodel.LibDeskViewModel
 /**
  * Restricted Management Interface for the Platform Owner (SaaS Admin).
  * Accessible via dedicated bottom navigation entry or footer links.
- * Requires Platform Owner authentication (Master PIN / 2FA) to unlock
+ * Requires Platform Owner authentication (Password / Supabase 2FA) to unlock
  * global SaaS subscriptions, MRR metrics, library plans, and pricing tiers.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -237,8 +237,8 @@ fun RestrictedPlatformOwnerGate(
                                     enteredPin = it
                                     errorMessage = null
                                 },
-                                label = { Text("Master PIN / Access Code") },
-                                placeholder = { Text("Enter 4-8 digit master code") },
+                                label = { Text("Super Admin Password") },
+                                placeholder = { Text("Enter account password") },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Key,
@@ -283,7 +283,7 @@ fun RestrictedPlatformOwnerGate(
                             Button(
                                 onClick = {
                                     if (enteredPin.isBlank()) {
-                                        errorMessage = "Please enter the Master PIN / Access Code"
+                                        errorMessage = "Please enter your Super Admin password"
                                         return@Button
                                     }
                                     isLoading = true
@@ -291,27 +291,19 @@ fun RestrictedPlatformOwnerGate(
                                     val profile = superAdminProfile
                                     val targetEmail = profile?.email ?: ""
 
-                                    if (profile?.accessCode?.trim() == enteredPin.trim()) {
-                                        if (profile.is2FaEnabled) {
-                                            viewModel.requestSuperAdmin2FaOtp(
-                                                email = targetEmail,
-                                                accessCode = enteredPin.trim(),
-                                                onOtpDispatched = {
-                                                    isLoading = false
-                                                },
-                                                onError = { err ->
-                                                    isLoading = false
-                                                    errorMessage = err
-                                                }
-                                            )
-                                        } else {
+                                    viewModel.authenticateWithPassword(
+                                        identifier = targetEmail,
+                                        passwordInput = enteredPin.trim(),
+                                        role = "SUPER_ADMIN",
+                                        onSuccess = {
                                             isLoading = false
                                             isUnlocked = true
+                                        },
+                                        onError = { err ->
+                                            isLoading = false
+                                            errorMessage = err
                                         }
-                                    } else {
-                                        isLoading = false
-                                        errorMessage = "Invalid Master PIN or Access Code. Access Denied."
-                                    }
+                                    )
                                 },
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
@@ -483,8 +475,8 @@ fun RestrictedPlatformOwnerGate(
                         OutlinedTextField(
                             value = claimPin,
                             onValueChange = { claimPin = it },
-                            label = { Text("Master PIN / Password (4-8 digits)") },
-                            placeholder = { Text("e.g. 8888") },
+                            label = { Text("Password (at least 6 characters)") },
+                            placeholder = { Text("Enter secure password") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
@@ -502,8 +494,8 @@ fun RestrictedPlatformOwnerGate(
 
                         Button(
                             onClick = {
-                                if (claimEmail.isBlank() || claimPin.isBlank()) {
-                                    errorMessage = "Please enter official email and master PIN"
+                                if (claimEmail.isBlank() || claimPin.length < 6) {
+                                    errorMessage = "Please enter official email and a password with at least 6 characters"
                                     return@Button
                                 }
                                 isLoading = true

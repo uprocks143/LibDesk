@@ -153,7 +153,7 @@ object EmailOtpService {
                 val typesToTest = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> listOf("recovery", "email")
                     OtpPurpose.SIGNUP_VERIFICATION -> listOf("signup", "email")
-                    OtpPurpose.SUPER_ADMIN_2FA -> listOf("email", "magiclink")
+                    OtpPurpose.SUPER_ADMIN_2FA -> listOf("email", "magiclink", "signup")
                 }
 
                 for (type in typesToTest) {
@@ -244,7 +244,7 @@ object EmailOtpService {
                 val typesToTest = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> listOf("recovery", "email")
                     OtpPurpose.SIGNUP_VERIFICATION -> listOf("signup", "email")
-                    OtpPurpose.SUPER_ADMIN_2FA -> listOf("email", "magiclink")
+                    OtpPurpose.SUPER_ADMIN_2FA -> listOf("email", "magiclink", "signup")
                 }
 
                 for (type in typesToTest) {

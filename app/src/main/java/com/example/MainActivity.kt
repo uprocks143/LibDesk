@@ -1022,6 +1022,7 @@ onOpenSyncBackup = { showBackupScreen = true },
             libraryLatitude = libLat,
             libraryLongitude = libLng,
             libraryName = libName,
+            studentsList = students,
             onScanCode = { code, locNote, onResult ->
                 viewModel.scanQrAttendance(
                     code = code,

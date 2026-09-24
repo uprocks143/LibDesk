@@ -55,9 +55,28 @@ import com.google.zxing.common.GlobalHistogramBinarizer
 import com.google.zxing.common.HybridBinarizer
 import java.util.concurrent.Executors
 
+import com.example.data.local.entities.StudentEntity
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+
+data class SessionScanRecord(
+    val id: String = UUID.randomUUID().toString(),
+    val studentName: String,
+    val studentCode: String,
+    val seatNumber: String,
+    val mode: String, // "IN" or "OUT"
+    val timestamp: String,
+    val isSuccess: Boolean,
+    val message: String
+)
+
 /**
- * Industrial-grade Seat QR Code Scanner Component for checking into allocated library seats.
- * Enforces rule-based seat allocation matching and real-time cloud attendance verification.
+ * Industrial-grade Seat QR & Student ID Scanner Component for quick check-ins.
+ * Supports both Student Self Check-In and Librarian Desk Rapid ID Scanning.
  */
 @Composable
 fun SeatCheckInScannerModal(
@@ -69,18 +88,22 @@ fun SeatCheckInScannerModal(
     libraryLatitude: Double = 28.6139,
     libraryLongitude: Double = 77.2090,
     libraryName: String = "Library Desk",
+    studentsList: List<StudentEntity> = emptyList(),
     onScanCode: (String, String?, ((Boolean, String) -> Unit)?) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
     var manualInput by remember { mutableStateOf("") }
     var isTorchOn by remember { mutableStateOf(false) }
     var cameraLensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
     var isVerifying by remember { mutableStateOf(false) }
     var lastResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    var autoScanNext by remember { mutableStateOf(!isStudentMode) }
+    val sessionScans = remember { mutableStateListOf<SessionScanRecord>() }
 
     // Camera Permission State
     var hasCameraPermission by remember {
@@ -174,10 +197,52 @@ fun SeatCheckInScannerModal(
             "Location Checked"
         } else null
 
+        val cleanCode = code.trim().removePrefix("LIBDESK:STUDENT:").removePrefix("STUDENT:").removePrefix("STU:")
         onScanCode(code.trim(), locNote) { success, message ->
             isVerifying = false
             lastResult = Pair(success, message)
             triggerHapticFeedback(success)
+
+            if (success) {
+                val matched = studentsList.find {
+                    it.id.equals(cleanCode, ignoreCase = true) ||
+                    it.studentCode.equals(cleanCode, ignoreCase = true) ||
+                    it.mobile.equals(cleanCode, ignoreCase = true) ||
+                    it.rfidQrCode.equals(cleanCode, ignoreCase = true) ||
+                    it.seatNumber.equals(cleanCode, ignoreCase = true)
+                }
+                val sName = matched?.fullName ?: if (isStudentMode) studentName else "Student Member"
+                val sCode = matched?.studentCode ?: cleanCode
+                val sSeat = matched?.seatNumber?.ifBlank { "General Desk" } ?: "General Desk"
+                val sMode = if (message.contains("Checked OUT", ignoreCase = true)) "OUT" else "IN"
+                val sTime = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+
+                sessionScans.add(
+                    0,
+                    SessionScanRecord(
+                        studentName = sName,
+                        studentCode = sCode,
+                        seatNumber = sSeat,
+                        mode = sMode,
+                        timestamp = sTime,
+                        isSuccess = true,
+                        message = message
+                    )
+                )
+                if (sessionScans.size > 20) {
+                    sessionScans.removeLast()
+                }
+
+                // In continuous/auto-scan mode for librarian, clear result after 2.5s to scan next ID
+                if (!isStudentMode && autoScanNext) {
+                    coroutineScope.launch {
+                        delay(2500L)
+                        if (lastResult?.first == true) {
+                            lastResult = null
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -221,26 +286,26 @@ fun SeatCheckInScannerModal(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                                .background(if (isStudentMode) MaterialTheme.colorScheme.primaryContainer else LibDeskColors.warningSoft),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.QrCodeScanner,
+                                imageVector = if (isStudentMode) Icons.Default.QrCodeScanner else Icons.Default.Badge,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                tint = if (isStudentMode) MaterialTheme.colorScheme.onPrimaryContainer else LibDeskColors.warning,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Seat Check-In Scanner",
+                                text = if (isStudentMode) "Seat Check-In Scanner" else "Librarian Student ID Scanner",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Scan allocated seat QR sticker or gate pass",
-                                fontSize = 13.sp,
+                                text = if (isStudentMode) "Scan allocated seat QR sticker or gate pass" else "Scan student ID card, QR badge, or barcode for quick check-in",
+                                fontSize = 12.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -260,10 +325,56 @@ fun SeatCheckInScannerModal(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Allocated Seat Card (rule-based reference)
-                if (allocatedSeatNumber.isNotBlank()) {
+                // Librarian Mode Controls & Rapid Queue Toggle
+                if (!isStudentMode) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = LibDeskColors.successSoft
+                                ) {
+                                    Text(
+                                        text = "STAFF DESK",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = LibDeskColors.success,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Auto-Scan Next Student",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            Switch(
+                                checked = autoScanNext,
+                                onCheckedChange = { autoScanNext = it },
+                                modifier = Modifier.height(28.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                // Allocated Seat Card (rule-based reference for student self check-in)
+                if (allocatedSeatNumber.isNotBlank() && isStudentMode) {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -580,6 +691,17 @@ fun SeatCheckInScannerModal(
                                 horizontalArrangement = Arrangement.End
                             ) {
                                 if (success) {
+                                    if (!isStudentMode) {
+                                        OutlinedButton(
+                                            onClick = { lastResult = null },
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        ) {
+                                            Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Scan Next")
+                                        }
+                                    }
                                     Button(
                                         onClick = onClose,
                                         shape = RoundedCornerShape(10.dp),
@@ -589,7 +711,7 @@ fun SeatCheckInScannerModal(
                                         ),
                                         modifier = Modifier.testTag("confirm_checkin_done_button")
                                     ) {
-                                        Text("Done")
+                                        Text(if (isStudentMode) "Done" else "Finish Session")
                                     }
                                 } else {
                                     OutlinedButton(
@@ -607,12 +729,20 @@ fun SeatCheckInScannerModal(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Manual Desk / Seat Code Input Fallback
+                // Manual Desk / Student Code Input Fallback
                 OutlinedTextField(
                     value = manualInput,
                     onValueChange = { manualInput = it },
-                    label = { Text("Enter Seat Number (e.g. A-12) or Code") },
-                    placeholder = { Text(if (allocatedSeatNumber.isNotBlank()) "e.g. $allocatedSeatNumber" else "e.g. A-12") },
+                    label = { Text(if (isStudentMode) "Enter Seat Number (e.g. A-12) or Code" else "Enter Student Code / Mobile / Seat No.") },
+                    placeholder = {
+                        Text(
+                            if (isStudentMode) {
+                                if (allocatedSeatNumber.isNotBlank()) "e.g. $allocatedSeatNumber" else "e.g. A-12"
+                            } else {
+                                "e.g. STU-1001, 9876543210, A-12"
+                            }
+                        )
+                    },
                     singleLine = true,
                     trailingIcon = {
                         IconButton(
@@ -626,7 +756,7 @@ fun SeatCheckInScannerModal(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Submit seat code",
+                                contentDescription = "Submit code",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -636,6 +766,110 @@ fun SeatCheckInScannerModal(
                         .fillMaxWidth()
                         .testTag("manual_seat_input")
                 )
+
+                // Librarian Recent Queue Activity Feed
+                if (!isStudentMode && sessionScans.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.History,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Queue Activity",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        text = "${sessionScans.size} logged",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            sessionScans.take(6).forEach { scan ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (scan.mode == "IN") LibDeskColors.successSoft else LibDeskColors.warningSoft
+                                            ) {
+                                                Text(
+                                                    text = if (scan.mode == "IN") "CHECK-IN" else "CHECK-OUT",
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = if (scan.mode == "IN") LibDeskColors.success else LibDeskColors.warning,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = scan.studentName,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 12.5.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "ID: ${scan.studentCode} • Seat: ${scan.seatNumber}",
+                                                    fontSize = 10.5.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+
+                                        Text(
+                                            text = scan.timestamp,
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

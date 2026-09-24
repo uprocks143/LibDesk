@@ -1070,7 +1070,6 @@ private fun BroadcastTab(libraries: List<LibraryEntity>, viewModel: LibDeskViewM
 private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewModel, onLogout: () -> Unit) {
     var name by remember(profile) { mutableStateOf(profile?.name ?: "") }
     var email by remember(profile) { mutableStateOf(profile?.email ?: "") }
-    var accessCode by remember(profile) { mutableStateOf(profile?.accessCode ?: "") }
     var upiId by remember(profile) { mutableStateOf(profile?.upiId ?: "libdesk.billing@upi") }
     var upiPayeeName by remember(profile) { mutableStateOf(profile?.upiPayeeName ?: "LibDesk Subscriptions") }
     var showResetConfirm by remember { mutableStateOf(false) }
@@ -1093,23 +1092,19 @@ private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewMo
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(
-                    value = accessCode, onValueChange = { accessCode = it },
-                    label = { Text("Access PIN") }, singleLine = true, modifier = Modifier.fillMaxWidth()
-                )
                 Button(
                     onClick = {
                         viewModel.updateSuperAdminProfile(
                             email = email.trim(),
                             name = name.trim(),
-                            accessCode = accessCode.trim(),
+                            accessCode = "",
                             is2Fa = true,
                             upiId = upiId.trim(),
                             upiPayeeName = upiPayeeName.trim()
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = name.isNotBlank() && email.isNotBlank() && accessCode.isNotBlank()
+                    enabled = name.isNotBlank() && email.isNotBlank()
                 ) { Text("Save Changes") }
             }
         }

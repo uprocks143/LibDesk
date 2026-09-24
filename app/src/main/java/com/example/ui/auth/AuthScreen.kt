@@ -1870,7 +1870,7 @@ fun AuthScreen(
                     
                     Button(
                         onClick = {
-                            if (otpInput.length < 4) {
+                            if (otpInput.length != 6) {
                                 otpErrorMessage = "Please enter complete 6-digit OTP"
                             } else {
                                 onVerify2FaOtp(

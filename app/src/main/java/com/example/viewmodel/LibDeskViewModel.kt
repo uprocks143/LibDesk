@@ -458,22 +458,22 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
 
-            val cleanEmail = email.trim()
-            val cleanCode = accessCode.trim()
+            val cleanEmail = email.trim().lowercase()
+            val cleanPassword = accessCode.trim()
 
             if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
                 onError("Please provide a valid Super Admin Email address.")
                 return@launch
             }
-            if (cleanCode.length < 4) {
-                onError("Master Access PIN/Password must be at least 4 characters.")
+            if (cleanPassword.length < 6) {
+                onError("Super Admin password must be at least 6 characters.")
                 return@launch
             }
             
             val signUpResult = SupabaseAuthService.signUp(
                 context = getApplication(),
                 email = cleanEmail,
-                password = cleanCode,
+                password = cleanPassword,
                 name = name.ifBlank { "SaaS Master Administrator" },
                 role = UserRole.OWNER,
                 libraryId = ""
@@ -485,15 +485,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                         errMsg.contains("already exists", ignoreCase = true) ||
                         errMsg.contains("user_already_exists", ignoreCase = true)
 
-                if (!isAlreadyRegistered) {
-                    val userFriendlyError = if (errMsg.contains("weak_password", ignoreCase = true) ||
-                        errMsg.contains("Password should contain", ignoreCase = true)
-                    ) {
-                        "Supabase requires a password with uppercase, lowercase, number, and symbol (e.g. Admin@2026)."
-                    } else {
-                        errMsg.ifBlank { "Registration failed. Please check internet connection." }
-                    }
-                    onError(userFriendlyError)
+                if (!isAlreadyRegistered && errMsg.isNotBlank()) {
+                    onError("Supabase Registration Error: $errMsg")
                     return@launch
                 }
             }
@@ -501,29 +494,51 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             val newAdmin = SuperAdminUserEntity(
                 id = "SUPER-ADMIN-MASTER",
                 email = cleanEmail,
-                name = name.trim(),
+                name = name.trim().ifBlank { "SaaS Master Administrator" },
                 mobile = mobile.trim(),
                 role = "SUPER_ADMIN",
-                accessCode = cleanCode,
+                accessCode = "",
                 is2FaEnabled = is2Fa,
                 isClaimed = true,
                 createdAt = System.currentTimeMillis()
             )
             repository.saveSuperAdmin(newAdmin)
-            _userMessage.value = "🎉 Master Admin Account Created! Single slot is now securely locked (1 of 1)."
+            _userMessage.value = "🎉 Master Admin Account Created! Single slot is now securely registered."
 
             if (is2Fa) {
+                _twoFaTargetEmail.value = cleanEmail
+                _isAwaiting2Fa.value = true
+                _otpTimerSeconds.value = 60
+                _activeOtpCode.value = null
 
-                requestSuperAdmin2FaOtp(cleanEmail, cleanCode, { otp ->
-                    onSuccess(otp)
-                }, { err ->
-                    onError(err)
-                })
+                val otpResult = SupabaseAuthService.signInWithOtp(cleanEmail, shouldCreateUser = false)
+                if (otpResult.isSuccess) {
+                    _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)} via Supabase."
+                    onSuccess("")
+                } else {
+                    onError(otpResult.exceptionOrNull()?.message ?: "Failed to dispatch 2FA OTP via Supabase.")
+                }
+
+                viewModelScope.launch {
+                    for (sec in 60 downTo 0) {
+                        _otpTimerSeconds.value = sec
+                        kotlinx.coroutines.delay(1000L)
+                        if (!_isAwaiting2Fa.value) break
+                    }
+                }
             } else {
                 _isAuthenticated.value = true
                 _currentRole.value = "SUPER_ADMIN"
                 _currentUserEmail.value = newAdmin.email
                 _currentUserName.value = newAdmin.name
+                persistAuthSession(
+                    authenticated = true,
+                    email = newAdmin.email,
+                    name = newAdmin.name,
+                    role = "SUPER_ADMIN",
+                    libraryId = "",
+                    studentId = ""
+                )
                 onSuccess("")
             }
         }
@@ -549,12 +564,12 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     fun requestSuperAdmin2FaOtp(
         email: String,
-        accessCode: String,
-        onOtpDispatched: (String) -> Unit,
-        onError: (String) -> Unit
+        accessCode: String = "",
+        onOtpDispatched: (String) -> Unit = {},
+        onError: (String) -> Unit = {}
     ) {
         val trimmedEmail = email.trim()
-        val trimmedCode = accessCode.trim()
+        val trimmedPassword = accessCode.trim()
 
         if (trimmedEmail.isBlank()) {
             onError("Please enter Super Admin Email / User ID")
@@ -563,38 +578,40 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             val adminProfile = repository.getSuperAdmin().firstOrNull()
-            if (adminProfile == null) {
+            if (adminProfile == null || !adminProfile.isClaimed) {
                 onError("No Super Admin registered yet. Please claim or register Super Admin first.")
                 return@launch
             }
-            val expectedEmail = adminProfile.email
-            val expectedCode = adminProfile.accessCode
 
-            val isEmailMatch = trimmedEmail.equals(expectedEmail, ignoreCase = true) ||
-                    (adminProfile.mobile.isNotBlank() && trimmedEmail == adminProfile.mobile)
-            val isCodeMatch = expectedCode.isNotBlank() && trimmedCode == expectedCode
+            val targetEmail = if (adminProfile.email.isNotBlank()) adminProfile.email else trimmedEmail
 
-            if (!isEmailMatch || !isCodeMatch) {
-                onError("Invalid Super Admin ID or Access PIN/Password.")
-                return@launch
+            // If password was supplied, verify with Supabase Auth
+            if (trimmedPassword.isNotBlank()) {
+                val authResult = SupabaseAuthService.signInWithPassword(
+                    context = getApplication(),
+                    email = targetEmail,
+                    password = trimmedPassword,
+                    expectedRole = "SUPER_ADMIN"
+                )
+                if (authResult.isFailure) {
+                    onError(authResult.exceptionOrNull()?.message ?: "Invalid Super Admin credentials.")
+                    return@launch
+                }
             }
 
-            _twoFaTargetEmail.value = trimmedEmail
+            _activeOtpCode.value = null
+            _twoFaTargetEmail.value = targetEmail
             _isAwaiting2Fa.value = true
-            _activeOtpCode.value = null 
             _otpTimerSeconds.value = 60
 
-            
-            com.example.util.EmailOtpService.dispatchEmailOtp(
-                email = trimmedEmail,
-                recipientName = "Super Administrator",
-                purpose = com.example.util.OtpPurpose.SUPER_ADMIN_2FA,
-                scope = viewModelScope
-            ) { result ->
-                _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(trimmedEmail)} via Supabase. Check your email."
+            val otpResult = SupabaseAuthService.signInWithOtp(targetEmail, shouldCreateUser = false)
+            if (otpResult.isSuccess) {
+                _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)} via Supabase."
+                onOtpDispatched("")
+            } else {
+                onError(otpResult.exceptionOrNull()?.message ?: "Failed to dispatch 2FA OTP.")
             }
 
-            
             viewModelScope.launch {
                 for (sec in 60 downTo 0) {
                     _otpTimerSeconds.value = sec
@@ -602,9 +619,46 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     if (!_isAwaiting2Fa.value) break
                 }
             }
+        }
+    }
 
-            _userMessage.value = "Security 2FA OTP sent to ${com.example.util.EmailOtpService.maskEmail(trimmedEmail)} via Supabase. Check your inbox & spam folder."
-            onOtpDispatched("") 
+    fun sendSuperAdminMagicLink(
+        email: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val cleanEmail = email.trim().lowercase()
+        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+            onError("Please enter a valid Super Admin email address.")
+            return
+        }
+
+        viewModelScope.launch {
+            val adminProfile = repository.getSuperAdmin().firstOrNull()
+            if (adminProfile != null && adminProfile.isClaimed && !cleanEmail.equals(adminProfile.email, ignoreCase = true)) {
+                onError("The entered email does not match the registered Super Admin account.")
+                return@launch
+            }
+
+            val result = SupabaseAuthService.signInWithOtp(cleanEmail, shouldCreateUser = false)
+            if (result.isSuccess) {
+                _twoFaTargetEmail.value = cleanEmail
+                _isAwaiting2Fa.value = true
+                _otpTimerSeconds.value = 60
+                _activeOtpCode.value = null
+                _userMessage.value = "Magic Link / OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)}. Enter the code to authenticate."
+                
+                viewModelScope.launch {
+                    for (sec in 60 downTo 0) {
+                        _otpTimerSeconds.value = sec
+                        kotlinx.coroutines.delay(1000L)
+                        if (!_isAwaiting2Fa.value) break
+                    }
+                }
+                onSuccess()
+            } else {
+                onError(result.exceptionOrNull()?.message ?: "Failed to send magic link.")
+            }
         }
     }
 
@@ -619,41 +673,59 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        com.example.util.EmailOtpService.verifyOtp(
-            context = getApplication(),
-            email = targetEmail,
-            enteredOtp = enteredOtp,
-            purpose = com.example.util.OtpPurpose.SUPER_ADMIN_2FA,
-            scope = viewModelScope
-        ) { isValid, errorMsg ->
-            if (isValid) {
-                _isAwaiting2Fa.value = false
-                _activeOtpCode.value = null
-                _isAuthenticated.value = true
-                _currentRole.value = "SUPER_ADMIN"
-                _currentUserEmail.value = targetEmail
-                _currentUserName.value = "Super Administrator"
-                _userMessage.value = "2FA Verification Successful! Welcome to SaaS Super Admin Portal."
-                onSuccess()
-            } else {
-                onError(errorMsg ?: "Incorrect 2FA OTP Code. Please enter the 6-digit code received on your email.")
+        val cleanOtp = enteredOtp.trim()
+        if (cleanOtp.length != 6) {
+            onError("Verification code must be 6 digits.")
+            return
+        }
+
+        viewModelScope.launch {
+            val adminProfile = repository.getSuperAdmin().firstOrNull()
+
+            com.example.util.EmailOtpService.verifyOtp(
+                context = getApplication(),
+                email = targetEmail,
+                enteredOtp = cleanOtp,
+                purpose = com.example.util.OtpPurpose.SUPER_ADMIN_2FA,
+                scope = viewModelScope
+            ) { isValid, errorMsg ->
+                if (isValid) {
+                    _isAwaiting2Fa.value = false
+                    _activeOtpCode.value = null
+                    _isAuthenticated.value = true
+                    _currentRole.value = "SUPER_ADMIN"
+                    _currentUserEmail.value = targetEmail
+                    _currentUserName.value = adminProfile?.name?.ifBlank { "Super Administrator" } ?: "Super Administrator"
+                    _userMessage.value = "2FA Verification Successful! Welcome to SaaS Super Admin Portal."
+                    persistAuthSession(
+                        authenticated = true,
+                        email = _currentUserEmail.value,
+                        name = _currentUserName.value,
+                        role = "SUPER_ADMIN",
+                        libraryId = "",
+                        studentId = ""
+                    )
+                    onSuccess()
+                } else {
+                    onError(errorMsg ?: "Invalid or expired 2FA OTP code. Please check your email and try again.")
+                }
             }
         }
     }
 
     fun resendSuperAdminOtp(onOtpDispatched: (String) -> Unit) {
-        val targetEmail = _twoFaTargetEmail.value ?: "superadmin@libdesk.io"
+        val targetEmail = _twoFaTargetEmail.value ?: return
         _otpTimerSeconds.value = 60
         _activeOtpCode.value = null
-        com.example.util.EmailOtpService.dispatchEmailOtp(
-            email = targetEmail,
-            recipientName = "Super Administrator",
-            purpose = com.example.util.OtpPurpose.SUPER_ADMIN_2FA,
-            scope = viewModelScope
-        ) {
-            _userMessage.value = "A new 2FA security OTP was dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)} via Supabase."
+        viewModelScope.launch {
+            val result = SupabaseAuthService.signInWithOtp(targetEmail, shouldCreateUser = false)
+            if (result.isSuccess) {
+                _userMessage.value = "A new 2FA security OTP was dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)} via Supabase."
+            } else {
+                _userMessage.value = "Failed to resend 2FA OTP: ${result.exceptionOrNull()?.message}"
+            }
+            onOtpDispatched("")
         }
-        onOtpDispatched("")
     }
 
     fun cancel2Fa() {
@@ -732,7 +804,87 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
-            // Resolve identifier if it is mobile or student code instead of raw email
+            // 1. Super Admin authentication branch
+            if (role.equals("SUPER_ADMIN", ignoreCase = true) || role.equals("OWNER", ignoreCase = true)) {
+                val adminProfile = repository.getSuperAdmin().firstOrNull()
+                val isSlotClaimed = adminProfile != null && adminProfile.isClaimed
+
+                if (!isSlotClaimed) {
+                    onError("No Super Admin registered yet. Please click 'Claim Admin Access' to set up your Master Super Admin credentials.")
+                    return@launch
+                }
+
+                // Resolve admin target email (support login via registered email or registered mobile)
+                val targetEmail = if (adminProfile != null && (
+                    trimmedIdentifier.equals(adminProfile.email, ignoreCase = true) ||
+                    (adminProfile.mobile.isNotBlank() && trimmedIdentifier == adminProfile.mobile)
+                )) {
+                    adminProfile.email
+                } else if (trimmedIdentifier.contains("@")) {
+                    trimmedIdentifier.lowercase()
+                } else {
+                    adminProfile?.email ?: trimmedIdentifier
+                }
+
+                // Strictly authenticate credentials against Supabase Auth
+                val supabaseResult = SupabaseAuthService.signInWithPassword(
+                    context = getApplication(),
+                    email = targetEmail,
+                    password = trimmedPassword,
+                    tenantCode = null,
+                    expectedRole = "SUPER_ADMIN"
+                )
+
+                if (supabaseResult.isFailure) {
+                    val errMsg = supabaseResult.exceptionOrNull()?.message ?: "Invalid Super Admin credentials."
+                    onError(errMsg)
+                    return@launch
+                }
+
+                val session = supabaseResult.getOrNull()
+                val is2Fa = adminProfile?.is2FaEnabled == true
+
+                if (is2Fa) {
+                    _twoFaTargetEmail.value = targetEmail
+                    _isAwaiting2Fa.value = true
+                    _otpTimerSeconds.value = 60
+                    _activeOtpCode.value = null
+
+                    val otpResult = SupabaseAuthService.signInWithOtp(targetEmail, shouldCreateUser = false)
+                    if (otpResult.isSuccess) {
+                        _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)} via Supabase."
+                    } else {
+                        _userMessage.value = "Failed to dispatch 2FA OTP: ${otpResult.exceptionOrNull()?.message}"
+                    }
+
+                    viewModelScope.launch {
+                        for (sec in 60 downTo 0) {
+                            _otpTimerSeconds.value = sec
+                            kotlinx.coroutines.delay(1000L)
+                            if (!_isAwaiting2Fa.value) break
+                        }
+                    }
+                    return@launch
+                } else {
+                    _isAuthenticated.value = true
+                    _currentRole.value = "SUPER_ADMIN"
+                    _currentUserEmail.value = targetEmail
+                    _currentUserName.value = session?.name?.ifBlank { adminProfile?.name ?: "Super Administrator" } ?: "Super Administrator"
+                    _userMessage.value = "Welcome back, ${_currentUserName.value}!"
+                    persistAuthSession(
+                        authenticated = true,
+                        email = _currentUserEmail.value,
+                        name = _currentUserName.value,
+                        role = "SUPER_ADMIN",
+                        libraryId = "",
+                        studentId = ""
+                    )
+                    onSuccess()
+                    return@launch
+                }
+            }
+
+            // 2. Resolve identifier if it is mobile or student code instead of raw email
             val (resolvedEmail, resolvedTenantFromId) = SupabaseAuthService.resolveLoginEmail(trimmedIdentifier, role)
             val effectiveTenantCode = if (trimmedTenantCode.isNotBlank()) trimmedTenantCode else (resolvedTenantFromId ?: "")
 
@@ -791,8 +943,35 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     return@launch
                 }
             }
+
+            // 3. Local database fallback for Manager and Student if offline
+            val localUser = repository.getUserByIdentifier(trimmedIdentifier)
+                ?: repository.getUserByEmail(resolvedEmail)
+            if (localUser != null && localUser.password == trimmedPassword) {
+                _isAuthenticated.value = true
+                _currentUserEmail.value = localUser.email
+                _currentUserName.value = localUser.name
+                _currentRole.value = localUser.role
+                if (localUser.libraryId.isNotBlank()) {
+                    _currentLibraryId.value = localUser.libraryId
+                }
+                if (!localUser.studentIdRef.isNullOrBlank()) {
+                    _activeStudentId.value = localUser.studentIdRef
+                }
+                _userMessage.value = "Welcome back, ${localUser.name}!"
+                persistAuthSession(
+                    authenticated = true,
+                    email = localUser.email,
+                    name = localUser.name,
+                    role = localUser.role,
+                    libraryId = localUser.libraryId,
+                    studentId = localUser.studentIdRef ?: ""
+                )
+                onSuccess()
+                return@launch
+            }
             
-            val errorMsg = supabaseResult.exceptionOrNull()?.message ?: "Authentication failed. Check your internet connection."
+            val errorMsg = supabaseResult.exceptionOrNull()?.message ?: "Authentication failed. Please verify your credentials or check internet connection."
             onError(errorMsg)
         }
     }
@@ -2266,7 +2445,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     fun updateSuperAdminProfile(
         email: String,
         name: String,
-        accessCode: String,
+        accessCode: String = "",
         is2Fa: Boolean,
         upiId: String = "",
         upiPayeeName: String = ""
@@ -2278,10 +2457,11 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             
             val updated = SuperAdminUserEntity(
                 id = "SUPER-ADMIN-MASTER",
-                email = email,
-                name = name,
-                accessCode = accessCode,
+                email = email.trim().lowercase(),
+                name = name.trim(),
+                accessCode = "",
                 is2FaEnabled = is2Fa,
+                isClaimed = true,
                 upiId = effectiveUpiId,
                 upiPayeeName = effectivePayee
             )

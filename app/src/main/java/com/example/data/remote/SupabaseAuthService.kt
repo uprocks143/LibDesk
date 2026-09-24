@@ -460,6 +460,8 @@ object SupabaseAuthService {
 
                     var role = if (!rawRoleStr.isNullOrBlank()) {
                         UserRole.fromString(rawRoleStr)
+                    } else if (expectedRole == "SUPER_ADMIN" || expectedRole == "OWNER") {
+                        UserRole.OWNER
                     } else if (expectedRole == "MANAGER") {
                         UserRole.ADMIN
                     } else {
@@ -470,12 +472,16 @@ object SupabaseAuthService {
                     if (expectedRole == "STUDENT" && (role == UserRole.ADMIN || role == UserRole.OWNER)) {
                         // User is an administrator trying to log in under Student tab
                         return@withContext Result.failure(
-                            Exception("This account is registered as a Library Administrator. Please select the 'Library Owner' tab.")
+                            Exception("This account is registered as an Administrator. Please select the appropriate management login.")
                         )
                     } else if (expectedRole == "MANAGER" && role == UserRole.STUDENT) {
                         // User is a student trying to log in under Manager tab
                         return@withContext Result.failure(
                             Exception("This account is registered as a Student Member. Please select the 'Student' tab to access your student pass.")
+                        )
+                    } else if ((expectedRole == "SUPER_ADMIN" || expectedRole == "OWNER") && role == UserRole.STUDENT) {
+                        return@withContext Result.failure(
+                            Exception("This account does not have Super Admin privileges.")
                         )
                     }
 

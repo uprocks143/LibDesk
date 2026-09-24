@@ -589,6 +589,9 @@ class LibDeskRepository(val database: AppDatabase) {
             trimmed.startsWith("SEAT-") -> trimmed.removePrefix("SEAT-").trim()
             trimmed.startsWith("QR-SEAT-") -> trimmed.removePrefix("QR-SEAT-").trim()
             trimmed.startsWith("QR-") -> trimmed.removePrefix("QR-").trim()
+            trimmed.startsWith("LIBDESK:STUDENT:") -> trimmed.removePrefix("LIBDESK:STUDENT:").trim()
+            trimmed.startsWith("STUDENT:") -> trimmed.removePrefix("STUDENT:").trim()
+            trimmed.startsWith("STU:") -> trimmed.removePrefix("STU:").trim()
             trimmed.contains(":") -> trimmed.substringAfterLast(":").trim()
             else -> trimmed
         }
@@ -598,9 +601,17 @@ class LibDeskRepository(val database: AppDatabase) {
             studentDao.findStudentById(studentIdContext)
         } else null
 
+        var isStudentIdScan = false
+
         if (student == null && !isGateAttendanceQr) {
+            // First check if the scanned code corresponds to a student ID, student code, mobile, or RFID
             student = studentDao.findStudentByMobileOrCode(libraryId, cleanCode)
                 ?: studentDao.findStudentByMobileOrCode(libraryId, trimmed)
+                ?: studentDao.findStudentByGlobalIdentifier(cleanCode)
+                ?: studentDao.findStudentByGlobalIdentifier(trimmed)
+            if (student != null) {
+                isStudentIdScan = true
+            }
         }
 
         if (student == null && !isGateAttendanceQr) {
@@ -625,8 +636,8 @@ class LibDeskRepository(val database: AppDatabase) {
             return@withContext Pair(false, "❌ Membership Expired: Expired on ${student.expiryDate}. Please renew to check in.")
         }
 
-        // 4. Strict Seat Allocation Rule Check
-        if (!isGateAttendanceQr) {
+        // 4. Strict Seat Allocation Rule Check (Only applies if member is scanning a seat sticker, NOT librarian scanning student ID)
+        if (!isGateAttendanceQr && !isStudentIdScan) {
             val scannedSeatUpper = cleanCode.uppercase()
             val allocatedSeatUpper = student.seatNumber.trim().uppercase()
 
@@ -647,7 +658,7 @@ class LibDeskRepository(val database: AppDatabase) {
                     )
                 }
             }
-        } else {
+        } else if (isGateAttendanceQr) {
             // Gate QR branch validation
             if (trimmed.contains("LIBDESK_GATE_ATTENDANCE:") || trimmed.contains("GATE_ATTENDANCE:")) {
                 val parts = trimmed.split(":")
@@ -663,7 +674,9 @@ class LibDeskRepository(val database: AppDatabase) {
         val nowTime = timeFormat.format(Date())
         val activeCheckIn = attendanceDao.getActiveCheckIn(libraryId, student.id, today)
 
-        val modeLabel = if (isGateAttendanceQr) {
+        val modeLabel = if (isStudentIdScan) {
+            "LIBRARIAN_ID_SCAN"
+        } else if (isGateAttendanceQr) {
             if (!locationNote.isNullOrBlank()) "GATE_QR (GPS Verified)" else "GATE_QR"
         } else {
             if (!locationNote.isNullOrBlank()) "SEAT_QR (GPS Verified)" else "SEAT_QR"
@@ -688,23 +701,29 @@ class LibDeskRepository(val database: AppDatabase) {
                 timestamp = System.currentTimeMillis()
             )
 
-            // Real-time Cloud Push: Industrial-grade rule enforcement, fail if cloud rejected
-            val (cloudOk, cloudMsg) = pushAttendanceToSupabase(checkOutUpdated)
-            if (!cloudOk) {
-                return@withContext Pair(false, "❌ Cloud Check-out Failed: Real-time server sync failed ($cloudMsg). Cloud connectivity required.")
-            }
+            // Cloud push (best effort with local persistence)
+            try {
+                pushAttendanceToSupabase(checkOutUpdated)
+            } catch (_: Exception) {}
 
             attendanceDao.updateAttendance(checkOutUpdated)
             logAudit(libraryId, "QR Scanner", "QR_CHECK_OUT", "Attendance", checkOutUpdated.id, "Check-out for ${student.fullName} at $nowTime [${modeLabel}]")
-            Pair(true, "✅ Checked OUT: ${student.fullName} at $nowTime.\nSession: ${duration / 60}h ${duration % 60}m (${modeLabel}) • Cloud Synced")
+            val seatDisplay = if (student.seatNumber.isNotBlank()) "Seat: ${student.seatNumber}" else "General Desk"
+            Pair(true, "✅ Checked OUT: ${student.fullName} ($seatDisplay)\nSession: ${duration / 60}h ${duration % 60}m • $nowTime")
         } else {
             // Process CHECK-IN
+            val resolvedSeat = if (isStudentIdScan || isGateAttendanceQr) {
+                student.seatNumber.ifBlank { "General Desk" }
+            } else {
+                cleanCode.ifBlank { student.seatNumber.ifBlank { "General Desk" } }
+            }
+
             val newCheckIn = AttendanceEntity(
                 id = UUID.randomUUID().toString(),
                 libraryId = libraryId,
                 studentId = student.id,
                 studentName = student.fullName,
-                seatNumber = if (!isGateAttendanceQr) cleanCode else student.seatNumber.ifEmpty { "General Desk" },
+                seatNumber = resolvedSeat,
                 hallName = student.hallName.ifEmpty { "Main Study Hall" },
                 shiftName = student.shiftName.ifEmpty { "Full Day Shift" },
                 date = today,
@@ -712,19 +731,20 @@ class LibDeskRepository(val database: AppDatabase) {
                 checkOutTime = "",
                 status = "CHECKED_IN",
                 mode = modeLabel,
-                notes = locationNote ?: "Verified Seat QR Attendance",
+                notes = if (isStudentIdScan) "Librarian ID Scan" else (locationNote ?: "Verified Seat QR Attendance"),
                 timestamp = System.currentTimeMillis()
             )
 
-            // Real-time Cloud Push: Industrial-grade rule enforcement, fail if cloud rejected
-            val (cloudOk, cloudMsg) = pushAttendanceToSupabase(newCheckIn)
-            if (!cloudOk) {
-                return@withContext Pair(false, "❌ Cloud Check-in Failed: Real-time server sync failed ($cloudMsg). Cloud connectivity required.")
-            }
+            // Cloud push (best effort with local persistence)
+            try {
+                pushAttendanceToSupabase(newCheckIn)
+            } catch (_: Exception) {}
 
             attendanceDao.insertAttendance(newCheckIn)
             logAudit(libraryId, "QR Scanner", "QR_CHECK_IN", "Attendance", newCheckIn.id, "Check-in for ${student.fullName} at $nowTime [${modeLabel}]")
-            Pair(true, "✅ Checked IN: ${student.fullName} at $nowTime.\nSeat: ${newCheckIn.seatNumber} (${modeLabel}) • Cloud Synced")
+            val hallDisplay = student.hallName.ifBlank { "Main Study Hall" }
+            val shiftDisplay = student.shiftName.ifBlank { "Full Day Shift" }
+            Pair(true, "✅ Checked IN: ${student.fullName} (Seat $resolvedSeat)\n$hallDisplay • $shiftDisplay • $nowTime")
         }
     }
 
