@@ -45,6 +45,7 @@ import com.example.ui.components.DepositPeriodDateRangeSelector
 import com.example.ui.components.DateRangeUtils
 import com.example.ui.theme.*
 import com.example.util.ImageShareUtils
+import com.example.util.FormFormatters
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1559,10 +1560,12 @@ fun RegisterStudentDialog(
     var parentMobile by remember { mutableStateOf("") }
     var joiningDate by remember { mutableStateOf(com.example.ui.components.DateRangeUtils.getTodayString()) }
 
+    val initialPlan = plans.firstOrNull()
     var selectedShift by remember { mutableStateOf(shifts.firstOrNull()) }
-    var selectedPlan by remember { mutableStateOf(plans.firstOrNull()) }
-    var feeText by remember { mutableStateOf("1000") }
-    var paidText by remember { mutableStateOf("1000") }
+    var selectedPlan by remember { mutableStateOf(initialPlan) }
+    val initialNetFee = initialPlan?.let { (it.baseFee - it.discount).coerceAtLeast(0.0).toInt().toString() } ?: "1000"
+    var feeText by remember { mutableStateOf(initialNetFee) }
+    var paidText by remember { mutableStateOf("0") } // Default to 0 (Unpaid / Pending)
 
     BackHandler { onClose() }
 
@@ -1599,7 +1602,7 @@ fun RegisterStudentDialog(
                 item {
                     OutlinedTextField(
                         value = fullName,
-                        onValueChange = { fullName = it },
+                        onValueChange = { fullName = FormFormatters.toTitleCase(it) },
                         label = { Text("Full Name *") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1609,7 +1612,7 @@ fun RegisterStudentDialog(
                 item {
                     CountryCodePhoneField(
                         mobile = mobile,
-                        onMobileChange = { mobile = it },
+                        onMobileChange = { mobile = FormFormatters.filterDigits(it, 10) },
                         countryCode = countryCode,
                         onCountryCodeChange = { countryCode = it },
                         label = "Mobile Number *",
@@ -1621,7 +1624,7 @@ fun RegisterStudentDialog(
                 item {
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = { email = FormFormatters.toLowerCaseClean(it) },
                         label = { Text("Email Address") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1650,7 +1653,7 @@ fun RegisterStudentDialog(
                 item {
                     OutlinedTextField(
                         value = targetExam,
-                        onValueChange = { targetExam = it },
+                        onValueChange = { targetExam = FormFormatters.toUpperCaseClean(it) },
                         label = { Text("Target Exam (UPSC, NEET, Banking, etc.)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -1658,36 +1661,7 @@ fun RegisterStudentDialog(
                 }
 
                 item {
-                    Text("Select Student Plan & Offer", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        plans.forEach { plan ->
-                            val net = (plan.baseFee - plan.discount).coerceAtLeast(0.0)
-                            FilterChip(
-                                selected = selectedPlan?.id == plan.id,
-                                onClick = {
-                                    selectedPlan = plan
-                                    feeText = net.toInt().toString()
-                                    paidText = net.toInt().toString()
-                                },
-                                label = {
-                                    if (plan.discount > 0) {
-                                        Text("${plan.name} (${formatCurrency(net)} • ₹${plan.discount.toInt()} OFF)", fontSize = 14.sp)
-                                    } else {
-                                        Text("${plan.name} (${formatCurrency(plan.baseFee)})", fontSize = 14.sp)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    Text("Select Shift", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Select Shift / Batch *", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1697,9 +1671,61 @@ fun RegisterStudentDialog(
                         shifts.forEach { shift ->
                             FilterChip(
                                 selected = selectedShift?.id == shift.id,
-                                onClick = { selectedShift = shift },
-                                label = { Text("${shift.name} (${shift.startTime}-${shift.endTime})", fontSize = 14.sp) }
+                                onClick = {
+                                    selectedShift = shift
+                                    // Auto-select matching shift plan if available
+                                    val matchingPlan = plans.firstOrNull { it.shiftId == shift.id }
+                                        ?: plans.firstOrNull { it.shiftId.isBlank() }
+                                        ?: plans.firstOrNull()
+                                    selectedPlan = matchingPlan
+                                    val net = matchingPlan?.let { (it.baseFee - it.discount).coerceAtLeast(0.0) } ?: shift.fee
+                                    feeText = net.toInt().toString()
+                                },
+                                label = { Text("${shift.name} (${shift.startTime}-${shift.endTime})", fontSize = 13.5.sp) }
                             )
+                        }
+                    }
+                }
+
+                item {
+                    val matchingPlans = remember(plans, selectedShift) {
+                        val shiftId = selectedShift?.id ?: ""
+                        if (shiftId.isBlank()) plans
+                        else {
+                            val direct = plans.filter { it.shiftId == shiftId }
+                            val global = plans.filter { it.shiftId.isBlank() }
+                            (direct + global).distinctBy { it.id }
+                        }
+                    }
+
+                    Text("Select Student Plan & Offer", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    if (matchingPlans.isEmpty()) {
+                        Text("No specific plans for this shift. Using standard shift fee.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            matchingPlans.forEach { plan ->
+                                val net = (plan.baseFee - plan.discount).coerceAtLeast(0.0)
+                                val isSelected = selectedPlan?.id == plan.id
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedPlan = plan
+                                        feeText = net.toInt().toString()
+                                    },
+                                    label = {
+                                        if (plan.discount > 0) {
+                                            Text("${plan.name} (${formatCurrency(net)} • ₹${plan.discount.toInt()} OFF)", fontSize = 13.5.sp)
+                                        } else {
+                                            Text("${plan.name} (${formatCurrency(plan.baseFee)})", fontSize = 13.5.sp)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -1709,34 +1735,68 @@ fun RegisterStudentDialog(
                     val paidVal = paidText.toDoubleOrNull() ?: 0.0
                     val dueCalc = (totalFeeVal - paidVal).coerceAtLeast(0.0)
 
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = feeText,
-                                onValueChange = { feeText = it },
-                                label = { Text("Total Fee (₹)") },
+                                onValueChange = { feeText = FormFormatters.filterDigits(it) },
+                                label = { Text("Plan Fee (₹)") },
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
                                 value = paidText,
-                                onValueChange = { paidText = it },
+                                onValueChange = { paidText = FormFormatters.filterDigits(it) },
                                 label = { Text("Paid Now (₹)") },
+                                placeholder = { Text("0 for Pending") },
                                 modifier = Modifier.weight(1f)
                             )
                         }
-                        Text(
-                            text = if (dueCalc > 0) "Calculated Due: ${formatCurrency(dueCalc)}" else "Fee Status: Full Paid",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (dueCalc > 0) MaterialTheme.colorScheme.error else LibDeskColors.success
-                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (paidVal <= 0.0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+                                    else if (dueCalc > 0.0) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+                                    else LibDeskColors.successSoft,
+                            border = BorderStroke(1.dp, if (paidVal <= 0.0) MaterialTheme.colorScheme.error.copy(alpha = 0.4f) else LibDeskColors.success.copy(alpha = 0.4f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (paidVal <= 0.0) Icons.Default.PendingActions else if (dueCalc > 0.0) Icons.Default.HourglassBottom else Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = if (paidVal <= 0.0) MaterialTheme.colorScheme.error else LibDeskColors.success,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (paidVal <= 0.0) "Fee Status: PENDING / DUE"
+                                               else if (dueCalc > 0.0) "Fee Status: PARTIAL PAID"
+                                               else "Fee Status: FULL PAID",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.5.sp,
+                                        color = if (paidVal <= 0.0) MaterialTheme.colorScheme.error else LibDeskColors.success
+                                    )
+                                }
+                                Text(
+                                    text = "Due: ${formatCurrency(dueCalc)}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = if (dueCalc > 0) MaterialTheme.colorScheme.error else LibDeskColors.success
+                                )
+                            }
+                        }
                     }
                 }
 
                 item {
                     OutlinedTextField(
                         value = address,
-                        onValueChange = { address = it },
+                        onValueChange = { address = FormFormatters.toSentenceCase(it) },
                         label = { Text("Full Address") },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1759,7 +1819,7 @@ fun RegisterStudentDialog(
                             onClick = {
                                 if (fullName.isNotBlank() && mobile.isNotBlank()) {
                                     val fee = feeText.toDoubleOrNull() ?: 1000.0
-                                    val paid = paidText.toDoubleOrNull() ?: 1000.0
+                                    val paid = paidText.toDoubleOrNull() ?: 0.0
                                     val fullMobile = combineCountryCodeAndPhone(countryCode, mobile)
                                     onConfirm(
                                         fullName,

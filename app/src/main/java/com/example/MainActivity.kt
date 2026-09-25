@@ -11,6 +11,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -502,10 +504,12 @@ fun LibDeskApp(
                         currentManagerTab = 0
                         managerDashboardSection = 3
                     },
-onOpenSyncBackup = { showBackupScreen = true },
+                    onOpenSyncBackup = { showBackupScreen = true },
                     onOpenQrScanner = { showQrScannerModal = true },
                     onShowLibraryQr = { showLibraryQrModal = true },
-                    onOpenSuperAdmin = { currentManagerTab = 4 },
+                    onOpenSuperAdmin = {
+                        // Restricted to platform owner login only
+                    },
                     onOpenMySubscription = {
                         showSaaSOffersModal = true
                     },
@@ -664,6 +668,23 @@ onOpenSyncBackup = { showBackupScreen = true },
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
+                    if (isSpeedDialFabExpanded) {
+                        BackHandler {
+                            isSpeedDialFabExpanded = false
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.35f))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    isSpeedDialFabExpanded = false
+                                }
+                        )
+                    }
+
                     if (normalizeUserRole(currentRole) == LibDeskRoles.MANAGER) {
                         RoleGate(
                             currentRole = currentRole,
@@ -730,6 +751,9 @@ onOpenSyncBackup = { showBackupScreen = true },
                                     },
                                     onEditInfrastructure = {
                                         showInfraEditorModal = true
+                                    },
+                                    onUpdateLibrary = { updatedLib ->
+                                        viewModel.updateLibraryProfile(updatedLib)
                                     }
                                 )
                             }
@@ -901,15 +925,6 @@ onOpenSyncBackup = { showBackupScreen = true },
                                     },
                                     onDeleteExpense = { exp ->
                                         viewModel.deleteExpenseRecord(exp)
-                                    }
-                                )
-                                4 -> RestrictedPlatformOwnerGate(
-                                    viewModel = viewModel,
-                                    onExit = { currentManagerTab = 0 },
-                                    onOpenMenu = {
-                                        coroutineScope.launch {
-                                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                                        }
                                     }
                                 )
                             }
@@ -1208,7 +1223,7 @@ onOpenSyncBackup = { showBackupScreen = true },
             onAddShift = { name, start, end, fee -> viewModel.addShift(name, start, end, fee) },
             onEditShift = { shift -> viewModel.updateShift(shift) },
             onDeleteShift = { shift -> viewModel.deleteShift(shift) },
-            onAddPlan = { name, duration, fee, durationType, discount, facilities -> viewModel.addMembershipPlan(name, duration, fee, durationType, discount, facilities) },
+            onAddPlan = { name, duration, fee, durationType, discount, facilities, shiftId -> viewModel.addMembershipPlan(name, duration, fee, durationType, discount, facilities, shiftId) },
             onEditPlan = { plan -> viewModel.updateMembershipPlan(plan) },
             onDeletePlan = { plan -> viewModel.deleteMembershipPlan(plan) },
             onClose = { showInfraEditorModal = false }

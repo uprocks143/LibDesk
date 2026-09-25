@@ -42,6 +42,10 @@ import com.example.data.local.entities.ShiftEntity
 import com.example.data.local.entities.MembershipPlanEntity
 import com.example.data.local.entities.SuperAdminUserEntity
 import com.example.ui.theme.*
+import com.example.util.FormFormatters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 @Composable
@@ -62,6 +66,7 @@ fun UserProfileModal(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
     var adminName by remember(superAdminProfile, userName) {
@@ -125,16 +130,62 @@ fun UserProfileModal(
             }
 
             if (bestLocation != null) {
-                latitudeStr = String.format(java.util.Locale.US, "%.6f", bestLocation.latitude)
-                longitudeStr = String.format(java.util.Locale.US, "%.6f", bestLocation.longitude)
-                Toast.makeText(context, "Current location captured successfully!", Toast.LENGTH_SHORT).show()
+                val lat = bestLocation.latitude
+                val lng = bestLocation.longitude
+                latitudeStr = String.format(java.util.Locale.US, "%.6f", lat)
+                longitudeStr = String.format(java.util.Locale.US, "%.6f", lng)
+
+                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+                        @Suppress("DEPRECATION")
+                        val addressList = geocoder.getFromLocation(lat, lng, 1)
+                        if (!addressList.isNullOrEmpty()) {
+                            val addr = addressList[0]
+                            val fullAddressLine = addr.getAddressLine(0) ?: ""
+                            val street = addr.thoroughfare ?: addr.subLocality ?: addr.featureName ?: ""
+                            val resolvedAddress = if (fullAddressLine.isNotBlank()) fullAddressLine else street
+                            val resolvedCity = addr.locality ?: addr.subAdminArea ?: ""
+                            val resolvedState = addr.adminArea ?: ""
+                            val resolvedPincode = addr.postalCode ?: ""
+
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                if (resolvedAddress.isNotBlank()) {
+                                    address = FormFormatters.toSentenceCase(resolvedAddress)
+                                }
+                                if (resolvedCity.isNotBlank()) {
+                                    city = FormFormatters.toTitleCase(resolvedCity)
+                                }
+                                if (resolvedState.isNotBlank()) {
+                                    state = FormFormatters.toTitleCase(resolvedState)
+                                }
+                                if (resolvedPincode.isNotBlank()) {
+                                    pincode = FormFormatters.filterDigits(resolvedPincode, 6)
+                                }
+                                Toast.makeText(context, "Location & Address auto-filled from Map & GPS!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                Toast.makeText(context, "GPS captured (Lat: $latitudeStr, Lng: $longitudeStr)", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            Toast.makeText(context, "GPS captured: $latitudeStr, $longitudeStr", Toast.LENGTH_SHORT).show()
+                        }
+                    } finally {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            isFetchingLocation = false
+                        }
+                    }
+                }
             } else {
+                isFetchingLocation = false
                 Toast.makeText(context, "Turn on GPS to get current location", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "Could not get location: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-        } finally {
             isFetchingLocation = false
+            Toast.makeText(context, "Could not get location: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -323,7 +374,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = adminName,
-                                onValueChange = { adminName = it },
+                                onValueChange = { adminName = FormFormatters.toTitleCase(it) },
                                 label = { Text("Super Admin Full Name") },
                                 leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -334,7 +385,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = adminEmail,
-                                onValueChange = { adminEmail = it },
+                                onValueChange = { adminEmail = FormFormatters.toLowerCaseClean(it) },
                                 label = { Text("Super Admin Master Email") },
                                 leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -345,7 +396,7 @@ fun UserProfileModal(
 
                             CountryCodePhoneField(
                                 mobile = adminPhone,
-                                onMobileChange = { adminPhone = it },
+                                onMobileChange = { adminPhone = FormFormatters.filterDigits(it, 10) },
                                 countryCode = adminCountryCode,
                                 onCountryCodeChange = { adminCountryCode = it },
                                 label = "Admin Contact / WhatsApp Phone",
@@ -385,7 +436,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = adminUpiId,
-                                onValueChange = { adminUpiId = it },
+                                onValueChange = { adminUpiId = FormFormatters.toLowerCaseClean(it) },
                                 label = { Text("Master UPI ID (VPA)") },
                                 placeholder = { Text("e.g. libdesk.billing@upi") },
                                 leadingIcon = { Icon(Icons.Default.Payment, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
@@ -396,7 +447,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = adminUpiPayeeName,
-                                onValueChange = { adminUpiPayeeName = it },
+                                onValueChange = { adminUpiPayeeName = FormFormatters.toTitleCase(it) },
                                 label = { Text("Payee Business / Platform Name") },
                                 placeholder = { Text("e.g. LibDesk Subscriptions") },
                                 leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
@@ -479,7 +530,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = libName,
-                                onValueChange = { libName = it },
+                                onValueChange = { libName = FormFormatters.toTitleCase(it) },
                                 label = { Text("Institute / Library Name") },
                                 leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -504,7 +555,7 @@ fun UserProfileModal(
 
                                 OutlinedTextField(
                                     value = regNumber,
-                                    onValueChange = { regNumber = it },
+                                    onValueChange = { regNumber = FormFormatters.toUpperCaseClean(it) },
                                     label = { Text("Reg / License No.") },
                                     leadingIcon = { Icon(Icons.Default.Badge, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                     singleLine = true,
@@ -515,7 +566,6 @@ fun UserProfileModal(
 
                             Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
 
-                            
                             Text(
                                 text = "MANAGER & CONTACT INFORMATION",
                                 fontSize = 14.sp,
@@ -526,7 +576,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = ownerName,
-                                onValueChange = { ownerName = it },
+                                onValueChange = { ownerName = FormFormatters.toTitleCase(it) },
                                 label = { Text("Owner / Manager Full Name") },
                                 leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -537,7 +587,7 @@ fun UserProfileModal(
 
                             CountryCodePhoneField(
                                 mobile = ownerPhone,
-                                onMobileChange = { ownerPhone = it },
+                                onMobileChange = { ownerPhone = FormFormatters.filterDigits(it, 10) },
                                 countryCode = ownerCountryCode,
                                 onCountryCodeChange = { ownerCountryCode = it },
                                 label = "Contact Phone / WhatsApp",
@@ -547,7 +597,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = ownerEmail,
-                                onValueChange = { ownerEmail = it },
+                                onValueChange = { ownerEmail = FormFormatters.toLowerCaseClean(it) },
                                 label = { Text("Official Email Address") },
                                 leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -558,7 +608,7 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = upiId,
-                                onValueChange = { upiId = it.trim() },
+                                onValueChange = { upiId = FormFormatters.toLowerCaseClean(it) },
                                 label = { Text("UPI ID for Fee Payments") },
                                 leadingIcon = { Icon(Icons.Default.QrCode, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 placeholder = { Text("e.g. yourlib@upi") },
@@ -567,20 +617,65 @@ fun UserProfileModal(
                                 modifier = Modifier.fillMaxWidth()
                             )
 
-Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
+                            Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
 
-                            
-                            Text(
-                                text = "CAMPUS LOCATION & ADDRESS",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                letterSpacing = 0.5.sp
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "CAMPUS LOCATION & ADDRESS",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    letterSpacing = 0.5.sp
+                                )
+
+                                TextButton(
+                                    onClick = {
+                                        locationPermissionLauncher.launch(
+                                            arrayOf(
+                                                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                                            )
+                                        )
+                                    },
+                                    enabled = !isFetchingLocation,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    if (isFetchingLocation) {
+                                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Detecting...", fontSize = 12.sp)
+                                    } else {
+                                        Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Auto-fill GPS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+
+                            if (latitudeStr.isNotBlank() && longitudeStr.isNotBlank()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("GPS Coordinates Linked: $latitudeStr, $longitudeStr", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    }
+                                }
+                            }
 
                             OutlinedTextField(
                                 value = address,
-                                onValueChange = { address = it },
+                                onValueChange = { address = FormFormatters.toSentenceCase(it) },
                                 label = { Text("Street Address / Landmark") },
                                 leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -594,7 +689,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
                             ) {
                                 OutlinedTextField(
                                     value = city,
-                                    onValueChange = { city = it },
+                                    onValueChange = { city = FormFormatters.toTitleCase(it) },
                                     label = { Text("City") },
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
@@ -603,7 +698,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                                 OutlinedTextField(
                                     value = pincode,
-                                    onValueChange = { pincode = it.filter { c -> c.isDigit() } },
+                                    onValueChange = { pincode = FormFormatters.filterDigits(it, 6) },
                                     label = { Text("PIN Code") },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -620,7 +715,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
                             ) {
                                 OutlinedTextField(
                                     value = state,
-                                    onValueChange = { state = it },
+                                    onValueChange = { state = FormFormatters.toTitleCase(it) },
                                     readOnly = false,
                                     label = { Text("State / UT") },
                                     placeholder = { Text("Select or type State") },
@@ -979,7 +1074,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             OutlinedTextField(
                                 value = studentFullName,
-                                onValueChange = { studentFullName = it },
+                                onValueChange = { studentFullName = FormFormatters.toTitleCase(it) },
                                 label = { Text("Student Full Name") },
                                 leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -990,7 +1085,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             CountryCodePhoneField(
                                 mobile = studentMobile,
-                                onMobileChange = { studentMobile = it },
+                                onMobileChange = { studentMobile = FormFormatters.filterDigits(it, 10) },
                                 countryCode = studentCountryCode,
                                 onCountryCodeChange = { studentCountryCode = it },
                                 label = "Mobile Number",
@@ -1000,7 +1095,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             OutlinedTextField(
                                 value = studentEmail,
-                                onValueChange = { studentEmail = it },
+                                onValueChange = { studentEmail = FormFormatters.toLowerCaseClean(it) },
                                 label = { Text("Email Address") },
                                 leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -1011,7 +1106,6 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
 
-                            
                             Text(
                                 text = "ACADEMIC & TARGET EXAM",
                                 fontSize = 14.sp,
@@ -1022,7 +1116,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             OutlinedTextField(
                                 value = targetExam,
-                                onValueChange = { targetExam = it },
+                                onValueChange = { targetExam = FormFormatters.toUpperCaseClean(it) },
                                 label = { Text("Target Exam (e.g. UPSC, NEET, Banking)") },
                                 leadingIcon = { Icon(Icons.Default.School, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -1032,7 +1126,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             OutlinedTextField(
                                 value = courseClass,
-                                onValueChange = { courseClass = it },
+                                onValueChange = { courseClass = FormFormatters.toTitleCase(it) },
                                 label = { Text("Current Course / Qualification") },
                                 leadingIcon = { Icon(Icons.Default.MenuBook, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -1042,7 +1136,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             OutlinedTextField(
                                 value = studentAddress,
-                                onValueChange = { studentAddress = it },
+                                onValueChange = { studentAddress = FormFormatters.toSentenceCase(it) },
                                 label = { Text("Residential Address / Hostel") },
                                 leadingIcon = { Icon(Icons.Default.Home, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
@@ -1052,7 +1146,6 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 4.dp))
 
-                            
                             Text(
                                 text = "GUARDIAN & EMERGENCY CONTACT",
                                 fontSize = 14.sp,
@@ -1063,7 +1156,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             OutlinedTextField(
                                 value = parentName,
-                                onValueChange = { parentName = it },
+                                onValueChange = { parentName = FormFormatters.toTitleCase(it) },
                                 label = { Text("Guardian Name") },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -1072,7 +1165,7 @@ Divider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.pa
 
                             CountryCodePhoneField(
                                 mobile = parentMobile,
-                                onMobileChange = { parentMobile = it },
+                                onMobileChange = { parentMobile = FormFormatters.filterDigits(it, 10) },
                                 countryCode = parentCountryCode,
                                 onCountryCodeChange = { parentCountryCode = it },
                                 label = "Guardian Phone",

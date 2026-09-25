@@ -49,6 +49,7 @@ fun ManagerSettingsScreen(
     onOpenSyncBackup: () -> Unit,
     onEditProfile: () -> Unit = {},
     onEditInfrastructure: () -> Unit = {},
+    onUpdateLibrary: (LibraryEntity) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -94,25 +95,55 @@ fun ManagerSettingsScreen(
             }
 
             if (bestLocation != null) {
-                val lat = String.format(java.util.Locale.US, "%.6f", bestLocation.latitude)
-                val lng = String.format(java.util.Locale.US, "%.6f", bestLocation.longitude)
-                try {
-                    val label = library?.name ?: "Library Location"
-                    val mapUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng(${Uri.encode(label)})")
-                    val mapIntent = Intent(Intent.ACTION_VIEW, mapUri)
-                    context.startActivity(mapIntent)
-                    Toast.makeText(context, "Current GPS: $lat, $lng (Opened in Maps)", Toast.LENGTH_LONG).show()
-                } catch (e: Exception) {
-                    val webUri = Uri.parse("https://maps.google.com/?q=$lat,$lng")
-                    context.startActivity(Intent(Intent.ACTION_VIEW, webUri))
+                val lat = bestLocation.latitude
+                val lng = bestLocation.longitude
+
+                // Geocode and persist to Library profile
+                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    var resolvedAddress = library?.address ?: ""
+                    var resolvedCity = library?.city ?: ""
+                    var resolvedState = library?.state ?: ""
+                    var resolvedPincode = library?.pincode ?: ""
+
+                    try {
+                        val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+                        @Suppress("DEPRECATION")
+                        val addresses = geocoder.getFromLocation(lat, lng, 1)
+                        if (!addresses.isNullOrEmpty()) {
+                            val addr = addresses[0]
+                            val fullLine = addr.getAddressLine(0) ?: ""
+                            val street = addr.thoroughfare ?: addr.subLocality ?: addr.featureName ?: ""
+                            resolvedAddress = if (fullLine.isNotBlank()) fullLine else street
+                            resolvedCity = addr.locality ?: addr.subAdminArea ?: resolvedCity
+                            resolvedState = addr.adminArea ?: resolvedState
+                            resolvedPincode = addr.postalCode ?: resolvedPincode
+                        }
+                    } catch (_: Exception) {}
+
+                    val updatedLib = (library ?: LibraryEntity(id = "", name = "Library", code = "LIB")).copy(
+                        latitude = lat,
+                        longitude = lng,
+                        address = if (resolvedAddress.isNotBlank()) resolvedAddress else (library?.address ?: ""),
+                        city = if (resolvedCity.isNotBlank()) resolvedCity else (library?.city ?: ""),
+                        state = if (resolvedState.isNotBlank()) resolvedState else (library?.state ?: ""),
+                        pincode = if (resolvedPincode.isNotBlank()) resolvedPincode else (library?.pincode ?: ""),
+                        updatedAt = System.currentTimeMillis()
+                    )
+
+                    onUpdateLibrary(updatedLib)
+
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        isFetchingLocation = false
+                        Toast.makeText(context, "Location & Address auto-saved! ($resolvedAddress, $resolvedCity)", Toast.LENGTH_LONG).show()
+                    }
                 }
             } else {
+                isFetchingLocation = false
                 Toast.makeText(context, "Turn on GPS to capture current location", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
-            Toast.makeText(context, "Could not get location: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
-        } finally {
             isFetchingLocation = false
+            Toast.makeText(context, "Could not get location: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 

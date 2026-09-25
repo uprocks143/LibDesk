@@ -1941,7 +1941,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         fee: Double,
         durationType: String = "MONTHS",
         discount: Double = 0.0,
-        facilities: String = "High-Speed Wi-Fi, RO Water, Charging Socket, Silent AC"
+        facilities: String = "High-Speed Wi-Fi, RO Water, Charging Socket, Silent AC",
+        shiftId: String = ""
     ) {
         val libId = currentLibraryId.value
         viewModelScope.launch {
@@ -1959,7 +1960,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 durationType = durationType,
                 baseFee = fee,
                 discount = discount,
-                facilities = facilities
+                facilities = facilities,
+                shiftId = shiftId
             )
             repository.insertMembershipPlan(plan)
             _userMessage.value = "Plan '$name' added successfully"
@@ -2065,31 +2067,30 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     fun loadCuratedFreeStudyPdfs() {
         viewModelScope.launch {
             val libId = _currentLibraryId.value
-            
             try {
                 val catalog = com.example.data.remote.NcertCatalogService.fetchNcertCatalog()
                 val materials = catalog.mapIndexed { index, metadata ->
                     DigitalMaterialEntity(
-                        id = "DM-NCERT-${index + 1}",
+                        id = "DM-NCERT-${index + 1}-${libId.take(4)}",
                         libraryId = libId,
                         title = metadata.title,
-                        description = "Complete textbook for ${metadata.title}",
+                        description = metadata.description.ifBlank { "Official NCERT textbook for ${metadata.title} (${metadata.category})" },
                         category = metadata.category,
                         subject = metadata.subject,
-                        exam = "CBSE",
+                        exam = metadata.exam,
                         fileType = "PDF",
-                        fileSize = "N/A",
+                        fileSize = "Digital PDF",
                         fileUrl = metadata.fileUrl,
                         accessPolicy = "ALL_STUDENTS",
                         uploadDate = getTodayDateString(),
-                        downloadCount = 0,
+                        downloadCount = 1,
                         isBookmarked = false
                     )
                 }
                 materials.forEach { repository.saveDigitalMaterial(it) }
-                _userMessage.value = "Digital materials added to the library!"
+                _userMessage.value = "📚 All NCERT Class 1-12 Textbooks (${materials.size} Books) added to Digital Library!"
             } catch (e: Exception) {
-                // error handling omitted for brevity
+                _userMessage.value = "Could not load NCERT books: ${e.localizedMessage}"
             }
         }
     }
@@ -2192,18 +2193,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateLibraryProfile(updatedLibrary: LibraryEntity, onError: ((String) -> Unit)? = null) {
         viewModelScope.launch {
-            val (isEligible, trialErrMsg) = repository.checkLibraryTrialEligibility(
-                updatedLibrary.ownerEmail,
-                updatedLibrary.ownerPhone,
-                excludeLibraryId = updatedLibrary.id
-            )
-            if (!isEligible) {
-                val err = trialErrMsg ?: "इस Email या Phone Number पर पहले से दूसरी Library रजिस्टर्ड है।"
-                com.example.ui.components.SnackbarController.showError(err)
-                _userMessage.value = err
-                onError?.invoke(err)
-                return@launch
-            }
             repository.saveLibrary(updatedLibrary)
             if (_currentRole.value == "MANAGER" && updatedLibrary.ownerName.isNotBlank()) {
                 _currentUserName.value = updatedLibrary.ownerName

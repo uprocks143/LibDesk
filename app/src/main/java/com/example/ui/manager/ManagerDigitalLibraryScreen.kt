@@ -51,11 +51,20 @@ fun ManagerDigitalLibraryScreen(
 
     val filteredMaterials = remember(materials, selectedCategoryFilter, searchQuery) {
         materials.filter { mat ->
-            val matchesCategory = selectedCategoryFilter == "ALL" || mat.category.equals(selectedCategoryFilter, ignoreCase = true)
+            val matchesCategory = when (selectedCategoryFilter) {
+                "ALL" -> true
+                "Class 1-5" -> mat.category in listOf("Class 1", "Class 2", "Class 3", "Class 4", "Class 5")
+                "Class 6-8" -> mat.category in listOf("Class 6", "Class 7", "Class 8")
+                "Class 9-10" -> mat.category in listOf("Class 9", "Class 10")
+                "Class 11-12" -> mat.category in listOf("Class 11", "Class 12")
+                "NCERT" -> mat.category.contains("Class", ignoreCase = true) || mat.category.equals("NCERT", ignoreCase = true) || mat.title.contains("NCERT", ignoreCase = true)
+                else -> mat.category.equals(selectedCategoryFilter, ignoreCase = true)
+            }
             val matchesSearch = searchQuery.isBlank() ||
                 mat.title.contains(searchQuery, ignoreCase = true) ||
                 mat.subject.contains(searchQuery, ignoreCase = true) ||
-                mat.exam.contains(searchQuery, ignoreCase = true)
+                mat.exam.contains(searchQuery, ignoreCase = true) ||
+                mat.category.contains(searchQuery, ignoreCase = true)
             matchesCategory && matchesSearch
         }
     }
@@ -155,7 +164,7 @@ fun ManagerDigitalLibraryScreen(
                         ) {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Embed NCERT", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("Add NCERT (1-12)", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -165,7 +174,7 @@ fun ManagerDigitalLibraryScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search e-books, notes, pyq, test series...") },
+                placeholder = { Text("Search NCERT books, notes, subject, class...") },
                 leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
@@ -185,27 +194,37 @@ fun ManagerDigitalLibraryScreen(
                 FilterChip(
                     selected = selectedCategoryFilter == "ALL",
                     onClick = { selectedCategoryFilter = "ALL" },
-                    label = { Text("All", fontSize = 14.sp) }
-                )
-                FilterChip(
-                    selected = selectedCategoryFilter == "UPSC CSE",
-                    onClick = { selectedCategoryFilter = "UPSC CSE" },
-                    label = { Text("UPSC CSE", fontSize = 14.sp) }
+                    label = { Text("All (${materials.size})", fontSize = 13.sp) }
                 )
                 FilterChip(
                     selected = selectedCategoryFilter == "NCERT",
                     onClick = { selectedCategoryFilter = "NCERT" },
-                    label = { Text("NCERT", fontSize = 14.sp) }
+                    label = { Text("NCERT All", fontSize = 13.sp) }
                 )
                 FilterChip(
-                    selected = selectedCategoryFilter == "SSC / Banking",
-                    onClick = { selectedCategoryFilter = "SSC / Banking" },
-                    label = { Text("SSC / Banking", fontSize = 14.sp) }
+                    selected = selectedCategoryFilter == "Class 1-5",
+                    onClick = { selectedCategoryFilter = "Class 1-5" },
+                    label = { Text("Class 1-5", fontSize = 13.sp) }
                 )
                 FilterChip(
-                    selected = selectedCategoryFilter == "State PSC",
-                    onClick = { selectedCategoryFilter = "State PSC" },
-                    label = { Text("State PSC", fontSize = 14.sp) }
+                    selected = selectedCategoryFilter == "Class 6-8",
+                    onClick = { selectedCategoryFilter = "Class 6-8" },
+                    label = { Text("Class 6-8", fontSize = 13.sp) }
+                )
+                FilterChip(
+                    selected = selectedCategoryFilter == "Class 9-10",
+                    onClick = { selectedCategoryFilter = "Class 9-10" },
+                    label = { Text("Class 9-10", fontSize = 13.sp) }
+                )
+                FilterChip(
+                    selected = selectedCategoryFilter == "Class 11-12",
+                    onClick = { selectedCategoryFilter = "Class 11-12" },
+                    label = { Text("Class 11-12", fontSize = 13.sp) }
+                )
+                FilterChip(
+                    selected = selectedCategoryFilter == "UPSC CSE",
+                    onClick = { selectedCategoryFilter = "UPSC CSE" },
+                    label = { Text("UPSC / Govt", fontSize = 13.sp) }
                 )
             }
 
@@ -389,20 +408,26 @@ fun AddDigitalMaterialDialog(
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("NCERT") }
-    var subject by remember { mutableStateOf("Science") }
-    var exam by remember { mutableStateOf("General") }
+    var subject by remember { mutableStateOf("General") }
+    var exam by remember { mutableStateOf("CBSE / All Exams") }
     var fileSize by remember { mutableStateOf("Local PDF") }
     var fileUriOrUrl by remember { mutableStateOf("") }
     var fileNamePicked by remember { mutableStateOf<String?>(null) }
+    var isEnteringWebUrl by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        // Previously this used GetContent(), which does NOT reliably support
-        // persistable URI permissions — the picked file's content:// URI would
-        // stop resolving after the app restarted (or sometimes sooner), so the
-        // "uploaded" PDF silently broke. OpenDocument() uses the real Storage
-        // Access Framework, which DOES support taking a permanent permission
-        // grant below.
+
+    fun cleanFileNameToTitle(rawName: String): String {
+        return rawName
+            .substringBeforeLast(".")
+            .replace(Regex("[_\\-+]"), " ")
+            .trim()
+            .split(" ")
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+    }
+
+    val openDocLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -411,17 +436,20 @@ fun AddDigitalMaterialDialog(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (e: SecurityException) {
-                // Some providers (e.g. certain cloud apps) don't support a
-                // persistable grant — the file will still work for this
-                // session; PdfViewerScreen also copies bytes into local
-                // cache on first open, which keeps it readable afterward.
+            } catch (_: Exception) {
             }
             fileUriOrUrl = uri.toString()
-            fileNamePicked = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val resolvedName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                 if (cursor.moveToFirst() && nameIndex >= 0) cursor.getString(nameIndex) else null
-            } ?: "Selected_PDF_Document.pdf"
+            } ?: "Document.pdf"
+            fileNamePicked = resolvedName
+            if (title.isBlank()) {
+                title = cleanFileNameToTitle(resolvedName)
+            }
+            if (description.isBlank()) {
+                description = "Digital study textbook / notes ($resolvedName)"
+            }
             fileSize = try {
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                     val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
@@ -430,8 +458,23 @@ fun AddDigitalMaterialDialog(
                         "%.1f MB".format(bytes / (1024.0 * 1024.0))
                     } else "Local PDF"
                 } ?: "Local PDF"
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 "Local PDF"
+            }
+        }
+    }
+
+    val getContentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            fileUriOrUrl = uri.toString()
+            fileNamePicked = "Selected_PDF_File.pdf"
+            if (title.isBlank()) {
+                title = "Study Resource PDF"
+            }
+            if (description.isBlank()) {
+                description = "Digital study textbook / notes"
             }
         }
     }
@@ -462,22 +505,102 @@ fun AddDigitalMaterialDialog(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = "Upload Digital Study Material",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Upload Digital Study Material",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                // PDF File Selection Box
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (fileNamePicked != null || fileUriOrUrl.isNotBlank()) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = fileNamePicked ?: fileUriOrUrl,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(text = "Size: $fileSize • Ready to Publish", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    try {
+                                        openDocLauncher.launch(arrayOf("application/pdf", "*/*"))
+                                    } catch (_: Exception) {
+                                        getContentLauncher.launch("application/pdf")
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (fileUriOrUrl.isBlank()) "Choose PDF File" else "Change File")
+                            }
+
+                            TextButton(
+                                onClick = { isEnteringWebUrl = !isEnteringWebUrl }
+                            ) {
+                                Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (isEnteringWebUrl) "Use Device File" else "Paste Web URL")
+                            }
+                        }
+
+                        if (isEnteringWebUrl) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = fileUriOrUrl,
+                                onValueChange = {
+                                    fileUriOrUrl = it
+                                    if (fileNamePicked == null && it.isNotBlank()) {
+                                        fileNamePicked = it.substringAfterLast("/").substringBefore("?")
+                                        if (title.isBlank()) title = cleanFileNameToTitle(fileNamePicked!!)
+                                    }
+                                },
+                                label = { Text("Direct PDF URL (https://...)") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Resource Title *") },
+                    label = { Text("Resource Title * (e.g. Class 10 Science Chapter 1)") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Summary / Highlights") },
+                    label = { Text("Summary / Highlights / Topics Covered") },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -485,40 +608,38 @@ fun AddDigitalMaterialDialog(
                     OutlinedTextField(
                         value = category,
                         onValueChange = { category = it },
-                        label = { Text("Category") },
+                        label = { Text("Category (e.g. Class 10, NCERT)") },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = subject,
                         onValueChange = { subject = it },
-                        label = { Text("Subject") },
+                        label = { Text("Subject (e.g. Maths, Science)") },
                         modifier = Modifier.weight(1f)
                     )
                 }
 
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                OutlinedTextField(
+                    value = exam,
+                    onValueChange = { exam = it },
+                    label = { Text("Target Board / Exam (e.g. CBSE, UPSC, SSC, NEET)") },
                     modifier = Modifier.fillMaxWidth()
+                )
+
+                // Quick Category Presets
+                Text("Quick Category Presets", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (fileNamePicked != null) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(36.dp))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(text = fileNamePicked!!, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                        Button(
-                            onClick = { filePickerLauncher.launch(arrayOf("application/pdf")) },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Icon(Icons.Default.AttachFile, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (fileNamePicked == null) "Select PDF File" else "Change File")
-                        }
+                    listOf("NCERT", "Class 10", "Class 12", "Class 9", "Class 11", "UPSC Notes", "PYQ 2024").forEach { preset ->
+                        FilterChip(
+                            selected = category == preset,
+                            onClick = { category = preset },
+                            label = { Text(preset, fontSize = 11.sp) }
+                        )
                     }
                 }
 
@@ -537,13 +658,27 @@ fun AddDigitalMaterialDialog(
                     }
                     Button(
                         onClick = {
-                            if (title.isNotBlank() && fileUriOrUrl.isNotBlank()) {
-                                onConfirm(title, description, category, subject, exam, "PDF", fileSize, fileUriOrUrl, "ALL_STUDENTS")
+                            val finalTitle = title.trim().ifBlank { fileNamePicked ?: "Study Resource PDF" }
+                            val finalUrl = fileUriOrUrl.trim()
+                            if (finalUrl.isNotBlank()) {
+                                onConfirm(
+                                    finalTitle,
+                                    description.trim().ifBlank { "Study PDF resource for $finalTitle" },
+                                    category.trim().ifBlank { "NCERT" },
+                                    subject.trim().ifBlank { "General" },
+                                    exam.trim().ifBlank { "All Exams" },
+                                    "PDF",
+                                    fileSize,
+                                    finalUrl,
+                                    "ALL_STUDENTS"
+                                )
+                            } else {
+                                Toast.makeText(context, "Please choose a PDF file or enter a PDF URL first", Toast.LENGTH_SHORT).show()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(8.dp),
-                        enabled = title.isNotBlank() && fileUriOrUrl.isNotBlank(),
+                        enabled = fileUriOrUrl.isNotBlank() || title.isNotBlank(),
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Publish PDF")

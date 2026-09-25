@@ -39,7 +39,7 @@ fun InfrastructureEditorModal(
     onAddShift: (name: String, start: String, end: String, fee: Double) -> Unit,
     onEditShift: (ShiftEntity) -> Unit = {},
     onDeleteShift: (ShiftEntity) -> Unit = {},
-    onAddPlan: (name: String, duration: Int, fee: Double, durationType: String, discount: Double, facilities: String) -> Unit = { _, _, _, _, _, _ -> },
+    onAddPlan: (name: String, duration: Int, fee: Double, durationType: String, discount: Double, facilities: String, shiftId: String) -> Unit = { _, _, _, _, _, _, _ -> },
     onEditPlan: (MembershipPlanEntity) -> Unit = {},
     onDeletePlan: (MembershipPlanEntity) -> Unit = {},
     onClose: () -> Unit
@@ -62,7 +62,8 @@ fun InfrastructureEditorModal(
     var editingShift by remember { mutableStateOf<ShiftEntity?>(null) }
     var deletingShift by remember { mutableStateOf<ShiftEntity?>(null) }
 
-    // Plan inputs (Student Plans & Offers)
+    // Plan inputs (Student Plans & Offers linked to Shifts)
+    var newPlanShiftId by remember { mutableStateOf("") } // "" = All Shifts
     var newPlanName by remember { mutableStateOf("") }
     var newPlanDurationUnit by remember { mutableStateOf("MONTHS") } // "MONTHS" or "DAYS"
     var newPlanDuration by remember { mutableStateOf("1") }
@@ -467,6 +468,7 @@ fun InfrastructureEditorModal(
                                         val isDays = plan.durationType.equals("DAYS", ignoreCase = true) || plan.durationDays > 0 && plan.durationMonths <= 1
                                         val durationLabel = if (isDays) "${plan.durationDays} Days" else "${plan.durationMonths} ${if (plan.durationMonths == 1) "Month" else "Months"}"
                                         val netPayable = (plan.baseFee - plan.discount).coerceAtLeast(0.0)
+                                        val linkedShift = shifts.firstOrNull { it.id == plan.shiftId }
 
                                         Card(
                                             modifier = Modifier.fillMaxWidth(),
@@ -481,7 +483,11 @@ fun InfrastructureEditorModal(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Column(modifier = Modifier.weight(1f)) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        modifier = Modifier.padding(bottom = 2.dp)
+                                                    ) {
                                                         Text(plan.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                                         Surface(
                                                             color = if (isDays) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
@@ -510,6 +516,21 @@ fun InfrastructureEditorModal(
                                                             }
                                                         }
                                                     }
+
+                                                    // Linked Shift Tag
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = if (linkedShift != null) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceVariant
+                                                    ) {
+                                                        Text(
+                                                            text = if (linkedShift != null) "Shift: ${linkedShift.name} (${linkedShift.startTime} - ${linkedShift.endTime})" else "Shift: All Shifts (Global)",
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = if (linkedShift != null) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+
                                                     Spacer(modifier = Modifier.height(3.dp))
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                         if (plan.discount > 0.0) {
@@ -573,15 +594,91 @@ fun InfrastructureEditorModal(
                             HorizontalDivider()
 
                             Text(
-                                "Create Student Plan / Offer",
+                                "Create Shift Plan / Special Offer",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
 
+                            // 1. Shift Association Selector
+                            Text("1. Select Target Shift / Batch", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = newPlanShiftId.isBlank(),
+                                    onClick = { newPlanShiftId = "" },
+                                    label = { Text("All Shifts (Global)", fontSize = 11.5.sp) }
+                                )
+                                shifts.take(3).forEach { shift ->
+                                    FilterChip(
+                                        selected = newPlanShiftId == shift.id,
+                                        onClick = {
+                                            newPlanShiftId = shift.id
+                                            if (newPlanName.isBlank() || newPlanName.contains("Shift", ignoreCase = true)) {
+                                                newPlanName = "${shift.name} Regular Plan"
+                                            }
+                                            newPlanFee = (shift.fee * (newPlanDuration.toIntOrNull() ?: 1)).toInt().toString()
+                                        },
+                                        label = { Text(shift.name, fontSize = 11.5.sp) }
+                                    )
+                                }
+                            }
+
+                            // 2. Offer Templates / Presets
+                            Text("2. Quick Plan & Offer Templates", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                SuggestionChip(
+                                    onClick = {
+                                        val shiftObj = shifts.firstOrNull { it.id == newPlanShiftId }
+                                        val shiftName = shiftObj?.name ?: "Shift"
+                                        newPlanName = "$shiftName Regular Plan"
+                                        newPlanDurationUnit = "MONTHS"
+                                        newPlanDuration = "1"
+                                        val base = shiftObj?.fee ?: 500.0
+                                        newPlanFee = base.toInt().toString()
+                                        newPlanDiscount = "0"
+                                    },
+                                    label = { Text("Regular Plan", fontSize = 11.sp) }
+                                )
+                                SuggestionChip(
+                                    onClick = {
+                                        val shiftObj = shifts.firstOrNull { it.id == newPlanShiftId }
+                                        val shiftName = shiftObj?.name ?: "Shift"
+                                        newPlanName = "$shiftName 3-Month Plan (20% Off)"
+                                        newPlanDurationUnit = "MONTHS"
+                                        newPlanDuration = "3"
+                                        val perMonth = shiftObj?.fee ?: 500.0
+                                        val totalBase = perMonth * 3.0
+                                        val discount = totalBase * 0.20
+                                        newPlanFee = totalBase.toInt().toString()
+                                        newPlanDiscount = discount.toInt().toString()
+                                    },
+                                    label = { Text("3 Mo (20% Off)", fontSize = 11.sp) }
+                                )
+                                SuggestionChip(
+                                    onClick = {
+                                        val shiftObj = shifts.firstOrNull { it.id == newPlanShiftId }
+                                        val shiftName = shiftObj?.name ?: "Library"
+                                        newPlanName = "Diwali Festive Offer (Flat 20% Off)"
+                                        newPlanDurationUnit = "MONTHS"
+                                        newPlanDuration = "1"
+                                        val base = shiftObj?.fee ?: 600.0
+                                        val discount = base * 0.20
+                                        newPlanFee = base.toInt().toString()
+                                        newPlanDiscount = discount.toInt().toString()
+                                    },
+                                    label = { Text("Diwali 20% Off", fontSize = 11.sp) }
+                                )
+                            }
+
                             OutlinedTextField(
                                 value = newPlanName,
                                 onValueChange = { newPlanName = it },
-                                label = { Text("Plan / Offer Name (e.g. 15-Day Sprint, Diwali Special)") },
+                                label = { Text("Plan / Offer Name (e.g. Morning Shift Regular, Diwali Special)") },
                                 leadingIcon = { Icon(Icons.Default.CardMembership, contentDescription = null) },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -637,7 +734,14 @@ fun InfrastructureEditorModal(
                                 } else {
                                     listOf("1", "2", "3", "6", "12").forEach { m ->
                                         SuggestionChip(
-                                            onClick = { newPlanDuration = m },
+                                            onClick = {
+                                                newPlanDuration = m
+                                                val shiftObj = shifts.firstOrNull { it.id == newPlanShiftId }
+                                                if (shiftObj != null) {
+                                                    val mInt = m.toIntOrNull() ?: 1
+                                                    newPlanFee = (shiftObj.fee * mInt).toInt().toString()
+                                                }
+                                            },
                                             label = { Text("$m Mo", fontSize = 11.sp) }
                                         )
                                     }
@@ -717,12 +821,14 @@ fun InfrastructureEditorModal(
                                             fee,
                                             newPlanDurationUnit,
                                             discountVal,
-                                            newPlanFacilities.trim()
+                                            newPlanFacilities.trim(),
+                                            newPlanShiftId
                                         )
                                         newPlanName = ""
                                         newPlanDuration = if (newPlanDurationUnit == "DAYS") "15" else "1"
                                         newPlanFee = "1000"
                                         newPlanDiscount = "0"
+                                        newPlanShiftId = ""
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
@@ -948,6 +1054,7 @@ fun InfrastructureEditorModal(
     editingPlan?.let { plan ->
         val initialIsDays = plan.durationType.equals("DAYS", ignoreCase = true) || (plan.durationDays > 0 && plan.durationMonths <= 1)
         var editName by remember { mutableStateOf(plan.name) }
+        var editShiftId by remember { mutableStateOf(plan.shiftId) }
         var editUnit by remember { mutableStateOf(if (initialIsDays) "DAYS" else "MONTHS") }
         var editDuration by remember {
             mutableStateOf(if (initialIsDays) plan.durationDays.toString() else plan.durationMonths.toString())
@@ -967,6 +1074,26 @@ fun InfrastructureEditorModal(
                         label = { Text("Plan / Offer Name") },
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Target Shift
+                    Text("Target Shift / Batch", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = editShiftId.isBlank(),
+                            onClick = { editShiftId = "" },
+                            label = { Text("All Shifts", fontSize = 11.sp) }
+                        )
+                        shifts.forEach { s ->
+                            FilterChip(
+                                selected = editShiftId == s.id,
+                                onClick = { editShiftId = s.id },
+                                label = { Text(s.name, fontSize = 11.sp) }
+                            )
+                        }
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1032,6 +1159,7 @@ fun InfrastructureEditorModal(
                         }
                         val updated = plan.copy(
                             name = editName.trim(),
+                            shiftId = editShiftId,
                             durationMonths = m,
                             durationDays = d,
                             durationType = editUnit,

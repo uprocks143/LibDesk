@@ -538,17 +538,19 @@ fun LibDeskDrawerContent(
                 }
             }
 
-            DrawerNavItem(
-                icon = Icons.Default.AdminPanelSettings,
-                title = "SaaS Admin Portal",
-                subtitle = "Restricted management interface for platform owner",
-                badge = "Owner",
-                badgeColor = MaterialTheme.colorScheme.primary,
-                onClick = {
-                    onOpenSuperAdmin()
-                    onCloseDrawer()
-                }
-            )
+            if (currentRole == "SUPER_ADMIN") {
+                DrawerNavItem(
+                    icon = Icons.Default.AdminPanelSettings,
+                    title = "SaaS Admin Portal",
+                    subtitle = "Restricted management interface for platform owner",
+                    badge = "Owner",
+                    badgeColor = MaterialTheme.colorScheme.primary,
+                    onClick = {
+                        onOpenSuperAdmin()
+                        onCloseDrawer()
+                    }
+                )
+            }
 
             DrawerNavItem(
                 icon = Icons.Default.Logout,
