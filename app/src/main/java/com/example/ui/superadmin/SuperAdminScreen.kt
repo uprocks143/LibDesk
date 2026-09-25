@@ -1070,6 +1070,7 @@ private fun BroadcastTab(libraries: List<LibraryEntity>, viewModel: LibDeskViewM
 private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewModel, onLogout: () -> Unit) {
     var name by remember(profile) { mutableStateOf(profile?.name ?: "") }
     var email by remember(profile) { mutableStateOf(profile?.email ?: "") }
+    var mobile by remember(profile) { mutableStateOf(profile?.mobile ?: "") }
     var upiId by remember(profile) { mutableStateOf(profile?.upiId ?: "libdesk.billing@upi") }
     var upiPayeeName by remember(profile) { mutableStateOf(profile?.upiPayeeName ?: "LibDesk Subscriptions") }
     var showResetConfirm by remember { mutableStateOf(false) }
@@ -1082,7 +1083,7 @@ private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewMo
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Account", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("Account & Support Contact", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1090,13 +1091,42 @@ private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewMo
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Your contact number is automatically mapped across the app for student & library helpline, WhatsApp support, and billing queries.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Super Admin Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
+                )
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email Address") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) }
+                )
+                OutlinedTextField(
+                    value = mobile,
+                    onValueChange = { mobile = it.filter { c -> c.isDigit() || c == '+' } },
+                    label = { Text("Official Contact & WhatsApp Support Phone") },
+                    placeholder = { Text("e.g. +91 9876543210") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) }
+                )
                 Button(
                     onClick = {
                         viewModel.updateSuperAdminProfile(
                             email = email.trim(),
                             name = name.trim(),
+                            mobile = mobile.trim(),
                             accessCode = "",
                             is2Fa = true,
                             upiId = upiId.trim(),
@@ -1105,7 +1135,11 @@ private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewMo
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = name.isNotBlank() && email.isNotBlank()
-                ) { Text("Save Changes") }
+                ) {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Save Changes & Sync Helpline")
+                }
             }
         }
 

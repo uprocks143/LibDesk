@@ -100,13 +100,9 @@ fun PlansAndOffersScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            // Previously this always sent to a hardcoded fake
-                            // number ("") regardless of any real
-                            // configuration — every "General Inquiry" from every
-                            // library owner went to a random, unrelated phone
-                            // number instead of real LibDesk support.
-                            val supportPhone = plans.firstOrNull { it.supportWhatsApp.isNotBlank() }?.supportWhatsApp
-                            if (supportPhone != null) {
+                            val supportPhone = superAdminProfile?.mobile?.takeIf { it.isNotBlank() }
+                                ?: plans.firstOrNull { it.supportWhatsApp.isNotBlank() }?.supportWhatsApp
+                            if (!supportPhone.isNullOrBlank()) {
                                 UpiPaymentHelper.shareReceiptToWhatsApp(
                                     context = context,
                                     whatsappNumber = supportPhone,
@@ -332,15 +328,15 @@ fun PlansAndOffersScreen(
                     ownerEmail = viewModel.currentUserEmail.value
                 )
 
-                // Only attempt WhatsApp handoff when a real, admin-configured
-                // support number exists. Previously a blank number here was
-                // silently replaced with a made-up "" — sending
-                // the owner's real UTR/payment receipt screenshot to whoever
-                // actually owns that number, not to LibDesk support.
-                if (plan.supportWhatsApp.isNotBlank()) {
+                val targetSupportWhatsApp = superAdminProfile?.mobile?.takeIf { it.isNotBlank() }
+                    ?: plan.supportWhatsApp.takeIf { it.isNotBlank() }
+                    ?: plans.firstOrNull { it.supportWhatsApp.isNotBlank() }?.supportWhatsApp
+                    ?: ""
+
+                if (targetSupportWhatsApp.isNotBlank()) {
                     UpiPaymentHelper.shareReceiptToWhatsApp(
                         context = context,
-                        whatsappNumber = plan.supportWhatsApp,
+                        whatsappNumber = targetSupportWhatsApp,
                         planName = plan.name,
                         amount = calculateCyclePrice(plan, selectedBillingCycle),
                         utrNumber = utr,

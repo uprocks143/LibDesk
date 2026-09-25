@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
@@ -10,26 +13,30 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.R
+import com.example.util.payment.UpiPaymentHelper
 import com.example.viewmodel.LiveSubscriptionCheck
 
 /**
  * Fail-closed subscription gate. Shown for the Manager/Owner role whenever a
  * live (non-cached) check against Supabase does not confirm an Active
  * subscription — including when the check simply couldn't be verified at
- * all (no internet). Previously nothing blocked feature access even after a
- * library was suspended or its plan expired, since only a local Room cache
- * was ever consulted, so a library could work indefinitely offline without
- * ever paying.
+ * all (no internet).
  */
 @Composable
 fun SubscriptionBlockedScreen(
     check: LiveSubscriptionCheck?,
+    supportPhone: String? = null,
     onRetry: () -> Unit,
     onViewPlans: () -> Unit,
     onLogout: () -> Unit
 ) {
+    val context = LocalContext.current
     val content = when (check) {
         null -> BlockedContent(
             Icons.Default.HourglassTop,
@@ -100,11 +107,40 @@ fun SubscriptionBlockedScreen(
                 Spacer(modifier = Modifier.height(28.dp))
                 Button(
                     onClick = content.primary.second,
-                    modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),
+                    modifier = Modifier.fillMaxWidth(0.85f).height(50.dp),
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Text(content.primary.first, fontWeight = FontWeight.Bold)
                 }
+
+                if (!supportPhone.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = {
+                            UpiPaymentHelper.shareReceiptToWhatsApp(
+                                context = context,
+                                whatsappNumber = supportPhone,
+                                planName = "Account Status Inquiry",
+                                amount = 0.0,
+                                utrNumber = "N/A",
+                                libraryName = "Library",
+                                ownerName = "Manager"
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(0.85f).height(48.dp),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_whatsapp_real),
+                            contentDescription = null,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Contact Super Admin Support", fontWeight = FontWeight.Bold)
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
                 TextButton(onClick = onLogout) {
                     Text("Sign Out", color = MaterialTheme.colorScheme.onSurfaceVariant)

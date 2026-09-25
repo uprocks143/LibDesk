@@ -170,6 +170,7 @@ fun LibDeskApp(
 
     val currentSubscription by viewModel.currentSubscription.collectAsStateWithLifecycle()
     val saasPlans by viewModel.saasPlans.collectAsStateWithLifecycle()
+    val subscriptionPlans by viewModel.subscriptionPlans.collectAsStateWithLifecycle()
     val trialDaysRemaining by viewModel.trialDaysRemaining.collectAsStateWithLifecycle()
     val isTrialActive by viewModel.isTrialActive.collectAsStateWithLifecycle()
     val isTrialExpired by viewModel.isTrialExpired.collectAsStateWithLifecycle()
@@ -319,6 +320,7 @@ fun LibDeskApp(
     if (isManagerRole && currentLib != null && liveSubCheck != com.example.viewmodel.LiveSubscriptionCheck.Active) {
         SubscriptionBlockedScreen(
             check = liveSubCheck,
+            supportPhone = superAdminProfile?.mobile?.takeIf { it.isNotBlank() } ?: subscriptionPlans.firstOrNull { it.supportWhatsApp.isNotBlank() }?.supportWhatsApp,
             onRetry = { subCheckAttempt++ },
             onViewPlans = { showSaaSOffersModal = true },
             onLogout = { showLogoutConfirmationDialog = true }
@@ -737,6 +739,7 @@ onOpenSyncBackup = { showBackupScreen = true },
                                     shifts = shifts,
                                     plans = plans,
                                     students = students,
+                                    superAdminProfile = superAdminProfile,
                                     onSelectLibrary = { libId ->
                                         viewModel.selectLibrary(libId)
                                     },
@@ -791,6 +794,7 @@ onOpenSyncBackup = { showBackupScreen = true },
                                 ManagerNoticesAndFeedbackScreen(
                                     notices = notices,
                                     feedbackList = feedbackList,
+                                    superAdminProfile = superAdminProfile,
                                     onPostNotice = { title, content, cat, prio ->
                                         viewModel.postNotice(title, content, cat, prio)
                                     },

@@ -44,6 +44,7 @@ fun ManagerSettingsScreen(
     shifts: List<ShiftEntity>,
     plans: List<MembershipPlanEntity>,
     students: List<StudentEntity> = emptyList(),
+    superAdminProfile: SuperAdminUserEntity? = null,
     onSelectLibrary: (String) -> Unit,
     onCreateLibrary: () -> Unit,
     onOpenSyncBackup: () -> Unit,
@@ -722,6 +723,114 @@ fun ManagerSettingsScreen(
                             Icon(imageVector = Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Test System Alert Notification Now", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            val adminPhone = superAdminProfile?.mobile?.takeIf { it.isNotBlank() }
+            val adminName = superAdminProfile?.name?.takeIf { it.isNotBlank() } ?: "LibDesk Platform Super Admin"
+
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.HeadsetMic,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Platform Support & Super Admin Helpline",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = "Auto-synced from live Super Admin database profile",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SettingInfoRow(
+                                icon = Icons.Default.Person,
+                                label = "Platform Super Admin",
+                                value = adminName
+                            )
+                            SettingInfoRow(
+                                icon = Icons.Default.Phone,
+                                label = "Official Helpline & WhatsApp",
+                                value = adminPhone ?: "Not configured in database yet"
+                            )
+                        }
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                if (!adminPhone.isNullOrBlank()) {
+                                    com.example.util.payment.UpiPaymentHelper.shareReceiptToWhatsApp(
+                                        context = context,
+                                        whatsappNumber = adminPhone,
+                                        planName = "Technical Support",
+                                        amount = 0.0,
+                                        utrNumber = "N/A",
+                                        libraryName = library?.name ?: "Library",
+                                        ownerName = library?.ownerName ?: "Manager"
+                                    )
+                                } else {
+                                    Toast.makeText(context, "Super Admin phone not configured.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Chat on WhatsApp", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                if (!adminPhone.isNullOrBlank()) {
+                                    val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$adminPhone"))
+                                    context.startActivity(dialIntent)
+                                } else {
+                                    Toast.makeText(context, "Contact number not available.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Call Support", fontWeight = FontWeight.Bold)
                         }
                     }
                 }

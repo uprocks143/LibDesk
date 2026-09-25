@@ -129,4 +129,43 @@ app/src/main/java/com/example/
 * **AES-256 GCM Cloud Snapshots**: Database backups uploaded to Google Drive are encrypted at the client level before transmission.
 * **Direct Targeting WhatsApp Communication**: Alerts and payment receipts are sent directly to the student's validated mobile number, eliminating human routing errors.
 * **Ephemeral TOTP Credentials**: Gate check-in QR codes expire every 30 seconds to prohibit credential sharing and screenshot forgery.
-* **Multi-Tenant RLS Policies**: Isolated PostgreSQL row-level security ensuring libraries only access their respective data partitions.
+* **Multi-Tenant RLS & JWT Isolation**: Enforced at the database layer with O(1) JWT custom claim lookup (`jwt_org_id()`, `jwt_role()`), completely isolating tenant databases without performance degrading subqueries.
+
+---
+
+## 👑 SaaS Role & Privilege Architecture
+
+LibDesk implements strict multi-tenant SaaS role-based isolation following the principle of least privilege:
+
+| Feature / Capability | 👑 Super Admin | 🏢 Library Owner / Manager | 🧑‍🎓 Student |
+| :--- | :---: | :---: | :---: |
+| **Platform Analytics & MRR** | ✅ | ❌ | ❌ |
+| **Library Onboarding & Approval** | ✅ | ❌ | ❌ |
+| **Subscription & License Activation** | ✅ | ❌ | ❌ |
+| **Direct Student PII Access** | ❌ (Strictly Blocked) | ✅ (Own Tenant Only) | Self Only |
+| **Seat Allocation & Desks** | ❌ | ✅ (Own Tenant Only) | View & Request |
+| **Fee Collection & Ledgers** | ❌ | ✅ (Own Tenant Only) | Pay & View Receipts |
+| **Attendance Marking** | ❌ | ✅ (Full Register) | Self 30s Dynamic QR |
+| **Upload Study Material / PDFs** | ❌ | ✅ (Own Tenant Only) | ❌ (Read Only) |
+| **Broadcast Notices** | Platform-Wide | Tenant-Wide | ❌ |
+| **Direct WhatsApp Alerts** | ❌ | ✅ | ❌ |
+| **Cloud Encrypted Backup** | Platform-Level | Own Library | ❌ |
+| **Digital Student ID Card** | ❌ | ❌ | ✅ |
+
+---
+
+## 🗄️ Supabase Database Setup & Schema
+
+The project includes a complete, production-ready PostgreSQL setup script in `/supabase_schema.sql`.
+
+### How to Apply the Database Script:
+1. Go to your **Supabase Dashboard** -> **SQL Editor**.
+2. Open the file `/supabase_schema.sql` from this repository.
+3. Paste the entire content into the SQL Editor and click **Run**.
+4. The script automatically:
+   - Creates all 26 tables matching the LibDesk Android camelCase data contracts.
+   - Sets up Row Level Security (RLS) policies enforcing multi-tenant isolation via custom JWT claims (`jwt_org_id()`, `jwt_role()`).
+   - Configures `public.custom_access_token_hook` for Supabase Auth custom claims.
+   - Enables `REPLICA IDENTITY FULL` and adds all tables to `supabase_realtime` for live synchronization.
+   - Creates database triggers that synchronize `auth.users` directly to `public.users`.
+   - Inserts initial master SaaS subscription plans.

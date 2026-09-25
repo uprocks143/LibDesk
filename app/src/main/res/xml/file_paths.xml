@@ -5,4 +5,5 @@
     <external-cache-path name="external_cache_images" path="images/" />
     <external-cache-path name="external_cache" path="." />
     <files-path name="shared_files" path="." />
+    <external-files-path name="ncert_files" path="." />
 </paths>

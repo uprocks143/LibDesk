@@ -1,5 +1,7 @@
 package com.example.ui.manager
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,24 +21,31 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.R
 import com.example.data.local.entities.FeedbackComplaintEntity
 import com.example.data.local.entities.NoticeEntity
+import com.example.data.local.entities.SuperAdminUserEntity
 import com.example.ui.components.EmptyPlaceholder
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.*
+import com.example.util.payment.UpiPaymentHelper
 
 @Composable
 fun ManagerNoticesAndFeedbackScreen(
     notices: List<NoticeEntity>,
     feedbackList: List<FeedbackComplaintEntity>,
+    superAdminProfile: SuperAdminUserEntity? = null,
     onPostNotice: (String, String, String, String) -> Unit,
     onReplyFeedback: (FeedbackComplaintEntity, String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) } 
     var showPostNoticeModal by remember { mutableStateOf(false) }
     var activeComplaintToReply by remember { mutableStateOf<FeedbackComplaintEntity?>(null) }
@@ -67,6 +77,7 @@ fun ManagerNoticesAndFeedbackScreen(
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Notices (${notices.size})") })
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Grievances (${feedbackList.size})") })
+                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Support Helpline") })
             }
 
             if (selectedTab == 0) {
@@ -127,7 +138,7 @@ fun ManagerNoticesAndFeedbackScreen(
                         }
                     }
                 }
-            } else {
+            } else if (selectedTab == 1) {
 
                 if (feedbackList.isEmpty()) {
                     EmptyPlaceholder(
@@ -190,6 +201,167 @@ fun ManagerNoticesAndFeedbackScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            } else {
+                val adminPhone = superAdminProfile?.mobile?.takeIf { it.isNotBlank() }
+                val adminName = superAdminProfile?.name?.takeIf { it.isNotBlank() } ?: "LibDesk Platform Master"
+                val adminEmail = superAdminProfile?.email?.takeIf { it.isNotBlank() } ?: "support@libdesk.com"
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.SupportAgent,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        text = "Official Platform & SaaS Support",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Direct helpline auto-mapped from Super Admin database",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("SUPPORT OFFICER", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                                    Text(adminName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                Surface(shape = RoundedCornerShape(6.dp), color = LibDeskColors.successSoft) {
+                                    Text("DATABASE MAPPED", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = LibDeskColors.success)
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("HELPLINE & WHATSAPP NUMBER", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = adminPhone ?: "Not configured by Super Admin yet",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (adminPhone != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("OFFICIAL EMAIL", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                                    Text(adminEmail, fontSize = 14.sp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Button(
+                                    onClick = {
+                                        if (!adminPhone.isNullOrBlank()) {
+                                            UpiPaymentHelper.shareReceiptToWhatsApp(
+                                                context = context,
+                                                whatsappNumber = adminPhone,
+                                                planName = "Library Assistance",
+                                                amount = 0.0,
+                                                utrNumber = "N/A",
+                                                libraryName = "Library Manager",
+                                                ownerName = "Manager"
+                                            )
+                                        } else {
+                                            com.example.ui.components.SnackbarController.showError("Super Admin hasn't saved their contact number yet.")
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f).height(46.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_whatsapp_real),
+                                        contentDescription = null,
+                                        tint = Color.Unspecified,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("WhatsApp", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        if (!adminPhone.isNullOrBlank()) {
+                                            val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$adminPhone"))
+                                            context.startActivity(dialIntent)
+                                        } else {
+                                            com.example.ui.components.SnackbarController.showError("Contact number not configured.")
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f).height(46.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Call Support", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Automatic Real-Time Sync Guarantee", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                "Whenever the Super Admin updates their phone or UPI details in their profile, it is instantly updated on your device via Supabase Cloud Realtime without needing app re-installations.",
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 17.sp
+                            )
                         }
                     }
                 }

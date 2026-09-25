@@ -129,9 +129,44 @@ class LibDeskRepository(val context: Context? = null) {
         SupabaseClient.deleteRecord("subscription_plans", plan.id)
     }
 
-    suspend fun updateAllPlansUpi(upiId: String, payeeName: String) = withContext(Dispatchers.IO) {
+    suspend fun updateAllPlansUpi(upiId: String, payeeName: String, supportWhatsApp: String = "") = withContext(Dispatchers.IO) {
         _subscriptionPlans.value = _subscriptionPlans.value.map {
-            it.copy(upiId = upiId, upiPayeeName = payeeName)
+            it.copy(
+                upiId = upiId,
+                upiPayeeName = payeeName,
+                supportWhatsApp = if (supportWhatsApp.isNotBlank()) supportWhatsApp else it.supportWhatsApp
+            )
+        }
+        try {
+            val arr = JSONArray()
+            for (plan in _subscriptionPlans.value) {
+                arr.put(JSONObject().apply {
+                    put("id", plan.id)
+                    put("name", plan.name)
+                    put("description", plan.description)
+                    put("price", plan.price)
+                    put("durationMonths", plan.durationMonths)
+                    put("durationDays", plan.durationDays)
+                    put("durationType", plan.durationType)
+                    put("maxSeats", plan.maxSeats)
+                    put("features", plan.features)
+                    put("badge", plan.badge)
+                    put("discountPercentage", plan.discountPercentage)
+                    put("upiId", plan.upiId)
+                    put("upi_id", plan.upiId)
+                    put("upiPayeeName", plan.upiPayeeName)
+                    put("upi_payee_name", plan.upiPayeeName)
+                    put("supportWhatsApp", plan.supportWhatsApp)
+                    put("support_whatsapp", plan.supportWhatsApp)
+                    put("isActive", plan.isActive)
+                    put("is_active", plan.isActive)
+                    put("displayOrder", plan.displayOrder)
+                    put("createdAt", plan.createdAt)
+                })
+            }
+            SupabaseClient.upsertRecords("subscription_plans", arr)
+        } catch (e: Exception) {
+            Log.w(TAG, "updateAllPlansUpi Supabase sync: ${e.message}")
         }
     }
 
@@ -435,12 +470,33 @@ class LibDeskRepository(val context: Context? = null) {
                 put("name", admin.name)
                 put("email", admin.email)
                 put("mobile", admin.mobile)
+                put("phone", admin.mobile)
+                put("supportWhatsApp", admin.mobile)
+                put("support_whatsapp", admin.mobile)
                 put("accessCode", admin.accessCode)
+                put("access_code", admin.accessCode)
                 put("upiId", admin.upiId)
+                put("upi_id", admin.upiId)
                 put("upiPayeeName", admin.upiPayeeName)
+                put("upi_payee_name", admin.upiPayeeName)
+                put("is2FaEnabled", admin.is2FaEnabled)
+                put("is_2fa_enabled", admin.is2FaEnabled)
+                put("isClaimed", admin.isClaimed)
+                put("is_claimed", admin.isClaimed)
+                put("updatedAt", System.currentTimeMillis())
+                put("updated_at", System.currentTimeMillis())
             })
         }
         SupabaseClient.upsertRecords("super_admin_users", arr)
+
+        // Automatically synchronize the updated contact number and UPI details across all plans
+        updateAllPlansUpi(admin.upiId, admin.upiPayeeName, admin.mobile)
+
+        // Cascade update to Super Admin user account if present in users table
+        val superUser = _users.value.find { it.role.equals("SUPER_ADMIN", ignoreCase = true) || it.email.equals(admin.email, ignoreCase = true) }
+        if (superUser != null) {
+            saveUser(superUser.copy(name = admin.name, phone = admin.mobile, email = admin.email))
+        }
     }
 
     // ==========================================
@@ -466,6 +522,21 @@ class LibDeskRepository(val context: Context? = null) {
 
     suspend fun saveLibrary(library: LibraryEntity) = withContext(Dispatchers.IO) {
         _libraries.value = _libraries.value.filter { it.id != library.id } + library
+
+        // Cascade updated library name and owner details to active subscription state
+        _librarySubscriptions.value = _librarySubscriptions.value.map {
+            if (it.libraryId == library.id) it.copy(libraryName = library.name, updatedAt = System.currentTimeMillis()) else it
+        }
+        _userSubscriptions.value = _userSubscriptions.value.map {
+            if (it.libraryId == library.id) it.copy(
+                libraryName = library.name,
+                ownerName = library.ownerName.ifBlank { it.ownerName },
+                ownerMobile = library.ownerPhone.ifBlank { it.ownerMobile },
+                ownerEmail = library.ownerEmail.ifBlank { it.ownerEmail },
+                updatedAt = System.currentTimeMillis()
+            ) else it
+        }
+
         val arr = JSONArray().apply {
             put(JSONObject().apply {
                 put("id", library.id)
@@ -1022,6 +1093,33 @@ class LibDeskRepository(val context: Context? = null) {
 
     suspend fun saveStudent(student: StudentEntity) = withContext(Dispatchers.IO) {
         _students.value = _students.value.filter { it.id != student.id } + student
+
+        // Cascade student name, shift & expiry date update to assigned seat
+        if (student.seatId.isNotBlank() || student.seatNumber.isNotBlank()) {
+            val matchingSeat = _seats.value.find { 
+                it.id == student.seatId || (it.libraryId == student.libraryId && it.seatNumber.equals(student.seatNumber, ignoreCase = true))
+            }
+            if (matchingSeat != null && matchingSeat.assignedStudentId == student.id) {
+                val updatedSeat = matchingSeat.copy(
+                    assignedStudentName = student.fullName,
+                    assignedShiftId = student.shiftId,
+                    assignedShiftName = student.shiftName,
+                    validUntil = student.expiryDate
+                )
+                if (updatedSeat != matchingSeat) {
+                    saveSeat(updatedSeat)
+                }
+            }
+        }
+
+        // Cascade update to UserAccount if created for this student
+        val userAcc = _users.value.find { 
+            it.studentIdRef == student.id || (it.libraryId == student.libraryId && it.email.equals(student.email, ignoreCase = true) && student.email.isNotBlank())
+        }
+        if (userAcc != null) {
+            saveUser(userAcc.copy(name = student.fullName, phone = student.mobile, email = student.email.ifBlank { userAcc.email }))
+        }
+
         pushStudentToSupabase(student)
         logAudit(student.libraryId, "Manager", "SAVE_STUDENT", "Student", student.id, "Saved student ${student.fullName}")
     }
@@ -1808,17 +1906,27 @@ class LibDeskRepository(val context: Context? = null) {
             if (ok && arr != null && arr.length() > 0) {
                 val obj = arr.getJSONObject(0)
                 val admin = SuperAdminUserEntity(
-                    id = obj.optString("id", "SUPER-ADMIN-MASTER"),
-                    name = obj.optString("name", "Super Administrator"),
-                    email = obj.optString("email", ""),
-                    mobile = obj.optString("mobile", obj.optString("phone", "")),
-                    accessCode = obj.optString("accessCode", ""),
-                    upiId = obj.optString("upiId", "libdesk.billing@upi"),
-                    upiPayeeName = obj.optString("upiPayeeName", "LibDesk Cloud Subscriptions"),
-                    is2FaEnabled = obj.optBoolean("is2FaEnabled", true),
-                    isClaimed = obj.optBoolean("isClaimed", false)
+                    id = optStringAny(obj, "id", fallback = "SUPER-ADMIN-MASTER"),
+                    name = optStringAny(obj, "name", fallback = "Super Administrator"),
+                    email = optStringAny(obj, "email", fallback = ""),
+                    mobile = optStringAny(obj, "mobile", "phone", "support_whatsapp", "supportWhatsApp", fallback = ""),
+                    accessCode = optStringAny(obj, "accessCode", "access_code", fallback = ""),
+                    upiId = optStringAny(obj, "upiId", "upi_id", fallback = "libdesk.billing@upi"),
+                    upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = "LibDesk Cloud Subscriptions"),
+                    is2FaEnabled = optBooleanAny(obj, "is2FaEnabled", "is_2fa_enabled", fallback = true),
+                    isClaimed = optBooleanAny(obj, "isClaimed", "is_claimed", fallback = true)
                 )
                 _superAdmin.value = admin
+                // Propagate the latest helpline contact & UPI to plans in memory if plans exist
+                if (admin.mobile.isNotBlank() || admin.upiId.isNotBlank()) {
+                    _subscriptionPlans.value = _subscriptionPlans.value.map { plan ->
+                        plan.copy(
+                            upiId = if (admin.upiId.isNotBlank()) admin.upiId else plan.upiId,
+                            upiPayeeName = if (admin.upiPayeeName.isNotBlank()) admin.upiPayeeName else plan.upiPayeeName,
+                            supportWhatsApp = if (admin.mobile.isNotBlank()) admin.mobile else plan.supportWhatsApp
+                        )
+                    }
+                }
                 Pair(true, "Fetched super admin")
             } else {
                 Pair(false, "No super admin found")

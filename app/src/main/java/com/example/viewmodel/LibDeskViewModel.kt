@@ -279,8 +279,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             _currentUserEmail.value = restored.email
             _currentUserName.value = restored.name
             _currentRole.value = when (restored.role) {
-                UserRole.OWNER -> "SUPER_ADMIN"
-                UserRole.ADMIN -> "MANAGER"
+                UserRole.SUPER_ADMIN -> "SUPER_ADMIN"
+                UserRole.OWNER, UserRole.ADMIN -> "MANAGER"
                 UserRole.STUDENT -> "STUDENT"
             }
             if (restored.libraryId.isNotBlank()) {
@@ -328,6 +328,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                         repository.pullFromCloud(libId)
                     }
                     repository.pullAllLibrariesFromCloud()
+                    repository.pullSuperAdminFromCloud()
                     repository.pullAllSubscriptionPlansFromCloud()
                 } else {
                     _supabaseStatusMessage.value = "● Cloud Disconnected (Active Internet Required)"
@@ -345,6 +346,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                         repository.pullFromCloud(libId)
                     }
                     repository.pullAllLibrariesFromCloud()
+                    repository.pullSuperAdminFromCloud()
+                    repository.pullAllSubscriptionPlansFromCloud()
                 }
             }
         }
@@ -461,8 +464,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 _currentUserEmail.value = session.email
                 _currentUserName.value = session.name
                 _currentRole.value = when (session.role) {
-                    UserRole.OWNER -> "SUPER_ADMIN"
-                    UserRole.ADMIN -> "MANAGER"
+                    UserRole.SUPER_ADMIN -> "SUPER_ADMIN"
+                    UserRole.OWNER, UserRole.ADMIN -> "MANAGER"
                     UserRole.STUDENT -> "STUDENT"
                 }
                 if (session.libraryId.isNotBlank()) {
@@ -512,7 +515,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 email = cleanEmail,
                 password = cleanPassword,
                 name = name.ifBlank { "SaaS Master Administrator" },
-                role = UserRole.OWNER,
+                role = UserRole.SUPER_ADMIN,
                 libraryId = ""
             )
             
@@ -929,8 +932,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     _currentUserEmail.value = session.email
                     _currentUserName.value = session.name
                     _currentRole.value = when (session.role) {
-                        UserRole.OWNER -> "SUPER_ADMIN"
-                        UserRole.ADMIN -> "MANAGER"
+                        UserRole.SUPER_ADMIN -> "SUPER_ADMIN"
+                        UserRole.OWNER, UserRole.ADMIN -> "MANAGER"
                         UserRole.STUDENT -> "STUDENT"
                     }
                     if (session.libraryId.isNotBlank()) {
@@ -1064,7 +1067,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 email = email,
                 password = password,
                 name = name,
-                role = UserRole.ADMIN,
+                role = UserRole.OWNER,
                 libraryId = libId
             )
             
@@ -2554,8 +2557,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 upiPayeeName = effectivePayee
             )
             repository.saveSuperAdmin(updated)
-            // Synchronize UPI ID across all subscription plans in database
-            repository.updateAllPlansUpi(effectiveUpiId, effectivePayee)
+            // Synchronize UPI ID and Support WhatsApp number across all subscription plans in database
+            repository.updateAllPlansUpi(effectiveUpiId, effectivePayee, effectiveMobile)
             if (_currentRole.value == "SUPER_ADMIN") {
                 if (name.isNotBlank()) _currentUserName.value = name.trim()
                 if (email.isNotBlank()) _currentUserEmail.value = email.trim().lowercase()

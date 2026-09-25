@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">LibDesk</string>
+    <string name="title_study_materials">Study Materials &amp; Notes</string>
+    <string name="title_upload_study_material">Upload Study Material</string>
+    <string name="title_ncert_textbooks">NCERT Official Textbooks</string>
+    <string name="title_ncert_management">NCERT Catalog Management</string>
+    <string name="ncert_attribution_title">Official Academic Source Attribution</string>
+    <string name="ncert_attribution_body">Books sourced directly from NCERT (ncert.nic.in), DIKSHA, and ePathshala portals. Official links provided with academic reference permissions under NEP 2020. All rights, trademarks, and textbook copyrights reserved by NCERT, Government of India.</string>
 </resources>

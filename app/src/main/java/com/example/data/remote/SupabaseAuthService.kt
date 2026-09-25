@@ -460,26 +460,26 @@ object SupabaseAuthService {
 
                     var role = if (!rawRoleStr.isNullOrBlank()) {
                         UserRole.fromString(rawRoleStr)
-                    } else if (expectedRole == "SUPER_ADMIN" || expectedRole == "OWNER") {
+                    } else if (expectedRole == "SUPER_ADMIN") {
+                        UserRole.SUPER_ADMIN
+                    } else if (expectedRole == "MANAGER" || expectedRole == "OWNER") {
                         UserRole.OWNER
-                    } else if (expectedRole == "MANAGER") {
-                        UserRole.ADMIN
                     } else {
                         UserRole.STUDENT
                     }
 
                     // Role validation if expectedRole was specified
-                    if (expectedRole == "STUDENT" && (role == UserRole.ADMIN || role == UserRole.OWNER)) {
+                    if (expectedRole == "STUDENT" && (role == UserRole.ADMIN || role == UserRole.OWNER || role == UserRole.SUPER_ADMIN)) {
                         // User is an administrator trying to log in under Student tab
                         return@withContext Result.failure(
                             Exception("This account is registered as an Administrator. Please select the appropriate management login.")
                         )
-                    } else if (expectedRole == "MANAGER" && role == UserRole.STUDENT) {
+                    } else if ((expectedRole == "MANAGER" || expectedRole == "OWNER") && role == UserRole.STUDENT) {
                         // User is a student trying to log in under Manager tab
                         return@withContext Result.failure(
                             Exception("This account is registered as a Student Member. Please select the 'Student' tab to access your student pass.")
                         )
-                    } else if ((expectedRole == "SUPER_ADMIN" || expectedRole == "OWNER") && role == UserRole.STUDENT) {
+                    } else if (expectedRole == "SUPER_ADMIN" && role != UserRole.SUPER_ADMIN) {
                         return@withContext Result.failure(
                             Exception("This account does not have Super Admin privileges.")
                         )
@@ -489,7 +489,9 @@ object SupabaseAuthService {
                         ?: userMetadata?.optString("name")
                         ?: cleanEmail.substringBefore("@")
 
-                    val metaLibId = appMetadata?.optString("library_id")?.takeIf { it.isNotBlank() }
+                    val metaLibId = appMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
+                        ?: appMetadata?.optString("library_id")?.takeIf { it.isNotBlank() }
+                        ?: userMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("library_id")
                         ?: ""
 
@@ -501,7 +503,7 @@ object SupabaseAuthService {
                     var finalLibId = metaLibId
                     var finalStudentId = metaStudentId
 
-                    if (role != UserRole.OWNER || !tenantCode.isNullOrBlank()) {
+                    if (role != UserRole.SUPER_ADMIN && (role != UserRole.OWNER || !tenantCode.isNullOrBlank())) {
                         val tenantResolution = resolveTenantForUser(cleanEmail, role, tenantCode)
                         if (tenantResolution.verified) {
                             if (tenantResolution.libraryId.isNotBlank()) {

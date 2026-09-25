@@ -21,16 +21,18 @@ import java.util.concurrent.TimeUnit
 
 
 enum class UserRole(val roleKey: String, val title: String) {
-    OWNER("OWNER", "Institute Owner"),
-    ADMIN("ADMIN", "Branch Admin"),
+    SUPER_ADMIN("SUPER_ADMIN", "SaaS Platform Owner"),
+    OWNER("OWNER", "Library Owner / Manager"),
+    ADMIN("ADMIN", "Library Manager / Staff"),
     STUDENT("STUDENT", "Student Member");
 
     companion object {
         fun fromString(value: String?): UserRole {
             return when (value?.trim()?.uppercase()) {
-                "OWNER", "SUPER_ADMIN", "MASTER_ADMIN" -> OWNER
-                "ADMIN", "MANAGER", "STAFF" -> ADMIN
-                "STUDENT", "MEMBER" -> STUDENT
+                "SUPER_ADMIN", "MASTER_ADMIN", "PLATFORM_ADMIN" -> SUPER_ADMIN
+                "OWNER" -> OWNER
+                "ADMIN", "MANAGER", "STAFF", "OPERATOR" -> ADMIN
+                "STUDENT", "MEMBER", "USER" -> STUDENT
                 else -> STUDENT
             }
         }
@@ -244,8 +246,9 @@ object SessionManager {
                         ?: userMetadata?.optString("name")
                         ?: email.substringBefore("@")
 
-                    val libraryId = appMetadata?.optString("library_id")
-                        ?.takeIf { it.isNotBlank() }
+                    val libraryId = appMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
+                        ?: appMetadata?.optString("library_id")?.takeIf { it.isNotBlank() }
+                        ?: userMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("library_id")
                         ?: _sessionState.value?.libraryId ?: ""
 
