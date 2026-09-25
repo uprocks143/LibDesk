@@ -1,8 +1,191 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="72dp"
-        android:height="72dp"
-        android:drawable="@drawable/ic_launcher_fg"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 1. Lamp Warm Light Cone Beam (Projected Downward onto Student & Book) -->
+    <path
+        android:pathData="M 67,34 L 50,49 L 40,68 L 68,68 L 73,46 Z"
+        android:alpha="0.85">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="67"
+                android:startY="34"
+                android:endX="46"
+                android:endY="68"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFF575" />
+                <item android:offset="0.35" android:color="#FFAE00" />
+                <item android:offset="0.75" android:color="#99FF7700" />
+                <item android:offset="1.0" android:color="#00FF5500" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Warm Light Bloom Circle -->
+    <path
+        android:pathData="M 64,39 A 7,5 0 1,1 63.99,39 Z"
+        android:alpha="0.75">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="64"
+                android:startY="39"
+                android:endX="71"
+                android:endY="44"
+                android:type="radial"
+                android:gradientRadius="7">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="0.4" android:color="#FFF176" />
+                <item android:offset="1.0" android:color="#00FFA000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Stylized Study Booth / Desk Corner 'L' Shape -->
+    <path android:pathData="M 27,33 C 27,27.5 31.5,23 37,23 L 39,23 C 42.5,23 45,25.5 45,29 L 45,58 C 45,63.5 49.5,68 55,68 L 77,68 C 80.5,68 83,70.5 83,74 L 83,75 C 83,80.5 78.5,85 73,85 L 39,85 C 32.5,85 27,79.5 27,73 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="27"
+                android:startY="23"
+                android:endX="83"
+                android:endY="85"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="0.65" android:color="#EDF5FF" />
+                <item android:offset="1.0" android:color="#BED9FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 3. Cyan-Blue Desk Surface / Mat Platform -->
+    <path android:pathData="M 52,69 L 83,69 C 86,69 88,71 86,73.5 L 75,84 L 49,84 L 46,72 C 46,70 48,69 52,69 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="52"
+                android:startY="69"
+                android:endX="86"
+                android:endY="84"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00C4FF" />
+                <item android:offset="1.0" android:color="#005BDB" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 4. Student Avatar (Head & Torso) -->
+    <!-- Head Circle -->
+    <path
+        android:pathData="M 56,36.5 A 7,7 0 1,1 55.99,36.5 Z"
+        android:fillColor="#FFFFFF" />
+    
+    <!-- Torso / Shoulders -->
+    <path
+        android:pathData="M 43.5,62 C 43.5,52.5 49,50.5 56,50.5 C 63,50.5 68.5,52.5 68.5,62 C 64.5,63 60,64 56,64 C 52,64 47.5,63 43.5,62 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- 5. Open 3D Book -->
+    <!-- Left Page -->
+    <path android:pathData="M 41,60 L 56,66 L 56,80 L 41,73 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="41"
+                android:startY="60"
+                android:endX="56"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00D2FF" />
+                <item android:offset="1.0" android:color="#0072EA" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Right Page -->
+    <path android:pathData="M 56,66 L 71,60 L 71,73 L 56,80 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="56"
+                android:startY="60"
+                android:endX="71"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#009DFF" />
+                <item android:offset="1.0" android:color="#0052BC" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Center Crease Spine Highlight -->
+    <path
+        android:pathData="M 56,66 L 56,80"
+        android:strokeWidth="1"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.6" />
+
+    <!-- Book 3D Base Thickness -->
+    <path
+        android:pathData="M 41,73 L 56,80 L 71,73 L 71,75.5 L 56,82.5 L 41,75.5 Z"
+        android:fillColor="#00378C" />
+
+    <!-- 6. Articulated Desk Lamp -->
+    <!-- Lamp Desk Base -->
+    <path
+        android:pathData="M 81,70 A 3.5,1.8 0 1,1 80.99,70 Z"
+        android:fillColor="#CCDDF8" />
+
+    <!-- Lower Arm Segment -->
+    <path
+        android:pathData="M 81,70 L 85.5,49"
+        android:strokeWidth="2.8"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round" />
+
+    <!-- Joint 1 (Elbow) -->
+    <path
+        android:pathData="M 85.5,46 A 3,3 0 1,1 85.49,46 Z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M 85.5,47.5 A 1.5,1.5 0 1,1 85.49,47.5 Z"
+        android:fillColor="#9EC2F7" />
+
+    <!-- Upper Arm Segment -->
+    <path
+        android:pathData="M 85.5,49 L 75,32"
+        android:strokeWidth="2.8"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round" />
+
+    <!-- Joint 2 (Top Elbow) -->
+    <path
+        android:pathData="M 75,29.2 A 2.8,2.8 0 1,1 74.99,29.2 Z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M 75,30.6 A 1.4,1.4 0 1,1 74.99,30.6 Z"
+        android:fillColor="#9EC2F7" />
+
+    <!-- Lamp Shade / Hood Cone -->
+    <path android:pathData="M 72.5,28.5 L 79.5,34 C 77.5,39 67.5,45 63.5,41 C 61,38 68,30 72.5,28.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="72.5"
+                android:startY="28.5"
+                android:endX="63.5"
+                android:endY="41"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="1.0" android:color="#D2E2F9" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Lamp Inner Glow Bulb -->
+    <path
+        android:pathData="M 67.5,37.5 A 3,2.2 35 1,1 67.49,37.5 Z"
+        android:fillColor="#FFF685" />
+    <path
+        android:pathData="M 67.5,37.5 A 1.6,1.1 35 1,1 67.49,37.5 Z"
+        android:fillColor="#FFFFFF" />
+
+</vector>

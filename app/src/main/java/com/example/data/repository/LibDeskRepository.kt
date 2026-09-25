@@ -1762,6 +1762,73 @@ class LibDeskRepository(val context: Context? = null) {
     // CLOUD REFRESH (PULL SUPABASE DATA INTO MEMORY) - PARALLEL FETCH
     // ==========================================
 
+    suspend fun pullAllLibrariesFromCloud(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        try {
+            val (ok, arr) = SupabaseClient.queryTable("libraries?select=*")
+            if (ok && arr != null) {
+                val list = mutableListOf<LibraryEntity>()
+                for (i in 0 until arr.length()) {
+                    list.add(parseLibrary(arr.getJSONObject(i)))
+                }
+                if (list.isNotEmpty()) {
+                    _libraries.value = list
+                }
+                Pair(true, "Fetched ${list.size} libraries from cloud")
+            } else {
+                Pair(false, "Failed to fetch libraries from cloud")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pulling libraries from cloud", e)
+            Pair(false, e.localizedMessage ?: "Error pulling libraries")
+        }
+    }
+
+    suspend fun pullAllSubscriptionPlansFromCloud(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        try {
+            val (ok, arr) = SupabaseClient.queryTable("subscription_plans?select=*")
+            if (ok && arr != null && arr.length() > 0) {
+                val list = mutableListOf<SubscriptionPlans>()
+                for (i in 0 until arr.length()) {
+                    list.add(parseSubscriptionPlan(arr.getJSONObject(i)))
+                }
+                _subscriptionPlans.value = list
+                Pair(true, "Fetched ${list.size} subscription plans")
+            } else {
+                Pair(false, "No subscription plans found")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pulling subscription plans from cloud", e)
+            Pair(false, e.localizedMessage ?: "Error")
+        }
+    }
+
+    suspend fun pullSuperAdminFromCloud(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        try {
+            val (ok, arr) = SupabaseClient.queryTable("super_admin_users?select=*")
+            if (ok && arr != null && arr.length() > 0) {
+                val obj = arr.getJSONObject(0)
+                val admin = SuperAdminUserEntity(
+                    id = obj.optString("id", "SUPER-ADMIN-MASTER"),
+                    name = obj.optString("name", "Super Administrator"),
+                    email = obj.optString("email", ""),
+                    mobile = obj.optString("mobile", obj.optString("phone", "")),
+                    accessCode = obj.optString("accessCode", ""),
+                    upiId = obj.optString("upiId", "libdesk.billing@upi"),
+                    upiPayeeName = obj.optString("upiPayeeName", "LibDesk Cloud Subscriptions"),
+                    is2FaEnabled = obj.optBoolean("is2FaEnabled", true),
+                    isClaimed = obj.optBoolean("isClaimed", false)
+                )
+                _superAdmin.value = admin
+                Pair(true, "Fetched super admin")
+            } else {
+                Pair(false, "No super admin found")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pulling super admin from cloud", e)
+            Pair(false, e.localizedMessage ?: "Error")
+        }
+    }
+
     suspend fun pullFromCloud(libraryId: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         if (libraryId.isBlank()) return@withContext Pair(false, "Library ID is empty")
         try {
@@ -1769,6 +1836,8 @@ class LibDeskRepository(val context: Context? = null) {
                 // Launch all table fetches concurrently in parallel for 10x faster performance
                 val libDeferred = async { SupabaseClient.queryTable("libraries?id=eq.$libraryId&select=*") }
                 val hallsDeferred = async { SupabaseClient.fetchRecords("halls", libraryId) }
+                val cabinsDeferred = async { SupabaseClient.fetchRecords("cabins", libraryId) }
+                val sectionsDeferred = async { SupabaseClient.fetchRecords("sections", libraryId) }
                 val shiftsDeferred = async { SupabaseClient.fetchRecords("shifts", libraryId) }
                 val plansDeferred = async { SupabaseClient.fetchRecords("membership_plans", libraryId) }
                 val studentsDeferred = async { SupabaseClient.fetchRecords("students", libraryId) }
@@ -1776,7 +1845,14 @@ class LibDeskRepository(val context: Context? = null) {
                 val noticesDeferred = async { SupabaseClient.fetchRecords("notices", libraryId) }
                 val paymentsDeferred = async { SupabaseClient.fetchRecords("payments", libraryId) }
                 val attendanceDeferred = async { SupabaseClient.fetchRecords("attendance", libraryId) }
+                val booksDeferred = async { SupabaseClient.fetchRecords("physical_books", libraryId) }
+                val issuesDeferred = async { SupabaseClient.fetchRecords("book_issues", libraryId) }
+                val materialsDeferred = async { SupabaseClient.fetchRecords("digital_materials", libraryId) }
+                val expensesDeferred = async { SupabaseClient.fetchRecords("expenses", libraryId) }
+                val finesDeferred = async { SupabaseClient.fetchRecords("fines", libraryId) }
+                val feedbackDeferred = async { SupabaseClient.fetchRecords("feedback_complaints", libraryId) }
                 val subDeferred = async { SupabaseClient.queryTable("library_subscriptions?libraryId=eq.$libraryId&select=*") }
+                val userSubDeferred = async { SupabaseClient.queryTable("user_subscriptions?libraryId=eq.$libraryId&select=*") }
 
                 // 1. Process Library
                 val (libOk, libArr) = libDeferred.await()
@@ -1793,6 +1869,26 @@ class LibDeskRepository(val context: Context? = null) {
                         hallsList.add(parseHall(hArr.getJSONObject(i), libraryId))
                     }
                     _halls.value = _halls.value.filter { it.libraryId != libraryId } + hallsList
+                }
+
+                // 2b. Process Cabins
+                val (cabOk, cabArr) = cabinsDeferred.await()
+                if (cabOk && cabArr != null) {
+                    val cabList = mutableListOf<CabinEntity>()
+                    for (i in 0 until cabArr.length()) {
+                        cabList.add(parseCabin(cabArr.getJSONObject(i), libraryId))
+                    }
+                    _cabins.value = _cabins.value.filter { it.libraryId != libraryId } + cabList
+                }
+
+                // 2c. Process Sections
+                val (secOk, secArr) = sectionsDeferred.await()
+                if (secOk && secArr != null) {
+                    val secList = mutableListOf<SectionEntity>()
+                    for (i in 0 until secArr.length()) {
+                        secList.add(parseSection(secArr.getJSONObject(i), libraryId))
+                    }
+                    _sections.value = _sections.value.filter { it.libraryId != libraryId } + secList
                 }
 
                 // 3. Process Shifts
@@ -1867,11 +1963,78 @@ class LibDeskRepository(val context: Context? = null) {
                     _attendance.value = _attendance.value.filter { it.libraryId != libraryId } + attList
                 }
 
-                // 10. Process Subscriptions
+                // 10. Process Books
+                val (bkOk, bkArr) = booksDeferred.await()
+                if (bkOk && bkArr != null) {
+                    val bkList = mutableListOf<PhysicalBookEntity>()
+                    for (i in 0 until bkArr.length()) {
+                        bkList.add(parseBook(bkArr.getJSONObject(i), libraryId))
+                    }
+                    _books.value = _books.value.filter { it.libraryId != libraryId } + bkList
+                }
+
+                // 11. Process Book Issues
+                val (issOk, issArr) = issuesDeferred.await()
+                if (issOk && issArr != null) {
+                    val issList = mutableListOf<BookIssueEntity>()
+                    for (i in 0 until issArr.length()) {
+                        issList.add(parseBookIssue(issArr.getJSONObject(i), libraryId))
+                    }
+                    _bookIssues.value = _bookIssues.value.filter { it.libraryId != libraryId } + issList
+                }
+
+                // 12. Process Digital Materials
+                val (matOk, matArr) = materialsDeferred.await()
+                if (matOk && matArr != null) {
+                    val matList = mutableListOf<DigitalMaterialEntity>()
+                    for (i in 0 until matArr.length()) {
+                        matList.add(parseDigitalMaterial(matArr.getJSONObject(i), libraryId))
+                    }
+                    _materials.value = _materials.value.filter { it.libraryId != libraryId } + matList
+                }
+
+                // 13. Process Expenses
+                val (expOk, expArr) = expensesDeferred.await()
+                if (expOk && expArr != null) {
+                    val expList = mutableListOf<ExpenseEntity>()
+                    for (i in 0 until expArr.length()) {
+                        expList.add(parseExpense(expArr.getJSONObject(i), libraryId))
+                    }
+                    _expenses.value = _expenses.value.filter { it.libraryId != libraryId } + expList
+                }
+
+                // 14. Process Fines
+                val (fineOk, fineArr) = finesDeferred.await()
+                if (fineOk && fineArr != null) {
+                    val fineList = mutableListOf<FineEntity>()
+                    for (i in 0 until fineArr.length()) {
+                        fineList.add(parseFine(fineArr.getJSONObject(i), libraryId))
+                    }
+                    _fines.value = _fines.value.filter { it.libraryId != libraryId } + fineList
+                }
+
+                // 15. Process Feedback Complaints
+                val (fbOk, fbArr) = feedbackDeferred.await()
+                if (fbOk && fbArr != null) {
+                    val fbList = mutableListOf<FeedbackComplaintEntity>()
+                    for (i in 0 until fbArr.length()) {
+                        fbList.add(parseFeedback(fbArr.getJSONObject(i), libraryId))
+                    }
+                    _feedback.value = _feedback.value.filter { it.libraryId != libraryId } + fbList
+                }
+
+                // 16. Process Subscriptions
                 val (subOk, subArr) = subDeferred.await()
                 if (subOk && subArr != null && subArr.length() > 0) {
                     val sub = parseLibrarySubscription(subArr.getJSONObject(0))
                     _librarySubscriptions.value = _librarySubscriptions.value.filter { it.libraryId != libraryId } + sub
+                }
+
+                // 17. Process User Subscriptions
+                val (uSubOk, uSubArr) = userSubDeferred.await()
+                if (uSubOk && uSubArr != null && uSubArr.length() > 0) {
+                    val uSub = parseUserSubscription(uSubArr.getJSONObject(0))
+                    _userSubscriptions.value = _userSubscriptions.value.filter { it.libraryId != libraryId } + uSub
                 }
 
                 Pair(true, "Cloud sync completed ($studentCount students synchronized)")
@@ -2192,6 +2355,163 @@ class LibDeskRepository(val context: Context? = null) {
             notes = optStringAny(obj, "notes", fallback = ""),
             createdAt = optLongAny(obj, "createdAt", "created_at", fallback = System.currentTimeMillis()),
             updatedAt = optLongAny(obj, "updatedAt", "updated_at", fallback = System.currentTimeMillis())
+        )
+    }
+
+    private fun parseCabin(obj: JSONObject, defaultLibId: String): CabinEntity {
+        return CabinEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            cabinNumber = optStringAny(obj, "cabinNumber", "cabin_number", fallback = "C-01"),
+            name = optStringAny(obj, "name", "cabin_name", fallback = "Cabin"),
+            floor = optStringAny(obj, "floor", fallback = "1st Floor"),
+            isAc = optBooleanAny(obj, "isAc", "is_ac", fallback = true),
+            isPrivate = optBooleanAny(obj, "isPrivate", "is_private", fallback = true),
+            seatCount = optIntAny(obj, "seatCount", "seat_count", fallback = 1),
+            monthlyFee = optDoubleAny(obj, "monthlyFee", "monthly_fee", fallback = 2500.0),
+            description = optStringAny(obj, "description", fallback = ""),
+            isActive = optBooleanAny(obj, "isActive", "is_active", fallback = true)
+        )
+    }
+
+    private fun parseSection(obj: JSONObject, defaultLibId: String): SectionEntity {
+        return SectionEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            name = optStringAny(obj, "name", "section_name", fallback = "Section A"),
+            description = optStringAny(obj, "description", fallback = ""),
+            floor = optStringAny(obj, "floor", fallback = "Ground Floor"),
+            hallId = optStringAny(obj, "hallId", "hall_id", fallback = ""),
+            cabinId = optStringAny(obj, "cabinId", "cabin_id", fallback = ""),
+            isActive = optBooleanAny(obj, "isActive", "is_active", fallback = true)
+        )
+    }
+
+    private fun parseBook(obj: JSONObject, defaultLibId: String): PhysicalBookEntity {
+        return PhysicalBookEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            title = optStringAny(obj, "title", fallback = "Book Title"),
+            author = optStringAny(obj, "author", fallback = "Author"),
+            isbn = optStringAny(obj, "isbn", fallback = ""),
+            publisher = optStringAny(obj, "publisher", fallback = ""),
+            edition = optStringAny(obj, "edition", fallback = ""),
+            category = optStringAny(obj, "category", fallback = "General"),
+            subject = optStringAny(obj, "subject", fallback = "General"),
+            rack = optStringAny(obj, "rack", fallback = "Rack A"),
+            shelf = optStringAny(obj, "shelf", fallback = "Shelf 1"),
+            accessionNumber = optStringAny(obj, "accessionNumber", "accession_number", fallback = "ACC-001"),
+            totalCopies = optIntAny(obj, "totalCopies", "total_copies", fallback = 1),
+            availableCopies = optIntAny(obj, "availableCopies", "available_copies", fallback = 1),
+            issuedCopies = optIntAny(obj, "issuedCopies", "issued_copies", fallback = 0),
+            coverUrl = optStringAny(obj, "coverUrl", "cover_url", fallback = "")
+        )
+    }
+
+    private fun parseBookIssue(obj: JSONObject, defaultLibId: String): BookIssueEntity {
+        return BookIssueEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            bookId = optStringAny(obj, "bookId", "book_id", fallback = ""),
+            bookTitle = optStringAny(obj, "bookTitle", "book_title", fallback = ""),
+            studentId = optStringAny(obj, "studentId", "student_id", fallback = ""),
+            studentName = optStringAny(obj, "studentName", "student_name", fallback = ""),
+            studentMobile = optStringAny(obj, "studentMobile", "student_mobile", fallback = ""),
+            issueDate = optStringAny(obj, "issueDate", "issue_date", fallback = ""),
+            dueDate = optStringAny(obj, "dueDate", "due_date", fallback = ""),
+            returnDate = optStringAny(obj, "returnDate", "return_date", fallback = ""),
+            fineAmount = optDoubleAny(obj, "fineAmount", "fine_amount", fallback = 0.0),
+            finePaid = optBooleanAny(obj, "finePaid", "fine_paid", fallback = false),
+            status = optStringAny(obj, "status", fallback = "ISSUED"),
+            notes = optStringAny(obj, "notes", fallback = "")
+        )
+    }
+
+    private fun parseDigitalMaterial(obj: JSONObject, defaultLibId: String): DigitalMaterialEntity {
+        return DigitalMaterialEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            title = optStringAny(obj, "title", fallback = "Digital PDF"),
+            description = optStringAny(obj, "description", fallback = ""),
+            category = optStringAny(obj, "category", fallback = "NCERT"),
+            subject = optStringAny(obj, "subject", fallback = "All"),
+            exam = optStringAny(obj, "exam", fallback = "All"),
+            fileType = optStringAny(obj, "fileType", "file_type", fallback = "PDF"),
+            fileSize = optStringAny(obj, "fileSize", "file_size", fallback = "2.5 MB"),
+            fileUrl = optStringAny(obj, "fileUrl", "file_url", fallback = ""),
+            accessPolicy = optStringAny(obj, "accessPolicy", "access_policy", fallback = "ALL_STUDENTS"),
+            allowedGroup = optStringAny(obj, "allowedGroup", "allowed_group", fallback = "All"),
+            downloadCount = optIntAny(obj, "downloadCount", "download_count", fallback = 0),
+            uploadDate = optStringAny(obj, "uploadDate", "upload_date", fallback = ""),
+            isBookmarked = optBooleanAny(obj, "isBookmarked", "is_bookmarked", fallback = false)
+        )
+    }
+
+    private fun parseExpense(obj: JSONObject, defaultLibId: String): ExpenseEntity {
+        return ExpenseEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            category = optStringAny(obj, "category", fallback = "General"),
+            amount = optDoubleAny(obj, "amount", fallback = 0.0),
+            date = optStringAny(obj, "date", fallback = ""),
+            description = optStringAny(obj, "description", fallback = ""),
+            paymentMode = optStringAny(obj, "paymentMode", "payment_mode", fallback = "UPI"),
+            status = optStringAny(obj, "status", fallback = "PAID"),
+            receiptRef = optStringAny(obj, "receiptRef", "receipt_ref", fallback = "")
+        )
+    }
+
+    private fun parseFine(obj: JSONObject, defaultLibId: String): FineEntity {
+        return FineEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            studentId = optStringAny(obj, "studentId", "student_id", fallback = ""),
+            studentName = optStringAny(obj, "studentName", "student_name", fallback = ""),
+            bookId = optStringAny(obj, "bookId", "book_id", fallback = ""),
+            bookTitle = optStringAny(obj, "bookTitle", "book_title", fallback = ""),
+            reason = optStringAny(obj, "reason", fallback = "Late Return"),
+            amount = optDoubleAny(obj, "amount", fallback = 10.0),
+            paid = optBooleanAny(obj, "paid", fallback = false),
+            date = optStringAny(obj, "date", fallback = "")
+        )
+    }
+
+    private fun parseFeedback(obj: JSONObject, defaultLibId: String): FeedbackComplaintEntity {
+        return FeedbackComplaintEntity(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            studentId = optStringAny(obj, "studentId", "student_id", fallback = ""),
+            studentName = optStringAny(obj, "studentName", "student_name", fallback = ""),
+            seatNumber = optStringAny(obj, "seatNumber", "seat_number", fallback = ""),
+            type = optStringAny(obj, "type", fallback = "COMPLAINT"),
+            subject = optStringAny(obj, "subject", fallback = "Subject"),
+            message = optStringAny(obj, "message", fallback = ""),
+            status = optStringAny(obj, "status", fallback = "PENDING"),
+            reply = optStringAny(obj, "reply", fallback = ""),
+            date = optStringAny(obj, "date", fallback = ""),
+            resolvedDate = optStringAny(obj, "resolvedDate", "resolved_date", fallback = "")
+        )
+    }
+
+    private fun parseSubscriptionPlan(obj: JSONObject): SubscriptionPlans {
+        return SubscriptionPlans(
+            id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+            name = optStringAny(obj, "name", fallback = "Standard Plan"),
+            description = optStringAny(obj, "description", fallback = ""),
+            price = optDoubleAny(obj, "price", fallback = 999.0),
+            durationMonths = optIntAny(obj, "durationMonths", "duration_months", fallback = 1),
+            durationDays = optIntAny(obj, "durationDays", "duration_days", fallback = 30),
+            durationType = optStringAny(obj, "durationType", "duration_type", fallback = "MONTHS"),
+            maxSeats = optIntAny(obj, "maxSeats", "max_seats", fallback = 100),
+            features = optStringAny(obj, "features", fallback = ""),
+            badge = optStringAny(obj, "badge", fallback = ""),
+            discountPercentage = optDoubleAny(obj, "discountPercentage", "discount_percentage", fallback = 0.0),
+            upiId = optStringAny(obj, "upiId", "upi_id", fallback = "libdesk.billing@upi"),
+            upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = "LibDesk Cloud Subscriptions"),
+            supportWhatsApp = optStringAny(obj, "supportWhatsApp", "support_whatsapp", fallback = ""),
+            isActive = optBooleanAny(obj, "isActive", "is_active", fallback = true),
+            displayOrder = optIntAny(obj, "displayOrder", "display_order", fallback = 1),
+            createdAt = optLongAny(obj, "createdAt", "created_at", fallback = System.currentTimeMillis())
         )
     }
 }

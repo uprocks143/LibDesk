@@ -1566,6 +1566,41 @@ fun RegisterStudentDialog(
     val initialNetFee = initialPlan?.let { (it.baseFee - it.discount).coerceAtLeast(0.0).toInt().toString() } ?: "1000"
     var feeText by remember { mutableStateOf(initialNetFee) }
     var paidText by remember { mutableStateOf("0") } // Default to 0 (Unpaid / Pending)
+    var isPaymentVerified by remember { mutableStateOf(false) }
+    var paymentMethod by remember { mutableStateOf("UPI") }
+
+    // Dynamic Plan Duration and Computed Expiry Date
+    val planDurationLabel = remember(selectedPlan) {
+        when {
+            selectedPlan == null -> "1 Month (Standard)"
+            selectedPlan!!.durationType.equals("DAYS", ignoreCase = true) || (selectedPlan!!.durationDays > 0 && selectedPlan!!.durationMonths <= 0) -> "${selectedPlan!!.durationDays} Days"
+            selectedPlan!!.durationMonths == 1 -> "1 Month (30 Days)"
+            selectedPlan!!.durationMonths == 3 -> "3 Months (Quarterly Pass)"
+            selectedPlan!!.durationMonths == 6 -> "6 Months (Half-Yearly)"
+            selectedPlan!!.durationMonths == 12 -> "12 Months (Annual Plan)"
+            else -> "${selectedPlan!!.durationMonths} Months"
+        }
+    }
+
+    val computedExpiryDate = remember(joiningDate, selectedPlan) {
+        val cal = java.util.Calendar.getInstance()
+        try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val parsed = sdf.parse(joiningDate)
+            if (parsed != null) cal.time = parsed
+        } catch (_: Exception) {}
+
+        if (selectedPlan != null) {
+            if (selectedPlan!!.durationType.equals("DAYS", ignoreCase = true) || (selectedPlan!!.durationDays > 0 && selectedPlan!!.durationMonths <= 0)) {
+                cal.add(java.util.Calendar.DAY_OF_YEAR, if (selectedPlan!!.durationDays > 0) selectedPlan!!.durationDays else 30)
+            } else {
+                cal.add(java.util.Calendar.MONTH, if (selectedPlan!!.durationMonths > 0) selectedPlan!!.durationMonths else 1)
+            }
+        } else {
+            cal.add(java.util.Calendar.MONTH, 1)
+        }
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+    }
 
     BackHandler { onClose() }
 
@@ -1698,7 +1733,7 @@ fun RegisterStudentDialog(
                         }
                     }
 
-                    Text("Select Student Plan & Offer", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Select Student Plan & Duration", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     if (matchingPlans.isEmpty()) {
                         Text("No specific plans for this shift. Using standard shift fee.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
@@ -1711,6 +1746,14 @@ fun RegisterStudentDialog(
                             matchingPlans.forEach { plan ->
                                 val net = (plan.baseFee - plan.discount).coerceAtLeast(0.0)
                                 val isSelected = selectedPlan?.id == plan.id
+                                val durationDesc = when {
+                                    plan.durationType.equals("DAYS", ignoreCase = true) || plan.durationDays > 0 -> "${plan.durationDays}d"
+                                    plan.durationMonths == 1 -> "1m"
+                                    plan.durationMonths == 3 -> "3m"
+                                    plan.durationMonths == 6 -> "6m"
+                                    plan.durationMonths == 12 -> "1y"
+                                    else -> "${plan.durationMonths}m"
+                                }
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = {
@@ -1719,9 +1762,9 @@ fun RegisterStudentDialog(
                                     },
                                     label = {
                                         if (plan.discount > 0) {
-                                            Text("${plan.name} (${formatCurrency(net)} • ₹${plan.discount.toInt()} OFF)", fontSize = 13.5.sp)
+                                            Text("${plan.name} [$durationDesc] (${formatCurrency(net)} • ₹${plan.discount.toInt()} OFF)", fontSize = 13.sp)
                                         } else {
-                                            Text("${plan.name} (${formatCurrency(plan.baseFee)})", fontSize = 13.5.sp)
+                                            Text("${plan.name} [$durationDesc] (${formatCurrency(plan.baseFee)})", fontSize = 13.sp)
                                         }
                                     }
                                 )
@@ -1734,60 +1777,240 @@ fun RegisterStudentDialog(
                     val totalFeeVal = feeText.toDoubleOrNull() ?: 0.0
                     val paidVal = paidText.toDoubleOrNull() ?: 0.0
                     val dueCalc = (totalFeeVal - paidVal).coerceAtLeast(0.0)
+                    val isFullPaid = totalFeeVal > 0 && paidVal >= totalFeeVal
+                    val isPartialPaid = paidVal > 0 && paidVal < totalFeeVal
+                    val isUnpaid = paidVal <= 0.0
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Fee Payment & Verification", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+
+                        // Quick action payment presets
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            SuggestionChip(
+                                onClick = {
+                                    paidText = totalFeeVal.toInt().toString()
+                                    isPaymentVerified = true
+                                },
+                                label = { Text("✓ Full Paid (${formatCurrency(totalFeeVal)})", fontSize = 12.5.sp) }
+                            )
+                            SuggestionChip(
+                                onClick = {
+                                    val half = (totalFeeVal / 2).toInt()
+                                    paidText = half.toString()
+                                    isPaymentVerified = true
+                                },
+                                label = { Text("50% Partial (${formatCurrency(totalFeeVal / 2)})", fontSize = 12.5.sp) }
+                            )
+                            SuggestionChip(
+                                onClick = {
+                                    paidText = "0"
+                                    isPaymentVerified = false
+                                },
+                                label = { Text("⏳ Unpaid / Pending (₹0)", fontSize = 12.5.sp) }
+                            )
+                        }
+
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(
                                 value = feeText,
                                 onValueChange = { feeText = FormFormatters.filterDigits(it) },
-                                label = { Text("Plan Fee (₹)") },
+                                label = { Text("Total Plan Fee (₹)") },
                                 modifier = Modifier.weight(1f)
                             )
                             OutlinedTextField(
                                 value = paidText,
-                                onValueChange = { paidText = FormFormatters.filterDigits(it) },
-                                label = { Text("Paid Now (₹)") },
+                                onValueChange = {
+                                    paidText = FormFormatters.filterDigits(it)
+                                    val p = paidText.toDoubleOrNull() ?: 0.0
+                                    if (p > 0 && !isPaymentVerified) {
+                                        isPaymentVerified = true
+                                    } else if (p <= 0) {
+                                        isPaymentVerified = false
+                                    }
+                                },
+                                label = { Text("Amount Paid Now (₹)") },
                                 placeholder = { Text("0 for Pending") },
                                 modifier = Modifier.weight(1f)
                             )
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (paidVal <= 0.0) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
-                                    else if (dueCalc > 0.0) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
-                                    else LibDeskColors.successSoft,
-                            border = BorderStroke(1.dp, if (paidVal <= 0.0) MaterialTheme.colorScheme.error.copy(alpha = 0.4f) else LibDeskColors.success.copy(alpha = 0.4f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        // Payment mode and verification checkbox
+                        if (paidVal > 0) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = if (paidVal <= 0.0) Icons.Default.PendingActions else if (dueCalc > 0.0) Icons.Default.HourglassBottom else Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = if (paidVal <= 0.0) MaterialTheme.colorScheme.error else LibDeskColors.success,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = if (paidVal <= 0.0) "Fee Status: PENDING / DUE"
-                                               else if (dueCalc > 0.0) "Fee Status: PARTIAL PAID"
-                                               else "Fee Status: FULL PAID",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.5.sp,
-                                        color = if (paidVal <= 0.0) MaterialTheme.colorScheme.error else LibDeskColors.success
+                                Text("Mode:", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                listOf("UPI", "Cash", "Card", "NetBanking").forEach { mode ->
+                                    FilterChip(
+                                        selected = paymentMethod == mode,
+                                        onClick = { paymentMethod = mode },
+                                        label = { Text(mode, fontSize = 12.sp) }
                                     )
                                 }
-                                Text(
-                                    text = "Due: ${formatCurrency(dueCalc)}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = if (dueCalc > 0) MaterialTheme.colorScheme.error else LibDeskColors.success
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { isPaymentVerified = !isPaymentVerified }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = isPaymentVerified,
+                                        onCheckedChange = { isPaymentVerified = it }
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = if (isPaymentVerified) "Payment Verified ($paymentMethod)" else "Payment Verification Pending",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (isPaymentVerified) LibDeskColors.success else LibDeskColors.warning
+                                        )
+                                        Text(
+                                            text = if (isPaymentVerified) "Transaction verified on receipt" else "Tick once payment is confirmed in bank/cash register",
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Prominent Visual Indicator for 'Pending' vs 'Paid' Status
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = when {
+                                isUnpaid -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                                isPartialPaid -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+                                !isPaymentVerified -> LibDeskColors.warningSoft
+                                else -> LibDeskColors.successSoft
+                            },
+                            border = BorderStroke(
+                                1.5.dp,
+                                when {
+                                    isUnpaid -> MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                    isPartialPaid -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f)
+                                    !isPaymentVerified -> LibDeskColors.warning.copy(alpha = 0.7f)
+                                    else -> LibDeskColors.success.copy(alpha = 0.7f)
+                                }
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = when {
+                                                isUnpaid -> Icons.Default.PendingActions
+                                                isPartialPaid -> Icons.Default.HourglassBottom
+                                                !isPaymentVerified -> Icons.Default.HourglassTop
+                                                else -> Icons.Default.Verified
+                                            },
+                                            contentDescription = null,
+                                            tint = when {
+                                                isUnpaid -> MaterialTheme.colorScheme.error
+                                                isPartialPaid -> MaterialTheme.colorScheme.tertiary
+                                                !isPaymentVerified -> LibDeskColors.warning
+                                                else -> LibDeskColors.success
+                                            },
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = when {
+                                                isUnpaid -> "STATUS: FEE PENDING / UNPAID"
+                                                isPartialPaid -> "STATUS: PARTIAL PAYMENT"
+                                                !isPaymentVerified -> "STATUS: PAID (VERIFICATION PENDING)"
+                                                else -> "STATUS: PAID & VERIFIED ✓"
+                                            },
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 13.5.sp,
+                                            color = when {
+                                                isUnpaid -> MaterialTheme.colorScheme.error
+                                                isPartialPaid -> MaterialTheme.colorScheme.tertiary
+                                                !isPaymentVerified -> LibDeskColors.warning
+                                                else -> LibDeskColors.success
+                                            }
+                                        )
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (dueCalc > 0) MaterialTheme.colorScheme.error else LibDeskColors.success
+                                    ) {
+                                        Text(
+                                            text = if (dueCalc > 0) "DUE: ${formatCurrency(dueCalc)}" else "CLEAR",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+
+                                Divider(
+                                    color = when {
+                                        isUnpaid -> MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
+                                        isPartialPaid -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.25f)
+                                        else -> LibDeskColors.success.copy(alpha = 0.25f)
+                                    },
+                                    thickness = 1.dp
                                 )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Plan Duration: $planDurationLabel",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Valid: $joiningDate → $computedExpiryDate",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Total Fee: ${formatCurrency(totalFeeVal)} | Paid: ${formatCurrency(paidVal)}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (paidVal > 0) {
+                                        Text(
+                                            text = if (isPaymentVerified) "Verified via $paymentMethod" else "Unverified",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isPaymentVerified) LibDeskColors.success else LibDeskColors.warning
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

@@ -291,7 +291,27 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        
+        // 1. Initial live pull from Supabase for all libraries, subscriptions, and superadmin
+        viewModelScope.launch {
+            repository.pullAllLibrariesFromCloud()
+            repository.pullAllSubscriptionPlansFromCloud()
+            repository.pullSuperAdminFromCloud()
+            val initialLibId = _currentLibraryId.value
+            if (initialLibId.isNotBlank()) {
+                repository.pullFromCloud(initialLibId)
+            }
+        }
+
+        // 2. Real-time dynamic listener: Whenever active library changes, fetch live cloud data
+        viewModelScope.launch {
+            _currentLibraryId.collectLatest { libId ->
+                if (libId.isNotBlank()) {
+                    repository.pullFromCloud(libId)
+                }
+            }
+        }
+
+        // 3. Network & periodic live cloud polling
         viewModelScope.launch {
             var isFirst = true
             networkMonitor.isOnline.collect { online ->
@@ -303,9 +323,28 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     _supabaseStatusMessage.value = "● Cloud Realtime Active (Supabase Synced)"
 
                     ensureSupabaseSessionFreshness()
-                    supabaseSyncManager.syncLocalToSupabase(_currentLibraryId.value)
+                    val libId = _currentLibraryId.value
+                    if (libId.isNotBlank()) {
+                        repository.pullFromCloud(libId)
+                    }
+                    repository.pullAllLibrariesFromCloud()
+                    repository.pullAllSubscriptionPlansFromCloud()
                 } else {
                     _supabaseStatusMessage.value = "● Cloud Disconnected (Active Internet Required)"
+                }
+            }
+        }
+
+        // 4. Live Background Polling Sync (every 10s when online)
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10000L)
+                if (networkMonitor.isOnline.value) {
+                    val libId = _currentLibraryId.value
+                    if (libId.isNotBlank()) {
+                        repository.pullFromCloud(libId)
+                    }
+                    repository.pullAllLibrariesFromCloud()
                 }
             }
         }
@@ -1167,6 +1206,24 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             authenticated = _isAuthenticated.value,
             libraryId = libraryId
         )
+        viewModelScope.launch {
+            repository.pullFromCloud(libraryId)
+        }
+    }
+
+    fun refreshAllData(forceCloud: Boolean = true) {
+        viewModelScope.launch {
+            _isSupabaseSyncing.value = true
+            val libId = _currentLibraryId.value
+            if (libId.isNotBlank()) {
+                repository.pullFromCloud(libId)
+            }
+            repository.pullAllLibrariesFromCloud()
+            repository.pullAllSubscriptionPlansFromCloud()
+            repository.pullSuperAdminFromCloud()
+            _isSupabaseSyncing.value = false
+            _userMessage.value = "Data refreshed live from Supabase cloud"
+        }
     }
 
     fun selectActiveStudent(studentId: String) {
