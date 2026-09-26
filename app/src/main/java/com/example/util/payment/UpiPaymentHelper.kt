@@ -35,11 +35,16 @@ object UpiPaymentHelper {
         transactionRef: String = "TXN_${System.currentTimeMillis()}"
     ): String {
         val cleanUpi = upiId.trim()
+        val formattedPa = if (!cleanUpi.contains("@") && cleanUpi.length == 10 && cleanUpi.all { it.isDigit() }) {
+            "$cleanUpi@upi"
+        } else {
+            cleanUpi
+        }
         val cleanName = Uri.encode(payeeName.trim().ifBlank { "LibDesk Subscriptions" })
         val formattedAmount = String.format(Locale.US, "%.2f", amount)
         val cleanNote = Uri.encode(note.trim().ifBlank { "LibDesk Subscription Plan" })
 
-        return "upi://pay?pa=$cleanUpi&pn=$cleanName&am=$formattedAmount&cu=INR&tn=$cleanNote&tr=$transactionRef"
+        return "upi://pay?pa=$formattedPa&pn=$cleanName&am=$formattedAmount&cu=INR&tn=$cleanNote&tr=$transactionRef"
     }
 
     /**

@@ -69,6 +69,8 @@ fun UserProfileModal(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
+    val normRole = remember(currentRole) { normalizeUserRole(currentRole) }
+
     var adminName by remember(superAdminProfile, userName) {
         mutableStateOf(superAdminProfile?.name?.takeIf { it.isNotBlank() } ?: userName.ifBlank { "Super Admin" })
     }
@@ -96,6 +98,7 @@ fun UserProfileModal(
         mutableStateOf(library?.ownerEmail?.takeIf { it.isNotBlank() } ?: userEmail)
     }
     var upiId by remember(library) { mutableStateOf(library?.upiId ?: "") }
+    var upiPayeeName by remember(library) { mutableStateOf(library?.upiPayeeName ?: "") }
     var address by remember(library) { mutableStateOf(library?.address ?: "") }
     var city by remember(library) { mutableStateOf(library?.city ?: "") }
     var state by remember(library) { mutableStateOf(library?.state ?: "") }
@@ -280,9 +283,9 @@ fun UserProfileModal(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = when (currentRole) {
-                                            "SUPER_ADMIN" -> Icons.Default.Shield
-                                            "MANAGER" -> Icons.Default.AccountBalance
+                                        imageVector = when (normRole) {
+                                            LibDeskRoles.SUPER_ADMIN -> Icons.Default.Shield
+                                            LibDeskRoles.MANAGER -> Icons.Default.AccountBalance
                                             else -> Icons.Default.Person
                                         },
                                         contentDescription = null,
@@ -293,9 +296,9 @@ fun UserProfileModal(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = when (currentRole) {
-                                            "SUPER_ADMIN" -> "Super Admin (SaaS Manager) Profile"
-                                            "MANAGER" -> "Library & Manager Profile"
+                                        text = when (normRole) {
+                                            LibDeskRoles.SUPER_ADMIN -> "Super Admin (SaaS Manager) Profile"
+                                            LibDeskRoles.MANAGER -> "Library & Manager Profile"
                                             else -> "Student Member Profile"
                                         },
                                         style = MaterialTheme.typography.titleMedium.copy(
@@ -304,9 +307,9 @@ fun UserProfileModal(
                                         )
                                     )
                                     Text(
-                                        text = when (currentRole) {
-                                            "SUPER_ADMIN" -> "Platform governance & SaaS billing settings"
-                                            "MANAGER" -> "Manage institute details & billing"
+                                        text = when (normRole) {
+                                            LibDeskRoles.SUPER_ADMIN -> "Platform governance & SaaS billing settings"
+                                            LibDeskRoles.MANAGER -> "Manage institute details & billing"
                                             else -> "Update personal & study info"
                                         },
                                         style = MaterialTheme.typography.bodySmall.copy(
@@ -363,7 +366,7 @@ fun UserProfileModal(
                             .padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        if (currentRole == "SUPER_ADMIN") {
+                        if (normRole == LibDeskRoles.SUPER_ADMIN) {
                             Text(
                                 text = "PLATFORM GOVERNANCE & ACCOUNT",
                                 fontSize = 14.sp,
@@ -518,7 +521,7 @@ fun UserProfileModal(
                                     }
                                 }
                             }
-                        } else if (currentRole == "MANAGER") {
+                        } else if (normRole == LibDeskRoles.MANAGER) {
 
                             Text(
                                 text = "INSTITUTE & STUDY HALL DETAILS",
@@ -608,10 +611,24 @@ fun UserProfileModal(
 
                             OutlinedTextField(
                                 value = upiId,
-                                onValueChange = { upiId = FormFormatters.toLowerCaseClean(it) },
-                                label = { Text("UPI ID for Fee Payments") },
+                                onValueChange = { upiId = it.trim().lowercase() },
+                                label = { Text("UPI ID / UPI Number for Payments") },
                                 leadingIcon = { Icon(Icons.Default.QrCode, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
-                                placeholder = { Text("e.g. yourlib@upi") },
+                                placeholder = { Text("e.g. library@upi or 10-digit mobile") },
+                                supportingText = { Text("Accepts UPI ID (e.g. name@paytm) or 10-digit UPI number") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            OutlinedTextField(
+                                value = upiPayeeName,
+                                onValueChange = { upiPayeeName = it },
+                                label = { Text("UPI Payee Name (Account Holder Name)") },
+                                leadingIcon = { Icon(Icons.Default.Badge, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
+                                placeholder = { Text("e.g. ${ownerName.ifBlank { libName.ifBlank { "Library Account" } }}") },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -1205,7 +1222,7 @@ fun UserProfileModal(
 
                             Button(
                                 onClick = {
-                                    if (currentRole == "SUPER_ADMIN") {
+                                    if (normRole == LibDeskRoles.SUPER_ADMIN) {
                                         if (adminName.isBlank()) {
                                             profileFormError = "Please enter Super Admin name before saving."
                                             return@Button
@@ -1229,36 +1246,46 @@ fun UserProfileModal(
                                             adminUpiPayeeName.trim().ifBlank { "LibDesk Subscriptions" }
                                         )
                                         onClose()
-                                    } else if (currentRole == "MANAGER") {
+                                    } else if (normRole == LibDeskRoles.MANAGER) {
                                         val fullOwnerPhone = combineCountryCodeAndPhone(ownerCountryCode, ownerPhone).trim()
-                                        if (libName.isBlank() || ownerName.isBlank() || fullOwnerPhone.isBlank() ||
-                                            address.isBlank() || city.isBlank() || state.isBlank() || upiId.isBlank()
-                                        ) {
-                                            profileFormError = "Please fill in all required fields (name, address, city, state, and UPI ID) before saving."
+                                        if (libName.isBlank()) {
+                                            profileFormError = "Please enter Institute / Library Name."
+                                            return@Button
+                                        }
+                                        if (ownerName.isBlank()) {
+                                            profileFormError = "Please enter Owner / Manager Full Name."
+                                            return@Button
+                                        }
+                                        if (upiId.isBlank()) {
+                                            profileFormError = "Please enter UPI ID or Mobile Number for student fee payments."
                                             return@Button
                                         }
                                         profileFormError = null
                                         isSaving = true
                                         val curLib = library ?: LibraryEntity(
                                             id = java.util.UUID.randomUUID().toString(),
-                                            name = libName,
+                                            name = libName.trim(),
                                             code = "LIB-${(1000..9999).random()}"
                                         )
+                                        val effectivePayee = upiPayeeName.trim().ifBlank {
+                                            ownerName.trim().ifBlank { libName.trim() }
+                                        }
                                         val updated = curLib.copy(
                                             name = libName.trim(),
                                             regNumber = regNumber.trim(),
                                             ownerName = ownerName.trim(),
-                                            ownerPhone = fullOwnerPhone,
-                                            ownerEmail = ownerEmail.trim(),
+                                            ownerPhone = fullOwnerPhone.ifBlank { curLib.ownerPhone },
+                                            ownerEmail = ownerEmail.trim().ifBlank { curLib.ownerEmail },
                                             upiId = upiId.trim(),
-                                            address = address.trim(),
-                                            city = city.trim(),
-                                            state = state.trim(),
-                                            pincode = pincode.trim(),
-                                            latitude = latitudeStr.trim().toDoubleOrNull() ?: 0.0,
-                                            longitude = longitudeStr.trim().toDoubleOrNull() ?: 0.0,
-                                            phone = fullOwnerPhone,
-                                            email = ownerEmail.trim(),
+                                            upiPayeeName = effectivePayee,
+                                            address = address.trim().ifBlank { curLib.address.ifBlank { "Main Campus" } },
+                                            city = city.trim().ifBlank { curLib.city.ifBlank { "Main Branch" } },
+                                            state = state.trim().ifBlank { curLib.state.ifBlank { "State" } },
+                                            pincode = pincode.trim().ifBlank { curLib.pincode },
+                                            latitude = latitudeStr.trim().toDoubleOrNull() ?: curLib.latitude,
+                                            longitude = longitudeStr.trim().toDoubleOrNull() ?: curLib.longitude,
+                                            phone = fullOwnerPhone.ifBlank { curLib.phone },
+                                            email = ownerEmail.trim().ifBlank { curLib.email },
                                             updatedAt = System.currentTimeMillis()
                                         )
                                         onUpdateLibrary(updated)

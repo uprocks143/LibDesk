@@ -509,9 +509,6 @@ fun LibDeskApp(
                     onOpenSyncBackup = { showBackupScreen = true },
                     onOpenQrScanner = { showQrScannerModal = true },
                     onShowLibraryQr = { showLibraryQrModal = true },
-                    onOpenSuperAdmin = {
-                        // Restricted to platform owner login only
-                    },
                     onOpenMySubscription = {
                         showSaaSOffersModal = true
                     },
@@ -597,13 +594,6 @@ onOpenSyncBackup = { showBackupScreen = true },
                                 onClick = { currentManagerTab = 3 },
                                 icon = { Icon(if (currentManagerTab == 3) Icons.Filled.Payments else Icons.Outlined.Payments, contentDescription = "Finance") },
                                 label = { Text("Finance", style = MaterialTheme.typography.labelSmall) },
-                                colors = navColors
-                            )
-                            NavigationBarItem(
-                                selected = currentManagerTab == 4,
-                                onClick = { currentManagerTab = 4 },
-                                icon = { Icon(if (currentManagerTab == 4) Icons.Filled.AdminPanelSettings else Icons.Outlined.AdminPanelSettings, contentDescription = "SaaS Admin") },
-                                label = { Text("SaaS Admin", style = MaterialTheme.typography.labelSmall) },
                                 colors = navColors
                             )
                         }

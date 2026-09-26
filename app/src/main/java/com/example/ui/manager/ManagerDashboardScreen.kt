@@ -1,5 +1,8 @@
 package com.example.ui.manager
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -92,6 +95,15 @@ fun ManagerDashboardScreen(
     
     var showAddBookModal by remember { mutableStateOf(false) }
     var showAddMaterialModal by remember { mutableStateOf(false) }
+    var selectedUploadUri by remember { mutableStateOf<Uri?>(null) }
+    val pickPdfFromStorageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedUploadUri = uri
+            showAddMaterialModal = true
+        }
+    }
     var selectedBookToIssue by remember { mutableStateOf<PhysicalBookEntity?>(null) }
     var selectedNoticeForDetail by remember { mutableStateOf<NoticeEntity?>(null) }
     var catalogSearchQuery by remember { mutableStateOf("") }
@@ -1300,15 +1312,21 @@ fun ManagerDashboardScreen(
                                     border = BorderStroke(1.dp, LibDeskColors.warning.copy(alpha = 0.5f)),
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(12.dp))
-                                        .clickable { showAddMaterialModal = true }
+                                        .clickable {
+                                            try {
+                                                pickPdfFromStorageLauncher.launch(arrayOf("application/pdf", "*/*"))
+                                            } catch (_: Exception) {
+                                                showAddMaterialModal = true
+                                            }
+                                        }
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.CloudUpload, null, tint = LibDeskColors.warning, modifier = Modifier.size(15.dp))
+                                        Icon(Icons.Default.FolderOpen, null, tint = LibDeskColors.warning, modifier = Modifier.size(15.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Add PDF/Notes", style = MaterialTheme.typography.labelLarge.copy(color = LibDeskColors.warning))
+                                        Text("Select PDF from Storage", style = MaterialTheme.typography.labelLarge.copy(color = LibDeskColors.warning))
                                     }
                                 }
                             }
@@ -2187,26 +2205,41 @@ fun ManagerDashboardScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
-                                            onClick = { showAddMaterialModal = true },
+                                            onClick = {
+                                                try {
+                                                    pickPdfFromStorageLauncher.launch(arrayOf("application/pdf", "*/*"))
+                                                } catch (_: Exception) {
+                                                    showAddMaterialModal = true
+                                                }
+                                            },
                                             shape = RoundedCornerShape(10.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier.weight(1.2f)
                                         ) {
-                                            Icon(Icons.Default.CloudUpload, null, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Upload PDF", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                            Text("Select from Storage", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                         }
 
                                         OutlinedButton(
-                                            onClick = { onAutoAddFreeMaterials() },
+                                            onClick = { showAddMaterialModal = true },
                                             shape = RoundedCornerShape(10.dp),
                                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                                            modifier = Modifier.weight(1f)
+                                            modifier = Modifier.weight(0.9f)
                                         ) {
-                                            Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Auto-Add Free PDFs", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                            Icon(Icons.Default.CloudUpload, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Upload Form", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, maxLines = 1)
                                         }
+                                    }
+
+                                    TextButton(
+                                        onClick = { onAutoAddFreeMaterials() },
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                    ) {
+                                        Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Auto-Add NCERT Textbooks", fontSize = 12.sp, color = MaterialTheme.colorScheme.secondary)
                                     }
                                 }
                             }
@@ -2517,105 +2550,40 @@ fun ManagerDashboardScreen(
 
     
     if (showAddMaterialModal) {
-        var matTitle by remember { mutableStateOf("") }
-        var matDesc by remember { mutableStateOf("") }
-        var matCategory by remember { mutableStateOf("Competitive Notes") }
-        var matSubject by remember { mutableStateOf("History & Polity") }
-        var matExam by remember { mutableStateOf("UPSC / State PCS") }
-        var matType by remember { mutableStateOf("PDF") }
-        var matSize by remember { mutableStateOf("4.2 MB") }
-
-        BackHandler { showAddMaterialModal = false }
-
         Dialog(
-            onDismissRequest = { showAddMaterialModal = false },
+            onDismissRequest = {
+                showAddMaterialModal = false
+                selectedUploadUri = null
+            },
             properties = androidx.compose.ui.window.DialogProperties(
                 usePlatformDefaultWidth = false,
                 dismissOnBackPress = true,
                 dismissOnClickOutside = false
             )
         ) {
-            Card(
-                shape = RoundedCornerShape(0.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .systemBarsPadding()
                     .imePadding()
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text("Upload Study Material", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-
-                    OutlinedTextField(
-                        value = matTitle,
-                        onValueChange = { matTitle = it },
-                        label = { Text("Resource Title") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = matDesc,
-                        onValueChange = { matDesc = it },
-                        label = { Text("Short Description") },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = matCategory,
-                            onValueChange = { matCategory = it },
-                            label = { Text("Category") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = matExam,
-                            onValueChange = { matExam = it },
-                            label = { Text("Target Exam") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(onClick = { showAddMaterialModal = false }) { Text("Cancel") }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (matTitle.isNotBlank()) {
-                                    onAddMaterial(
-                                        matTitle,
-                                        matDesc.ifBlank { "Comprehensive study notes" },
-                                        matCategory,
-                                        matSubject,
-                                        matExam,
-                                        matType,
-                                        matSize,
-                                        "https://example.com/file.pdf",
-                                        "ACTIVE_MEMBERS"
-                                    )
-                                    showAddMaterialModal = false
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Publish Resource")
-                        }
-                    }
-                }
+                com.example.ui.owner.StudyMaterialUploadScreen(
+                    orgId = library?.id ?: "DEFAULT_ORG",
+                    uploadedBy = userName,
+                    initialUri = selectedUploadUri,
+                    onNavigateBack = {
+                        showAddMaterialModal = false
+                        selectedUploadUri = null
+                    },
+                    onUploadSuccess = {
+                        showAddMaterialModal = false
+                        selectedUploadUri = null
+                    },
+                    onMaterialUploaded = { title, desc, cat, sub, exam, fType, fSize, fUrl, policy ->
+                        onAddMaterial(title, desc, cat, sub, exam, fType, fSize, fUrl, policy)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }

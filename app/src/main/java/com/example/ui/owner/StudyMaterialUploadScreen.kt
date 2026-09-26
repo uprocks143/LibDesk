@@ -36,7 +36,9 @@ fun StudyMaterialUploadScreen(
     onNavigateBack: () -> Unit,
     onUploadSuccess: () -> Unit,
     modifier: Modifier = Modifier,
-    repository: StudyMaterialRepository = StudyMaterialRepository(LocalContext.current)
+    initialUri: Uri? = null,
+    repository: StudyMaterialRepository = StudyMaterialRepository(LocalContext.current),
+    onMaterialUploaded: ((title: String, desc: String, category: String, subject: String, exam: String, fileType: String, fileSize: String, fileUrl: String, accessPolicy: String) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -64,19 +66,11 @@ fun StudyMaterialUploadScreen(
         "other" to "General Reference / Syllabus"
     )
 
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val mimeType = context.contentResolver.getType(uri)
-            if (mimeType != null && mimeType != "application/pdf") {
-                Toast.makeText(context, "Only PDF documents (.pdf) are permitted.", Toast.LENGTH_LONG).show()
-                return@rememberLauncherForActivityResult
-            }
+    fun handleSelectedPdf(uri: Uri) {
+        var name = "Document.pdf"
+        var size = 0L
 
-            var name = "Document.pdf"
-            var size = 0L
-
+        try {
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
@@ -85,26 +79,94 @@ fun StudyMaterialUploadScreen(
                     if (sizeIndex != -1) size = cursor.getLong(sizeIndex)
                 }
             }
+        } catch (_: Exception) {}
 
-            // Client-side 20 MB size validation
-            if (size > 20 * 1024 * 1024L) {
-                errorMessage = "Selected PDF exceeds the 20 MB maximum upload limit (${size / (1024 * 1024)} MB). Please select a compressed file."
-                selectedUri = null
-                selectedFileName = ""
-                selectedFileSize = 0L
-                return@rememberLauncherForActivityResult
+        if (size <= 0L) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    size = stream.available().toLong()
+                }
+            } catch (_: Exception) {}
+        }
+
+        val mimeType = context.contentResolver.getType(uri)
+        val isPdf = name.endsWith(".pdf", ignoreCase = true) ||
+            mimeType == "application/pdf" ||
+            mimeType == "application/x-pdf" ||
+            uri.toString().endsWith(".pdf", ignoreCase = true)
+
+        if (!isPdf && mimeType != null && mimeType != "application/octet-stream" && mimeType != "*/*") {
+            Toast.makeText(context, "Only PDF documents (.pdf) are permitted.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Client-side 20 MB size validation
+        if (size > 20 * 1024 * 1024L) {
+            errorMessage = "Selected PDF exceeds the 20 MB maximum upload limit (${size / (1024 * 1024)} MB). Please select a compressed file."
+            selectedUri = null
+            selectedFileName = ""
+            selectedFileSize = 0L
+            return
+        }
+
+        selectedUri = uri
+        selectedFileName = name
+        selectedFileSize = size
+        errorMessage = null
+
+        try {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: Exception) {}
+
+        if (title.isBlank()) {
+            title = name.removeSuffix(".pdf").removeSuffix(".PDF").replace("_", " ").replace("-", " ")
+        }
+
+        showWarning10Mb = size > 10 * 1024 * 1024L
+    }
+
+    LaunchedEffect(initialUri) {
+        if (initialUri != null) {
+            handleSelectedPdf(initialUri)
+        }
+    }
+
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) handleSelectedPdf(uri)
+    }
+
+    val getContentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) handleSelectedPdf(uri)
+    }
+
+    val launchDevicePicker = {
+        try {
+            openDocumentLauncher.launch(arrayOf("application/pdf", "application/x-pdf", "*/*"))
+        } catch (_: Exception) {
+            try {
+                getContentLauncher.launch("*/*")
+            } catch (e: Exception) {
+                Toast.makeText(context, "File picker could not be opened: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
 
-            selectedUri = uri
-            selectedFileName = name
-            selectedFileSize = size
-            errorMessage = null
-
-            if (title.isBlank()) {
-                title = name.removeSuffix(".pdf").replace("_", " ")
+    val launchAllFilesPicker = {
+        try {
+            getContentLauncher.launch("*/*")
+        } catch (_: Exception) {
+            try {
+                openDocumentLauncher.launch(arrayOf("*/*"))
+            } catch (e: Exception) {
+                Toast.makeText(context, "Storage picker could not be opened: ${e.message}", Toast.LENGTH_SHORT).show()
             }
-
-            showWarning10Mb = size > 10 * 1024 * 1024L
         }
     }
 
@@ -135,7 +197,8 @@ fun StudyMaterialUploadScreen(
             // PDF File Picker Card
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    containerColor = if (selectedUri != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                 ),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
@@ -146,14 +209,14 @@ fun StudyMaterialUploadScreen(
                         RoundedCornerShape(16.dp)
                     )
                     .clickable(enabled = !isUploading) {
-                        filePickerLauncher.launch(arrayOf("application/pdf"))
+                        launchDevicePicker()
                     }
                     .testTag("pdf_picker_card")
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp),
+                        .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -161,24 +224,66 @@ fun StudyMaterialUploadScreen(
                         imageVector = if (selectedUri != null) Icons.Default.CheckCircle else Icons.Default.UploadFile,
                         contentDescription = "Pick PDF",
                         tint = if (selectedUri != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(46.dp)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = if (selectedFileName.isNotBlank()) selectedFileName else "Select PDF from Device",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = if (selectedFileName.isNotBlank()) selectedFileName else "Select PDF from Internal Storage",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (selectedFileSize > 0) {
                             val mb = selectedFileSize / (1024.0 * 1024.0)
-                            String.format(java.util.Locale.US, "Size: %.2f MB (Max 20 MB)", mb)
+                            String.format(java.util.Locale.US, "Size: %.2f MB (Max 20 MB Limit)", mb)
                         } else {
-                            "Supports PDF only • Max 20 MB per file"
+                            "Pick file from internal storage, documents or downloads (PDF only, max 20 MB)"
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { launchDevicePicker() },
+                            enabled = !isUploading,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selectedUri != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                if (selectedUri != null) Icons.Default.ChangeCircle else Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (selectedUri != null) "Change PDF" else "Internal Storage", maxLines = 1)
+                        }
+
+                        OutlinedButton(
+                            onClick = { launchAllFilesPicker() },
+                            enabled = !isUploading,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.Storage,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("All Storage / Files", maxLines = 1)
+                        }
+                    }
                 }
             }
 
@@ -361,6 +466,21 @@ fun StudyMaterialUploadScreen(
                         isUploading = false
 
                         if (result.isSuccess) {
+                            val material = result.getOrNull()
+                            val mb = selectedFileSize / (1024.0 * 1024.0)
+                            val formattedSize = if (mb >= 1.0) String.format(java.util.Locale.US, "%.1f MB", mb) else "${(selectedFileSize / 1024).coerceAtLeast(1)} KB"
+                            val storagePath = material?.storagePath ?: "study-materials/$orgId/$category/$selectedFileName"
+                            onMaterialUploaded?.invoke(
+                                title.trim(),
+                                description.trim().ifBlank { "Study notes and reference guide." },
+                                category,
+                                "General Study",
+                                "All Competitive Exams",
+                                "PDF",
+                                formattedSize,
+                                storagePath,
+                                if (isFree) "ALL_STUDENTS" else "PAID_STUDENTS"
+                            )
                             Toast.makeText(context, "Study material uploaded successfully!", Toast.LENGTH_SHORT).show()
                             onUploadSuccess()
                         } else {

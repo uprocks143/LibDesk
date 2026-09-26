@@ -107,12 +107,27 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     private val _userMessage = MutableStateFlow<String?>(null)
     val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
 
-    val currentLibrary: StateFlow<LibraryEntity?> = _currentLibraryId
-        .flatMapLatest { id -> repository.getLibraryById(id) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
     val allLibraries: StateFlow<List<LibraryEntity>> = repository.getAllLibraries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentLibrary: StateFlow<LibraryEntity?> = combine(
+        _currentLibraryId,
+        repository.getAllLibraries(),
+        _currentUserEmail
+    ) { id, allLibs, email ->
+        val found = when {
+            id.isNotBlank() -> allLibs.find { it.id == id }
+                ?: allLibs.find { it.ownerEmail.equals(email, ignoreCase = true) || it.email.equals(email, ignoreCase = true) }
+                ?: if (_currentRole.value == "MANAGER" || _currentRole.value == "OWNER") allLibs.firstOrNull() else null
+            email.isNotBlank() -> allLibs.find { it.ownerEmail.equals(email, ignoreCase = true) || it.email.equals(email, ignoreCase = true) }
+                ?: if (_currentRole.value == "MANAGER" || _currentRole.value == "OWNER") allLibs.firstOrNull() else null
+            else -> if (_currentRole.value == "MANAGER" || _currentRole.value == "OWNER") allLibs.firstOrNull() else null
+        }
+        if (found != null && _currentLibraryId.value != found.id) {
+            _currentLibraryId.value = found.id
+        }
+        found
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val halls: StateFlow<List<HallEntity>> = _currentLibraryId
         .flatMapLatest { id -> repository.getHalls(id) }
@@ -2253,17 +2268,34 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     fun updateLibraryProfile(updatedLibrary: LibraryEntity, onError: ((String) -> Unit)? = null) {
         viewModelScope.launch {
+            if (_currentLibraryId.value.isBlank() || _currentLibraryId.value != updatedLibrary.id) {
+                _currentLibraryId.value = updatedLibrary.id
+            }
             repository.saveLibrary(updatedLibrary)
-            if (_currentRole.value == "MANAGER" && updatedLibrary.ownerName.isNotBlank()) {
-                _currentUserName.value = updatedLibrary.ownerName
-                persistAuthSession(
-                    authenticated = _isAuthenticated.value,
-                    email = _currentUserEmail.value,
-                    name = updatedLibrary.ownerName,
-                    role = _currentRole.value,
-                    libraryId = updatedLibrary.id,
-                    studentId = _activeStudentId.value
+            if (updatedLibrary.ownerName.isNotBlank()) {
+                _currentUserName.value = updatedLibrary.ownerName.trim()
+            }
+            if (updatedLibrary.ownerEmail.isNotBlank()) {
+                _currentUserEmail.value = updatedLibrary.ownerEmail.trim().lowercase()
+            } else if (updatedLibrary.email.isNotBlank()) {
+                _currentUserEmail.value = updatedLibrary.email.trim().lowercase()
+            }
+            persistAuthSession(
+                authenticated = _isAuthenticated.value,
+                email = _currentUserEmail.value,
+                name = _currentUserName.value,
+                role = _currentRole.value,
+                libraryId = updatedLibrary.id,
+                studentId = _activeStudentId.value
+            )
+            val currentSession = SessionManager.sessionState.value
+            if (currentSession != null) {
+                val updatedSession = currentSession.copy(
+                    name = _currentUserName.value.ifBlank { currentSession.name },
+                    email = _currentUserEmail.value.ifBlank { currentSession.email },
+                    libraryId = updatedLibrary.id
                 )
+                SessionManager.saveSession(getApplication(), updatedSession)
             }
             supabaseSyncManager.syncLocalToSupabase(updatedLibrary.id)
             _userMessage.value = "Library & Manager profile updated successfully!"
@@ -2546,11 +2578,11 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             val effectiveMobile = if (mobile.isNotBlank()) mobile.trim() else current?.mobile ?: ""
             
             val updated = SuperAdminUserEntity(
-                id = "SUPER-ADMIN-MASTER",
+                id = current?.id?.ifBlank { "SUPER-ADMIN-MASTER" } ?: "SUPER-ADMIN-MASTER",
                 email = email.trim().lowercase(),
                 name = name.trim(),
                 mobile = effectiveMobile,
-                accessCode = "",
+                accessCode = current?.accessCode ?: "",
                 is2FaEnabled = is2Fa,
                 isClaimed = true,
                 upiId = effectiveUpiId,
@@ -2559,17 +2591,23 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             repository.saveSuperAdmin(updated)
             // Synchronize UPI ID and Support WhatsApp number across all subscription plans in database
             repository.updateAllPlansUpi(effectiveUpiId, effectivePayee, effectiveMobile)
-            if (_currentRole.value == "SUPER_ADMIN") {
-                if (name.isNotBlank()) _currentUserName.value = name.trim()
-                if (email.isNotBlank()) _currentUserEmail.value = email.trim().lowercase()
-                persistAuthSession(
-                    authenticated = _isAuthenticated.value,
-                    email = _currentUserEmail.value,
-                    name = _currentUserName.value,
-                    role = "SUPER_ADMIN",
-                    libraryId = "",
-                    studentId = ""
+            if (name.isNotBlank()) _currentUserName.value = name.trim()
+            if (email.isNotBlank()) _currentUserEmail.value = email.trim().lowercase()
+            persistAuthSession(
+                authenticated = _isAuthenticated.value,
+                email = _currentUserEmail.value,
+                name = _currentUserName.value,
+                role = "SUPER_ADMIN",
+                libraryId = "",
+                studentId = ""
+            )
+            val currentSession = SessionManager.sessionState.value
+            if (currentSession != null) {
+                val updatedSession = currentSession.copy(
+                    name = _currentUserName.value.ifBlank { currentSession.name },
+                    email = _currentUserEmail.value.ifBlank { currentSession.email }
                 )
+                SessionManager.saveSession(getApplication(), updatedSession)
             }
             _userMessage.value = "Super Admin settings & UPI billing details updated across all plans!"
         }

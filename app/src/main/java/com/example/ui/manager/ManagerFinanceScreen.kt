@@ -299,12 +299,18 @@ fun ManagerFinanceScreen(
                                 color = MaterialTheme.colorScheme.error
                             )
                         } else {
-                            val upiString = "upi://pay?pa=${library.upiId}&pn=${library.upiPayeeName.ifBlank { "Your Library" }}&cu=INR"
+                            val upiPa = if (!library.upiId.contains("@") && library.upiId.length == 10 && library.upiId.all { it.isDigit() }) {
+                                "${library.upiId}@upi"
+                            } else {
+                                library.upiId
+                            }
+                            val payeeName = library.upiPayeeName.ifBlank { library.ownerName.ifBlank { library.name.ifBlank { "Library Admin" } } }
+                            val upiString = "upi://pay?pa=$upiPa&pn=${android.net.Uri.encode(payeeName)}&cu=INR"
                             QrCodeView(data = upiString, size = 200.dp)
 
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("UPI ID: ${library.upiId}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                            Text("Payee: ${library.upiPayeeName.ifBlank { "Your Library" }}", style = MaterialTheme.typography.bodySmall)
+                            Text("UPI ID / Number: ${library.upiId}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                            Text("Payee: $payeeName", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

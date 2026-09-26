@@ -537,6 +537,18 @@ class LibDeskRepository(val context: Context? = null) {
             ) else it
         }
 
+        // Cascade update to manager's user account in _users state
+        val mgrUser = _users.value.find { 
+            it.libraryId == library.id || (library.ownerEmail.isNotBlank() && it.email.equals(library.ownerEmail, ignoreCase = true))
+        }
+        if (mgrUser != null) {
+            saveUser(mgrUser.copy(
+                name = library.ownerName.ifBlank { mgrUser.name },
+                phone = library.ownerPhone.ifBlank { mgrUser.phone },
+                email = library.ownerEmail.ifBlank { mgrUser.email }
+            ))
+        }
+
         val arr = JSONArray().apply {
             put(JSONObject().apply {
                 put("id", library.id)
@@ -1869,7 +1881,18 @@ class LibDeskRepository(val context: Context? = null) {
                     list.add(parseLibrary(arr.getJSONObject(i)))
                 }
                 if (list.isNotEmpty()) {
-                    _libraries.value = list
+                    val cloudMap = list.associateBy { it.id }
+                    val currentMap = _libraries.value.associateBy { it.id }
+                    val merged = (currentMap.keys + cloudMap.keys).mapNotNull { id ->
+                        val local = currentMap[id]
+                        val cloud = cloudMap[id]
+                        when {
+                            local != null && cloud != null -> if (local.updatedAt >= cloud.updatedAt) local else cloud
+                            local != null -> local
+                            else -> cloud
+                        }
+                    }
+                    _libraries.value = merged
                 }
                 Pair(true, "Fetched ${list.size} libraries from cloud")
             } else {
@@ -1966,7 +1989,10 @@ class LibDeskRepository(val context: Context? = null) {
                 val (libOk, libArr) = libDeferred.await()
                 if (libOk && libArr != null && libArr.length() > 0) {
                     val lib = parseLibrary(libArr.getJSONObject(0))
-                    _libraries.value = _libraries.value.filter { it.id != lib.id } + lib
+                    val current = _libraries.value.find { it.id == lib.id }
+                    if (current == null || current.updatedAt <= lib.updatedAt) {
+                        _libraries.value = _libraries.value.filter { it.id != lib.id } + lib
+                    }
                 }
 
                 // 2. Process Halls

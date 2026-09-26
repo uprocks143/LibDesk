@@ -44,8 +44,8 @@ data class NcertBook(
 
     val editionBadge: String
         get() = when {
-            editionYear.contains("2026") || classLevel in 1..9 -> "Updated for 2026-27"
             classLevel in 10..11 -> "Valid for 2026-27 • NEP Revised coming 2027-28"
+            classLevel in 1..9 || editionYear.contains("2026") -> "Updated for 2026-27"
             else -> "NCERT Prescribed Edition"
         }
 

@@ -47,7 +47,6 @@ fun LibDeskDrawerContent(
     onOpenSyncBackup: () -> Unit,
     onOpenQrScanner: () -> Unit,
     onShowLibraryQr: () -> Unit = {},
-    onOpenSuperAdmin: () -> Unit = {},
     onOpenMySubscription: () -> Unit = {},
     isTrialActive: Boolean = false,
     trialDaysRemaining: Int = 15,
@@ -100,11 +99,7 @@ fun LibDeskDrawerContent(
                             border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color(0xFF0F172A).copy(alpha = 0.2f))
                         ) {
                             Text(
-                                text = when (currentRole) {
-                                    "SUPER_ADMIN" -> "SUPER ADMIN"
-                                    "MANAGER" -> "MANAGER"
-                                    else -> "STUDENT"
-                                },
+                                text = if (currentRole == "MANAGER") "LIBRARY MANAGER" else "STUDENT",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0F172A),
@@ -140,16 +135,12 @@ fun LibDeskDrawerContent(
                             }
                     ) {
 
-                        val initials = when (currentRole) {
-                            "SUPER_ADMIN" -> "SA"
-                            "MANAGER" -> {
-                                val name = currentUserName.ifBlank { library?.ownerName ?: "Manager" }
-                                name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "MG" }
-                            }
-                            else -> {
-                                val name = currentUserName.ifBlank { activeStudent?.fullName ?: "Student" }
-                                name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "ST" }
-                            }
+                        val initials = if (currentRole == "MANAGER") {
+                            val name = currentUserName.ifBlank { library?.ownerName ?: "Manager" }
+                            name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "MG" }
+                        } else {
+                            val name = currentUserName.ifBlank { activeStudent?.fullName ?: "Student" }
+                            name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "ST" }
                         }
 
                         Box(
@@ -177,15 +168,15 @@ fun LibDeskDrawerContent(
                         Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            val displayName = when (currentRole) {
-                                "SUPER_ADMIN" -> "Super Admin (SaaS Manager)"
-                                "MANAGER" -> currentUserName.ifBlank { library?.ownerName ?: "Library Manager" }
-                                else -> currentUserName.ifBlank { activeStudent?.fullName ?: "Student Member" }
+                            val displayName = if (currentRole == "MANAGER") {
+                                currentUserName.ifBlank { library?.ownerName ?: "Library Manager" }
+                            } else {
+                                currentUserName.ifBlank { activeStudent?.fullName ?: "Student Member" }
                             }
-                            val displayEmail = when (currentRole) {
-                                "SUPER_ADMIN" -> currentUserEmail.ifBlank { "superadmin@libdesk.cloud" }
-                                "MANAGER" -> currentUserEmail.ifBlank { library?.email ?: "" }
-                                else -> currentUserEmail.ifBlank { activeStudent?.email ?: "" }
+                            val displayEmail = if (currentRole == "MANAGER") {
+                                currentUserEmail.ifBlank { library?.email ?: "" }
+                            } else {
+                                currentUserEmail.ifBlank { activeStudent?.email ?: "" }
                             }
 
                             Text(
@@ -205,7 +196,7 @@ fun LibDeskDrawerContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (currentRole == "SUPER_ADMIN") "SaaS Subscriptions Hub" else (library?.name ?: "Your Library"),
+                                text = library?.name ?: "Your Library",
                                 color = drawerHeaderSubtext,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -244,22 +235,14 @@ fun LibDeskDrawerContent(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Icon(
-                                imageVector = when (currentRole) {
-                                    "SUPER_ADMIN" -> Icons.Default.Shield
-                                    "MANAGER" -> Icons.Default.AdminPanelSettings
-                                    else -> Icons.Default.School
-                                },
+                                imageVector = if (currentRole == "MANAGER") Icons.Default.AdminPanelSettings else Icons.Default.School,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = when (currentRole) {
-                                    "SUPER_ADMIN" -> "Super Admin (SaaS Manager)"
-                                    "MANAGER" -> "Manager"
-                                    else -> "Student"
-                                },
+                                text = if (currentRole == "MANAGER") "Library Owner / Manager" else "Student",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -273,60 +256,6 @@ fun LibDeskDrawerContent(
             }
 
             Spacer(modifier = Modifier.height(10.dp))
-
-            RoleGate(
-                currentRole = currentRole,
-                allowedRoles = setOf(LibDeskRoles.SUPER_ADMIN),
-                fallback = {}
-            ) {
-                Column {
-                    Text(
-                        text = "SAAS MANAGEMENT MODULES",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 0.8.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                    )
-                    DrawerNavItem(
-                        icon = Icons.Default.Subscriptions,
-                        title = "Subscriptions & Libraries",
-                        subtitle = "Monitor active libraries, billing & expiry",
-                        badge = "SaaS",
-                        onClick = {
-                            onNavigateTab(0, 0)
-                            onCloseDrawer()
-                        }
-                    )
-                    DrawerNavItem(
-                        icon = Icons.Default.PriceChange,
-                        title = "SaaS Plans & Pricing",
-                        subtitle = "Configure tiers, monthly & annual pricing",
-                        onClick = {
-                            onNavigateTab(1, 0)
-                            onCloseDrawer()
-                        }
-                    )
-                    DrawerNavItem(
-                        icon = Icons.Default.TrendingUp,
-                        title = "Revenue Analytics & MRR",
-                        subtitle = "View network health, revenue & library stats",
-                        onClick = {
-                            onNavigateTab(2, 0)
-                            onCloseDrawer()
-                        }
-                    )
-                    DrawerNavItem(
-                        icon = Icons.Default.Security,
-                        title = "2FA & Admin Security",
-                        subtitle = "Two-factor authentication & admin access",
-                        onClick = {
-                            onNavigateTab(3, 0)
-                            onCloseDrawer()
-                        }
-                    )
-                }
-            }
 
             RoleGate(
                 currentRole = currentRole,
@@ -536,20 +465,6 @@ fun LibDeskDrawerContent(
                         )
                     )
                 }
-            }
-
-            if (currentRole == "SUPER_ADMIN") {
-                DrawerNavItem(
-                    icon = Icons.Default.AdminPanelSettings,
-                    title = "SaaS Admin Portal",
-                    subtitle = "Restricted management interface for platform owner",
-                    badge = "Owner",
-                    badgeColor = MaterialTheme.colorScheme.primary,
-                    onClick = {
-                        onOpenSuperAdmin()
-                        onCloseDrawer()
-                    }
-                )
             }
 
             DrawerNavItem(
