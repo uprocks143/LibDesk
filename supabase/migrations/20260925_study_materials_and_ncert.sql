@@ -222,18 +222,26 @@ CREATE POLICY "student_download_study_materials_storage" ON storage.objects
 -- 13. Realtime Enablement
 ALTER TABLE public.study_materials REPLICA IDENTITY FULL;
 ALTER TABLE public.ncert_catalog REPLICA IDENTITY FULL;
+ALTER TABLE public.download_logs REPLICA IDENTITY FULL;
 
 DO $$
 BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        CREATE PUBLICATION supabase_realtime;
+    END IF;
     BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.study_materials;
-    EXCEPTION WHEN duplicate_object THEN NULL;
+    EXCEPTION WHEN OTHERS THEN NULL;
     END;
     BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.ncert_catalog;
-    EXCEPTION WHEN duplicate_object THEN NULL;
+    EXCEPTION WHEN OTHERS THEN NULL;
     END;
-END $$;
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.download_logs;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+END $$ LANGUAGE plpgsql;
 
 -- 14. Initial NCERT Catalog Seed
 INSERT INTO public.ncert_catalog (class_level, subject, book_title, medium, language, edition_year, source_name, source_url, is_active)

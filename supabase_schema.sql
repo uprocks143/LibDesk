@@ -11,6 +11,9 @@
 -- =========================================================================
 
 -- 1. DROP ALL EXISTING TABLES & OBJECTS (CASCADE handles dependencies)
+DROP TABLE IF EXISTS public.study_materials CASCADE;
+DROP TABLE IF EXISTS public.ncert_catalog CASCADE;
+DROP TABLE IF EXISTS public.download_logs CASCADE;
 DROP TABLE IF EXISTS public.attendance CASCADE;
 DROP TABLE IF EXISTS public.payments CASCADE;
 DROP TABLE IF EXISTS public.seat_assignments CASCADE;
@@ -403,6 +406,7 @@ CREATE TABLE public.feedback_complaints (
     "libraryId" TEXT NOT NULL,
     "studentId" TEXT NOT NULL,
     "studentName" TEXT NOT NULL,
+    email TEXT DEFAULT '',
     "seatNumber" TEXT DEFAULT '',
     type TEXT DEFAULT 'COMPLAINT',
     subject TEXT NOT NULL,
@@ -935,29 +939,11 @@ ALTER TABLE public.library_subscriptions REPLICA IDENTITY FULL;
 -- =========================================================================
 
 DO $$
-DECLARE
-    tbl text;
-    tables text[] := ARRAY[
-        'libraries', 'users', 'students', 'seats', 'halls', 'cabins', 'sections',
-        'shifts', 'membership_plans', 'seat_assignments', 'attendance', 'payments',
-        'expenses', 'fines', 'physical_books', 'book_issues', 'digital_materials',
-        'notices', 'feedback_complaints', 'audit_logs', 'super_admin_users',
-        'subscription_plans', 'user_subscriptions', 'library_subscriptions'
-    ];
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
         CREATE PUBLICATION supabase_realtime;
     END IF;
-    
-    FOREACH tbl IN ARRAY tables LOOP
-        BEGIN
-            EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I;', tbl);
-        EXCEPTION 
-            WHEN duplicate_object THEN NULL;
-            WHEN OTHERS THEN NULL;
-        END;
-    END LOOP;
-END $$;
+END $$ LANGUAGE plpgsql;
 
 -- =========================================================================
 -- 6. SUPABASE AUTHENTICATION AUTOMATIC USER PROFILE TRIGGER
@@ -985,7 +971,8 @@ BEGIN
   v_name := COALESCE(
     new.raw_user_meta_data->>'full_name',
     new.raw_user_meta_data->>'name',
-    split_part(new.email, '@', 1)
+    split_part(COALESCE(new.email, ''), '@', 1),
+    'LibDesk User'
   );
 
   INSERT INTO public.users (
@@ -998,7 +985,7 @@ BEGIN
     "createdAt"
   ) VALUES (
     new.id::text,
-    new.email,
+    COALESCE(new.email, ''),
     v_name,
     v_role,
     v_org_id,
@@ -1213,11 +1200,15 @@ CREATE POLICY "owner_view_download_logs" ON public.download_logs
     USING (public.is_library_owner() OR public.is_super_admin());
 
 -- Storage RLS Policies
+DROP POLICY IF EXISTS "owner_upload_study_materials_storage" ON storage.objects;
+DROP POLICY IF EXISTS "owner_delete_study_materials_storage" ON storage.objects;
+DROP POLICY IF EXISTS "student_download_study_materials_storage" ON storage.objects;
+
 CREATE POLICY "owner_upload_study_materials_storage" ON storage.objects
     FOR INSERT TO authenticated
     WITH CHECK (
         bucket_id = 'study-materials'
-        AND (storage.foldername(name))[1] = public.jwt_org_id()
+        AND split_part(name, '/', 1) = public.jwt_org_id()
         AND public.is_library_owner()
     );
 
@@ -1225,7 +1216,7 @@ CREATE POLICY "owner_delete_study_materials_storage" ON storage.objects
     FOR DELETE TO authenticated
     USING (
         bucket_id = 'study-materials'
-        AND (storage.foldername(name))[1] = public.jwt_org_id()
+        AND split_part(name, '/', 1) = public.jwt_org_id()
         AND public.is_library_owner()
     );
 
@@ -1233,25 +1224,43 @@ CREATE POLICY "student_download_study_materials_storage" ON storage.objects
     FOR SELECT TO authenticated
     USING (
         bucket_id = 'study-materials'
-        AND (storage.foldername(name))[1] = public.jwt_org_id()
+        AND split_part(name, '/', 1) = public.jwt_org_id()
         AND (public.is_student() OR public.is_library_owner())
     );
 
--- Realtime & Seed Sample NCERT
+-- Realtime Publication for all 27 LibDesk Tables
 ALTER TABLE public.study_materials REPLICA IDENTITY FULL;
 ALTER TABLE public.ncert_catalog REPLICA IDENTITY FULL;
+ALTER TABLE public.download_logs REPLICA IDENTITY FULL;
 
-DO $$
-BEGIN
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE public.study_materials;
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
-    BEGIN
-        ALTER PUBLICATION supabase_realtime ADD TABLE public.ncert_catalog;
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END;
-END $$;
+ALTER PUBLICATION supabase_realtime SET TABLE 
+    public.libraries,
+    public.users,
+    public.students,
+    public.seats,
+    public.halls,
+    public.cabins,
+    public.sections,
+    public.shifts,
+    public.membership_plans,
+    public.seat_assignments,
+    public.attendance,
+    public.payments,
+    public.expenses,
+    public.fines,
+    public.physical_books,
+    public.book_issues,
+    public.digital_materials,
+    public.notices,
+    public.feedback_complaints,
+    public.audit_logs,
+    public.super_admin_users,
+    public.subscription_plans,
+    public.user_subscriptions,
+    public.library_subscriptions,
+    public.study_materials,
+    public.ncert_catalog,
+    public.download_logs;
 
 INSERT INTO public.ncert_catalog (class_level, subject, book_title, medium, language, edition_year, source_name, source_url, is_active)
 VALUES
