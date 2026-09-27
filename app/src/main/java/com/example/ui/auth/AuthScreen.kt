@@ -644,7 +644,6 @@ fun AuthScreen(
                                         )
                                     )
 
-                                    
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -665,14 +664,14 @@ fun AuthScreen(
                                                 }
                                         ) {
                                             Column(
-                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 4.dp),
+                                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.AdminPanelSettings,
                                                     contentDescription = null,
                                                     tint = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(22.dp)
+                                                    modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(modifier = Modifier.height(3.dp))
                                                 Text(
@@ -689,7 +688,6 @@ fun AuthScreen(
                                             }
                                         }
 
-                                        
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
                                             color = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
@@ -705,14 +703,14 @@ fun AuthScreen(
                                                 }
                                         ) {
                                             Column(
-                                                modifier = Modifier.padding(vertical = 11.dp, horizontal = 4.dp),
+                                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
                                                 horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Default.School,
                                                     contentDescription = null,
                                                     tint = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(22.dp)
+                                                    modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(modifier = Modifier.height(3.dp))
                                                 Text(
@@ -930,9 +928,10 @@ fun AuthScreen(
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
                                             text = when (selectedRole) {
-                                                "SUPER_ADMIN" -> "Sign In as SaaS Admin (Platform Developer)"
+                                                "SUPER_ADMIN" -> "Sign In as Super Admin"
                                                 "MANAGER" -> "Sign In as Library Owner / Admin"
-                                                else -> "Sign In as Student"
+                                                "STUDENT" -> "Sign In as Student"
+                                                else -> "Sign In"
                                             },
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.labelLarge

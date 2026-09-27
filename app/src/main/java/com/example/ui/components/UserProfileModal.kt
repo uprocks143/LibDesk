@@ -81,10 +81,10 @@ fun UserProfileModal(
     var adminCountryCode by remember(superAdminProfile) { mutableStateOf(initialAdminPhone.first) }
     var adminPhone by remember(superAdminProfile) { mutableStateOf(initialAdminPhone.second) }
     var adminUpiId by remember(superAdminProfile) {
-        mutableStateOf(superAdminProfile?.upiId ?: "libdesk.billing@upi")
+        mutableStateOf(superAdminProfile?.upiId ?: "")
     }
     var adminUpiPayeeName by remember(superAdminProfile) {
-        mutableStateOf(superAdminProfile?.upiPayeeName ?: "LibDesk Subscriptions")
+        mutableStateOf(superAdminProfile?.upiPayeeName ?: "")
     }
 
     var libName by remember(library) { mutableStateOf(library?.name ?: "") }
@@ -1243,7 +1243,7 @@ fun UserProfileModal(
                                             adminEmail.trim().lowercase(),
                                             fullAdminPhone,
                                             adminUpiId.trim(),
-                                            adminUpiPayeeName.trim().ifBlank { "LibDesk Subscriptions" }
+                                            adminUpiPayeeName.trim().ifBlank { adminName.trim() }
                                         )
                                         onClose()
                                     } else if (normRole == LibDeskRoles.MANAGER) {

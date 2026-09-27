@@ -255,6 +255,15 @@ object SupabaseAuthService {
         // 1. Check if digits only (Mobile number)
         val digitsOnly = clean.filter { it.isDigit() }
         if (digitsOnly.length >= 7) {
+            val (saOk, saArr) = SupabaseClient.queryTable("super_admin?mobile=eq.$digitsOnly&select=email,name")
+            if (saOk && saArr != null && saArr.length() > 0) {
+                val rec = saArr.getJSONObject(0)
+                val em = rec.optString("email").trim()
+                if (em.isNotBlank() && em.contains("@")) {
+                    return@withContext Pair(em, null)
+                }
+            }
+
             val (sOk, sArr) = SupabaseClient.queryTable("students?mobile=eq.$digitsOnly&select=email,libraryId,id,fullName,studentCode")
             if (sOk && sArr != null && sArr.length() > 0) {
                 val rec = sArr.getJSONObject(0)

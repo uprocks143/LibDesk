@@ -45,7 +45,7 @@ class BackupViewModel(application: Application) : AndroidViewModel(application) 
     private val _lastBackupSizeBytes = MutableStateFlow(prefs.getLong("last_backup_size_bytes", 245760L))
     val lastBackupSizeBytes = _lastBackupSizeBytes.asStateFlow()
 
-    private val _googleAccountEmail = MutableStateFlow(prefs.getString("gdrive_account_email", "smtsharma282.sks@gmail.com") ?: "smtsharma282.sks@gmail.com")
+    private val _googleAccountEmail = MutableStateFlow(prefs.getString("gdrive_account_email", "") ?: "")
     val googleAccountEmail = _googleAccountEmail.asStateFlow()
 
     private val _backupFrequency = MutableStateFlow(prefs.getString("gdrive_backup_frequency", "Only when I tap \"Back up\"") ?: "Only when I tap \"Back up\"")

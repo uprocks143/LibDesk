@@ -1262,7 +1262,7 @@ fun ManualAttendanceDialog(
                 OutlinedTextField(
                     value = notesText,
                     onValueChange = { notesText = it },
-                    label = { Text("Reason / Staff Notes") },
+                    label = { Text("Reason / Owner Notes") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp)

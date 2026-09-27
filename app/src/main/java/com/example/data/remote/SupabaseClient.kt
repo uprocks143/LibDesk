@@ -299,7 +299,9 @@ DROP TABLE IF EXISTS public.sections CASCADE;
 DROP TABLE IF EXISTS public.cabins CASCADE;
 DROP TABLE IF EXISTS public.halls CASCADE;
 DROP TABLE IF EXISTS public.library_subscriptions CASCADE;
+DROP TABLE IF EXISTS public.user_subscriptions CASCADE;
 DROP TABLE IF EXISTS public.saas_plans CASCADE;
+DROP TABLE IF EXISTS public.subscription_plans CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
 DROP TABLE IF EXISTS public.super_admin_users CASCADE;
 DROP TABLE IF EXISTS public.libraries CASCADE;
@@ -464,6 +466,8 @@ CREATE TABLE public.membership_plans (
     "libraryId" TEXT NOT NULL,
     name TEXT NOT NULL,
     "durationMonths" INT DEFAULT 1,
+    "durationDays" INT DEFAULT 30,
+    "durationType" TEXT DEFAULT 'MONTHS',
     "baseFee" DOUBLE PRECISION DEFAULT 1000.0,
     "maintenanceFee" DOUBLE PRECISION DEFAULT 100.0,
     "securityDeposit" DOUBLE PRECISION DEFAULT 500.0,
@@ -550,6 +554,8 @@ CREATE TABLE public.payments (
     purpose TEXT DEFAULT 'MEMBERSHIP_FEE',
     "referenceNumber" TEXT DEFAULT '',
     notes TEXT DEFAULT '',
+    remarks TEXT DEFAULT '',
+    period TEXT DEFAULT '',
     "dueBalance" DOUBLE PRECISION DEFAULT 0.0,
     "createdAt" BIGINT DEFAULT 0
 );
@@ -648,6 +654,7 @@ CREATE TABLE public.notices (
     priority TEXT DEFAULT 'NORMAL',
     date TEXT NOT NULL,
     "targetAudience" TEXT DEFAULT 'ALL',
+    "senderName" TEXT DEFAULT 'LibDesk Admin',
     "isActive" BOOLEAN DEFAULT TRUE
 );
 
@@ -680,6 +687,26 @@ CREATE TABLE public.audit_logs (
 );
 
 -- SaaS Plans & Subscriptions
+CREATE TABLE public.subscription_plans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    price DOUBLE PRECISION NOT NULL,
+    "durationMonths" INT DEFAULT 1,
+    "durationDays" INT DEFAULT 30,
+    "durationType" TEXT DEFAULT 'MONTHS',
+    "maxSeats" INT DEFAULT 100,
+    features TEXT DEFAULT '',
+    badge TEXT DEFAULT '',
+    "discountPercentage" DOUBLE PRECISION DEFAULT 0.0,
+    "upiId" TEXT DEFAULT '',
+    "upiPayeeName" TEXT DEFAULT '',
+    "supportWhatsApp" TEXT DEFAULT '',
+    "isActive" BOOLEAN DEFAULT TRUE,
+    "displayOrder" INT DEFAULT 0,
+    "createdAt" BIGINT DEFAULT 0
+);
+
 CREATE TABLE public.saas_plans (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -700,11 +727,37 @@ CREATE TABLE public.library_subscriptions (
     status TEXT DEFAULT 'ACTIVE',
     "startDate" TEXT DEFAULT '',
     "expiryDate" TEXT DEFAULT '',
+    "durationDays" INT DEFAULT 30,
+    "durationUnit" TEXT DEFAULT 'MONTHS',
     price DOUBLE PRECISION NOT NULL,
     discount DOUBLE PRECISION DEFAULT 0.0,
     "maxSeats" INT DEFAULT 100,
     "autoRenew" BOOLEAN DEFAULT TRUE,
     notes TEXT DEFAULT '',
+    "updatedAt" BIGINT DEFAULT 0
+);
+
+CREATE TABLE public.user_subscriptions (
+    id TEXT PRIMARY KEY,
+    "libraryId" TEXT NOT NULL,
+    "userId" TEXT DEFAULT '',
+    "ownerName" TEXT DEFAULT '',
+    "ownerMobile" TEXT DEFAULT '',
+    "ownerEmail" TEXT DEFAULT '',
+    "libraryName" TEXT DEFAULT '',
+    "planId" TEXT NOT NULL,
+    "planName" TEXT NOT NULL,
+    "amountPaid" DOUBLE PRECISION NOT NULL,
+    "billingCycle" TEXT DEFAULT 'MONTHLY',
+    status TEXT DEFAULT 'ACTIVE',
+    "startDate" TEXT DEFAULT '',
+    "expiryDate" TEXT DEFAULT '',
+    "paymentMethod" TEXT DEFAULT 'UPI_MANUAL',
+    "paymentReferenceId" TEXT DEFAULT '',
+    "receiptImageUrl" TEXT DEFAULT '',
+    "isVerifiedByAdmin" BOOLEAN DEFAULT FALSE,
+    notes TEXT DEFAULT '',
+    "createdAt" BIGINT DEFAULT 0,
     "updatedAt" BIGINT DEFAULT 0
 );
 
@@ -718,6 +771,8 @@ CREATE TABLE public.super_admin_users (
     "accessCode" TEXT DEFAULT 'ADMIN99',
     "is2FaEnabled" BOOLEAN DEFAULT TRUE,
     "isClaimed" BOOLEAN DEFAULT FALSE,
+    "upiId" TEXT DEFAULT '',
+    "upiPayeeName" TEXT DEFAULT '',
     "createdAt" BIGINT DEFAULT 0
 );
 
@@ -757,7 +812,9 @@ ALTER TABLE public.notices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feedback_complaints ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.saas_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subscription_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.library_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.super_admin_users ENABLE ROW LEVEL SECURITY;
 
 -- Allow authenticated users and app anon key with access policies
@@ -782,7 +839,9 @@ CREATE POLICY "Allow anon all notices" ON public.notices FOR ALL USING (true) WI
 CREATE POLICY "Allow anon all feedback_complaints" ON public.feedback_complaints FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon all audit_logs" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon all saas_plans" ON public.saas_plans FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow anon all subscription_plans" ON public.subscription_plans FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon all library_subscriptions" ON public.library_subscriptions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow anon all user_subscriptions" ON public.user_subscriptions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow anon all super_admin_users" ON public.super_admin_users FOR ALL USING (true) WITH CHECK (true);
 
 -- Auto-elevation trigger: Sets app_metadata.role from user_metadata upon signup

@@ -16,8 +16,8 @@ data class SubscriptionPlans(
     val features: String = "", // Comma or newline-separated feature items
     val badge: String = "", // e.g. "MOST POPULAR", "BEST VALUE", "STARTER"
     val discountPercentage: Double = 0.0,
-    val upiId: String = "libdesk.billing@upi",
-    val upiPayeeName: String = "LibDesk Subscriptions",
+    val upiId: String = "",
+    val upiPayeeName: String = "",
     val supportWhatsApp: String = "",
     val isActive: Boolean = true,
     val displayOrder: Int = 0,

@@ -246,7 +246,7 @@ fun ManagerSettingsScreen(
 
                     SettingInfoRow(icon = Icons.Default.Person, label = "Owner / Incharge", value = library?.ownerName ?: "Library Manager")
                     SettingInfoRow(icon = Icons.Default.Phone, label = "Contact Phone", value = library?.ownerPhone ?: "")
-                    SettingInfoRow(icon = Icons.Default.Email, label = "Email", value = library?.ownerEmail ?: "admin@libdesk.cloud")
+                    SettingInfoRow(icon = Icons.Default.Email, label = "Email", value = library?.ownerEmail?.ifBlank { "Not configured" } ?: "Not configured")
                     val addressDisplay = listOfNotNull(library?.address?.takeIf { it.isNotBlank() }, library?.city?.takeIf { it.isNotBlank() }, library?.state?.takeIf { it.isNotBlank() }).joinToString(", ")
                     SettingInfoRow(icon = Icons.Default.LocationOn, label = "Address", value = addressDisplay.ifBlank { "Not set" })
                     val hasGeo = (library?.latitude ?: 0.0) != 0.0 && (library?.longitude ?: 0.0) != 0.0

@@ -46,7 +46,7 @@ object LibDeskRoles {
 fun normalizeUserRole(role: String?): String {
     return when (role?.trim()?.uppercase()) {
         "SUPER_ADMIN", "MASTER_ADMIN", "PLATFORM_ADMIN" -> LibDeskRoles.SUPER_ADMIN
-        "OWNER", "MANAGER", "ADMIN", "STAFF", "OPERATOR" -> LibDeskRoles.MANAGER
+        "OWNER", "MANAGER", "ADMIN" -> LibDeskRoles.MANAGER
         "STUDENT", "MEMBER", "USER" -> LibDeskRoles.STUDENT
         else -> LibDeskRoles.STUDENT
     }

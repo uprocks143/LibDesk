@@ -346,7 +346,7 @@ fun SeatCheckInScannerModal(
                                     color = LibDeskColors.successSoft
                                 ) {
                                     Text(
-                                        text = "STAFF DESK",
+                                        text = "LIBRARY DESK",
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = LibDeskColors.success,

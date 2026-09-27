@@ -90,7 +90,7 @@ fun BackupSettingsScreen(
     onUploadToGoogleDrive: (String, String, (Boolean, String) -> Unit) -> Unit = { _, _, _ -> },
     onRestoreFromGoogleDrive: (String, String, String, (Boolean, String) -> Unit) -> Unit = { _, _, _, _ -> },
     onRefreshDriveFiles: (String) -> Unit = {},
-    googleAccountEmail: String = "smtsharma282.sks@gmail.com",
+    googleAccountEmail: String = "",
     onSetGoogleAccountEmail: (String) -> Unit = {},
     backupFrequency: String = "Only when I tap \"Back up\"",
     onSetBackupFrequency: (String) -> Unit = {},

@@ -867,20 +867,19 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
-            // 1. Super Admin authentication branch
-            if (role.equals("SUPER_ADMIN", ignoreCase = true)) {
-                val adminProfile = repository.getSuperAdmin().firstOrNull()
+            val adminProfile = repository.getSuperAdmin().firstOrNull()
+            val isMatchingAdminCredentials = adminProfile != null && adminProfile.isClaimed &&
+                    (trimmedIdentifier.equals(adminProfile.email, ignoreCase = true) ||
+                            (adminProfile.mobile.isNotBlank() && trimmedIdentifier == adminProfile.mobile))
 
+            // 1. Super Admin authentication branch
+            if (role.equals("SUPER_ADMIN", ignoreCase = true) || isMatchingAdminCredentials) {
                 if (adminProfile == null || !adminProfile.isClaimed) {
                     onError("SaaS Admin account has not been claimed or created yet. Please register the SaaS Admin account first.")
                     return@launch
                 }
 
-                // Verify that identifier matches the registered super admin's email or mobile
-                val isMatchingAdmin = trimmedIdentifier.equals(adminProfile.email, ignoreCase = true) ||
-                        (adminProfile.mobile.isNotBlank() && trimmedIdentifier == adminProfile.mobile)
-
-                if (!isMatchingAdmin) {
+                if (!isMatchingAdminCredentials) {
                     onError("The entered credentials do not match the registered SaaS Super Admin.")
                     return@launch
                 }
@@ -2590,8 +2589,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     ) {
         viewModelScope.launch {
             val current = superAdminProfile.value
-            val effectiveUpiId = if (upiId.isNotBlank()) upiId.trim() else current?.upiId ?: "libdesk.billing@upi"
-            val effectivePayee = if (upiPayeeName.isNotBlank()) upiPayeeName.trim() else current?.upiPayeeName ?: (if (name.isNotBlank()) name.trim() else "LibDesk Subscriptions")
+            val effectiveUpiId = if (upiId.isNotBlank()) upiId.trim() else current?.upiId ?: ""
+            val effectivePayee = if (upiPayeeName.isNotBlank()) upiPayeeName.trim() else current?.upiPayeeName ?: (if (name.isNotBlank()) name.trim() else "")
             val effectiveMobile = if (mobile.isNotBlank()) mobile.trim() else current?.mobile ?: ""
             
             val updated = SuperAdminUserEntity(

@@ -727,19 +727,83 @@ private fun PlanEditDialog(
     }
     var price by remember { mutableStateOf(plan?.price?.toString() ?: "") }
     var maxSeats by remember { mutableStateOf(plan?.maxSeats?.toString() ?: "50") }
-    var features by remember { mutableStateOf(plan?.features ?: "") }
     var badge by remember { mutableStateOf(plan?.badge ?: "") }
     var isActive by remember { mutableStateOf(plan?.isActive ?: true) }
 
+    // Core Modular App Features
+    val standardAppFeatures = remember {
+        listOf(
+            "Smart Gate QR Attendance" to "QR code check-in & gate security logs",
+            "Live Seat Allocation & Grid" to "Seat matrix layout and real-time status",
+            "Fee Ledger & Digital Receipts" to "Invoicing, fees collection & payment slips",
+            "WhatsApp & SMS Alerts" to "Automatic dues & membership reminders",
+            "Student Portal & Digital Pass" to "Self-service student app & digital ID",
+            "Expense & Financial Reports" to "Monthly P&L, expenses & revenue graphs",
+            "E-Library & Study Materials" to "NCERT books and digital PDF notes",
+            "Multi-Shift Management" to "Morning, Evening, Night & Full day shifts",
+            "Custom Branding & Dynamic QR" to "Library logo and custom QR desk stickers",
+            "Excel & PDF Data Export" to "Full export of student & ledger data",
+            "24x7 Priority Support" to "Direct helpline & ticket resolution"
+        )
+    }
+
+    // Initialize enabled state for each feature from plan.features
+    val selectedFeatures = remember {
+        val currentFeaturesText = plan?.features ?: ""
+        mutableStateMapOf<String, Boolean>().apply {
+            standardAppFeatures.forEach { (featName, _) ->
+                if (plan == null) {
+                    // Default features for new plan
+                    put(featName, true)
+                } else {
+                    // Check if present in features text
+                    val isPresent = currentFeaturesText.contains(featName, ignoreCase = true) ||
+                            (featName.contains("QR", ignoreCase = true) && currentFeaturesText.contains("QR", ignoreCase = true)) ||
+                            (featName.contains("Seat", ignoreCase = true) && currentFeaturesText.contains("Seat", ignoreCase = true)) ||
+                            (featName.contains("Fee", ignoreCase = true) && currentFeaturesText.contains("Fee", ignoreCase = true)) ||
+                            (featName.contains("WhatsApp", ignoreCase = true) && currentFeaturesText.contains("WhatsApp", ignoreCase = true)) ||
+                            (featName.contains("Student", ignoreCase = true) && currentFeaturesText.contains("Student", ignoreCase = true)) ||
+                            (featName.contains("Expense", ignoreCase = true) && currentFeaturesText.contains("Expense", ignoreCase = true)) ||
+                            (featName.contains("E-Library", ignoreCase = true) && currentFeaturesText.contains("Book", ignoreCase = true)) ||
+                            (featName.contains("Shift", ignoreCase = true) && currentFeaturesText.contains("Shift", ignoreCase = true)) ||
+                            (featName.contains("Export", ignoreCase = true) && currentFeaturesText.contains("Export", ignoreCase = true))
+                    put(featName, isPresent)
+                }
+            }
+        }
+    }
+
+    var customExtraFeatures by remember {
+        mutableStateOf(
+            if (plan == null) ""
+            else {
+                val lines = plan.features.split("\n", ",").map { it.trim() }.filter { it.isNotBlank() }
+                val customLines = lines.filter { line ->
+                    standardAppFeatures.none { (feat, _) -> line.contains(feat, ignoreCase = true) || feat.contains(line, ignoreCase = true) }
+                }
+                customLines.joinToString("\n")
+            }
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (plan == null) "New SaaS Plan" else "Edit Plan") },
+        title = { Text(if (plan == null) "New SaaS Subscription Plan" else "Edit Subscription Plan") },
         text = {
             Column(
-                modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Plan name *") },
+                    placeholder = { Text("e.g. Standard Growth Pack") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -751,7 +815,7 @@ private fun PlanEditDialog(
                             durationUnit = "MONTHS"
                             if (duration == "15" || duration == "30") duration = "1"
                         },
-                        label = { Text("Months") },
+                        label = { Text("Billing: Months") },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
@@ -760,37 +824,138 @@ private fun PlanEditDialog(
                             durationUnit = "DAYS"
                             if (duration == "1") duration = "15"
                         },
-                        label = { Text("Days") },
+                        label = { Text("Billing: Days") },
                         modifier = Modifier.weight(1f)
                     )
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        value = duration, onValueChange = { duration = it.filter { c -> c.isDigit() } },
-                        label = { Text(if (durationUnit == "DAYS") "Duration (days)" else "Duration (months)") },
+                        value = duration,
+                        onValueChange = { duration = it.filter { c -> c.isDigit() } },
+                        label = { Text(if (durationUnit == "DAYS") "Duration (days) *" else "Duration (months) *") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f), singleLine = true
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
                     )
                     OutlinedTextField(
-                        value = price, onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
-                        label = { Text("Price (₹)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f), singleLine = true
+                        value = price,
+                        onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text("Price (₹) *") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
                     )
                 }
+
                 OutlinedTextField(
-                    value = maxSeats, onValueChange = { maxSeats = it.filter { c -> c.isDigit() } },
-                    label = { Text("Max seats") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                    value = maxSeats,
+                    onValueChange = { maxSeats = it.filter { c -> c.isDigit() } },
+                    label = { Text("Max seats allowed *") },
+                    placeholder = { Text("e.g. 100 or 9999 for unlimited") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
+
                 OutlinedTextField(
-                    value = features, onValueChange = { features = it }, label = { Text("Features (shown to library owners)") },
-                    modifier = Modifier.fillMaxWidth(), minLines = 2
+                    value = badge,
+                    onValueChange = { badge = it },
+                    label = { Text("Badge Label (Optional)") },
+                    placeholder = { Text("e.g. Most Popular, 15% OFF") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(value = badge, onValueChange = { badge = it }, label = { Text("Badge (e.g. \"Most Popular\", optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Feature Selector Heading
+                Text(
+                    text = "Include App Features & Module Permissions:",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Toggle ON the features included in this plan. Only enabled modules will be shown to libraries on this plan.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Feature Checklist (Switches/Checkboxes)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    standardAppFeatures.forEach { (featureTitle, featureDesc) ->
+                        val isChecked = selectedFeatures[featureTitle] ?: false
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isChecked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isChecked) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedFeatures[featureTitle] = !isChecked
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { selectedFeatures[featureTitle] = it },
+                                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = featureTitle,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = if (isChecked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = featureDesc,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = if (isChecked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                ) {
+                                    Text(
+                                        text = if (isChecked) "ON" else "OFF",
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isChecked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = customExtraFeatures,
+                    onValueChange = { customExtraFeatures = it },
+                    label = { Text("Custom / Additional Features (optional)") },
+                    placeholder = { Text("e.g. Free Cloud Backup\nInstant Setup Assistance") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = isActive, onCheckedChange = { isActive = it })
-                    Text("Active (visible to libraries)")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Plan Active (visible to library owners in app)")
                 }
             }
         },
@@ -804,6 +969,23 @@ private fun PlanEditDialog(
                     } else {
                         Pair(durNum, durNum * 30)
                     }
+
+                    // Assemble features list from active toggles + custom lines
+                    val activeFeaturesList = mutableListOf<String>()
+                    standardAppFeatures.forEach { (featTitle, _) ->
+                        if (selectedFeatures[featTitle] == true) {
+                            activeFeaturesList.add(featTitle)
+                        }
+                    }
+                    if (customExtraFeatures.isNotBlank()) {
+                        customExtraFeatures.split("\n", ",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
+                            if (!activeFeaturesList.contains(it)) {
+                                activeFeaturesList.add(it)
+                            }
+                        }
+                    }
+                    val finalFeaturesString = activeFeaturesList.joinToString("\n")
+
                     onSave(
                         SubscriptionPlans(
                             id = plan?.id ?: "PLAN-${System.currentTimeMillis()}",
@@ -813,15 +995,15 @@ private fun PlanEditDialog(
                             durationType = durationUnit,
                             price = price.toDoubleOrNull() ?: 0.0,
                             maxSeats = maxSeats.toIntOrNull() ?: 50,
-                            features = features.trim(),
+                            features = finalFeaturesString,
                             isActive = isActive,
                             badge = badge.trim(),
-                            upiId = plan?.upiId ?: "libdesk.billing@upi",
-                            upiPayeeName = plan?.upiPayeeName ?: "LibDesk Subscriptions"
+                            upiId = plan?.upiId ?: "",
+                            upiPayeeName = plan?.upiPayeeName ?: ""
                         )
                     )
                 }
-            ) { Text(if (plan == null) "Create" else "Save") }
+            ) { Text(if (plan == null) "Create Plan" else "Save Changes") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

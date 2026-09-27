@@ -207,7 +207,7 @@ fun ManagerNoticesAndFeedbackScreen(
             } else {
                 val adminPhone = superAdminProfile?.mobile?.takeIf { it.isNotBlank() }
                 val adminName = superAdminProfile?.name?.takeIf { it.isNotBlank() } ?: "LibDesk Platform Master"
-                val adminEmail = superAdminProfile?.email?.takeIf { it.isNotBlank() } ?: "support@libdesk.com"
+                val adminEmail = superAdminProfile?.email?.takeIf { it.isNotBlank() } ?: "Not configured"
 
                 Column(
                     modifier = Modifier

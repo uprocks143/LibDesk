@@ -176,7 +176,7 @@ class LibDeskRepository(val context: Context? = null) {
     suspend fun getUserSubscriptionDirect(libraryId: String): UserSubscription? = withContext(Dispatchers.IO) {
         _userSubscriptions.value.find { it.libraryId == libraryId }
             ?: run {
-                val (ok, arr) = SupabaseClient.queryTable("user_subscriptions?libraryId=eq.$libraryId&select=*")
+                val (ok, arr) = SupabaseClient.queryTable("user_subscriptions?or=(libraryId.eq.$libraryId,library_id.eq.$libraryId)&select=*")
                 if (ok && arr != null && arr.length() > 0) {
                     parseUserSubscription(arr.getJSONObject(0))
                 } else null
@@ -189,25 +189,43 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", sub.id)
                 put("libraryId", sub.libraryId)
+                put("library_id", sub.libraryId)
                 put("userId", sub.userId)
+                put("user_id", sub.userId)
                 put("ownerName", sub.ownerName)
+                put("owner_name", sub.ownerName)
                 put("ownerMobile", sub.ownerMobile)
+                put("owner_mobile", sub.ownerMobile)
                 put("ownerEmail", sub.ownerEmail)
+                put("owner_email", sub.ownerEmail)
                 put("libraryName", sub.libraryName)
+                put("library_name", sub.libraryName)
                 put("planId", sub.planId)
+                put("plan_id", sub.planId)
                 put("planName", sub.planName)
+                put("plan_name", sub.planName)
                 put("amountPaid", sub.amountPaid)
+                put("amount_paid", sub.amountPaid)
                 put("billingCycle", sub.billingCycle)
+                put("billing_cycle", sub.billingCycle)
                 put("status", sub.status)
                 put("startDate", sub.startDate)
+                put("start_date", sub.startDate)
                 put("expiryDate", sub.expiryDate)
+                put("expiry_date", sub.expiryDate)
                 put("paymentMethod", sub.paymentMethod)
+                put("payment_method", sub.paymentMethod)
                 put("paymentReferenceId", sub.paymentReferenceId)
+                put("payment_reference_id", sub.paymentReferenceId)
                 put("receiptImageUrl", sub.receiptImageUrl)
+                put("receipt_image_url", sub.receiptImageUrl)
                 put("isVerifiedByAdmin", sub.isVerifiedByAdmin)
+                put("is_verified_by_admin", sub.isVerifiedByAdmin)
                 put("notes", sub.notes)
                 put("createdAt", sub.createdAt)
+                put("created_at", sub.createdAt)
                 put("updatedAt", sub.updatedAt)
+                put("updated_at", sub.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("user_subscriptions", arr)
@@ -250,8 +268,8 @@ class LibDeskRepository(val context: Context? = null) {
                 features = "Up to 60 Dedicated Seats\nSmart Gate QR Code Attendance\nCash & UPI Fee Ledger\nReal-time Student Directory\nDigital Notice Board Broadcast\nInstant Setup in 2 Minutes",
                 badge = "Starter Pack",
                 discountPercentage = 0.0,
-                upiId = "libdesk.billing@upi",
-                upiPayeeName = "LibDesk Cloud Subscriptions",
+                upiId = "",
+                upiPayeeName = "",
                 supportWhatsApp = "",
                 isActive = true,
                 displayOrder = 1
@@ -266,8 +284,8 @@ class LibDeskRepository(val context: Context? = null) {
                 features = "Up to 160 Dedicated & Flexible Seats\n3 Shifts Support (Morning/Evening/Full Day)\nDirect WhatsApp Fee Slips & Reminders\nStudent Self-Service Portal Access\nDigital E-Book Catalog & Issues\nFull Daily P&L Expense Tracking\nCloud-Synchronized Multi-Tenant Security",
                 badge = "Most Popular",
                 discountPercentage = 15.0,
-                upiId = "libdesk.billing@upi",
-                upiPayeeName = "LibDesk Cloud Subscriptions",
+                upiId = "",
+                upiPayeeName = "",
                 supportWhatsApp = "",
                 isActive = true,
                 displayOrder = 2
@@ -282,8 +300,8 @@ class LibDeskRepository(val context: Context? = null) {
                 features = "Unlimited Seats & Multi-Halls\nCustom UPI QR Code for Member Fees\n2 Months Free on Annual Billing\nAutomated Cloud Sync & Backup\nPriority 24x7 WhatsApp VIP Support\nBiometric & RFID Turnstile Ready\nAdvanced Monthly Financial Reports",
                 badge = "Best Value (Save 35%)",
                 discountPercentage = 35.0,
-                upiId = "libdesk.billing@upi",
-                upiPayeeName = "LibDesk Cloud Subscriptions",
+                upiId = "",
+                upiPayeeName = "",
                 supportWhatsApp = "",
                 isActive = true,
                 displayOrder = 3
@@ -299,7 +317,7 @@ class LibDeskRepository(val context: Context? = null) {
     suspend fun getSubscriptionDirect(libraryId: String): LibrarySubscriptionEntity? = withContext(Dispatchers.IO) {
         _librarySubscriptions.value.find { it.libraryId == libraryId }
             ?: run {
-                val (ok, arr) = SupabaseClient.queryTable("library_subscriptions?libraryId=eq.$libraryId&select=*")
+                val (ok, arr) = SupabaseClient.queryTable("library_subscriptions?or=(libraryId.eq.$libraryId,library_id.eq.$libraryId)&select=*")
                 if (ok && arr != null && arr.length() > 0) {
                     parseLibrarySubscription(arr.getJSONObject(0))
                 } else null
@@ -326,6 +344,10 @@ class LibDeskRepository(val context: Context? = null) {
                     put("start_date", sub.startDate)
                     put("expiryDate", sub.expiryDate)
                     put("expiry_date", sub.expiryDate)
+                    put("durationDays", sub.durationDays)
+                    put("duration_days", sub.durationDays)
+                    put("durationUnit", sub.durationUnit)
+                    put("duration_unit", sub.durationUnit)
                     put("price", sub.price)
                     put("discount", sub.discount)
                     put("maxSeats", sub.maxSeats)
@@ -335,6 +357,8 @@ class LibDeskRepository(val context: Context? = null) {
                     put("notes", sub.notes)
                     put("subscriptionActive", isSubActive)
                     put("subscription_active", isSubActive)
+                    put("updatedAt", System.currentTimeMillis())
+                    put("updated_at", System.currentTimeMillis())
                 })
             }
             SupabaseClient.upsertRecords("library_subscriptions", subArray)
@@ -461,8 +485,8 @@ class LibDeskRepository(val context: Context? = null) {
                     email = obj.optString("email", email),
                     mobile = obj.optString("mobile", obj.optString("phone", "")),
                     accessCode = obj.optString("accessCode", ""),
-                    upiId = obj.optString("upiId", "libdesk.billing@upi"),
-                    upiPayeeName = obj.optString("upiPayeeName", "LibDesk Cloud Subscriptions")
+                    upiId = obj.optString("upiId", ""),
+                    upiPayeeName = obj.optString("upiPayeeName", "")
                 )
                 _superAdmin.value = admin
                 admin
@@ -915,22 +939,43 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", seat.id)
                 put("libraryId", seat.libraryId)
+                put("library_id", seat.libraryId)
                 put("seatNumber", seat.seatNumber)
+                put("seat_number", seat.seatNumber)
                 put("hallId", seat.hallId)
+                put("hall_id", seat.hallId)
                 put("hallName", seat.hallName)
+                put("hall_name", seat.hallName)
                 put("sectionId", seat.sectionId)
+                put("section_id", seat.sectionId)
                 put("sectionName", seat.sectionName)
+                put("section_name", seat.sectionName)
+                put("cabinId", seat.cabinId)
+                put("cabin_id", seat.cabinId)
+                put("cabinName", seat.cabinName)
+                put("cabin_name", seat.cabinName)
                 put("floor", seat.floor)
                 put("seatType", seat.seatType)
+                put("seat_type", seat.seatType)
                 put("monthlyFee", seat.monthlyFee)
+                put("monthly_fee", seat.monthlyFee)
                 put("status", seat.status)
                 put("assignedStudentId", seat.assignedStudentId)
+                put("assigned_student_id", seat.assignedStudentId)
                 put("assignedStudentName", seat.assignedStudentName)
+                put("assigned_student_name", seat.assignedStudentName)
                 put("assignedShiftId", seat.assignedShiftId)
+                put("assigned_shift_id", seat.assignedShiftId)
                 put("assignedShiftName", seat.assignedShiftName)
+                put("assigned_shift_name", seat.assignedShiftName)
                 put("validUntil", seat.validUntil)
+                put("valid_until", seat.validUntil)
                 put("gridRow", seat.gridRow)
+                put("grid_row", seat.gridRow)
                 put("gridCol", seat.gridCol)
+                put("grid_col", seat.gridCol)
+                put("floorZone", seat.floorZone)
+                put("floor_zone", seat.floorZone)
             })
         }
         SupabaseClient.upsertRecords("seats", arr)
@@ -984,14 +1029,22 @@ class LibDeskRepository(val context: Context? = null) {
             arr.put(JSONObject().apply {
                 put("id", s.id)
                 put("libraryId", s.libraryId)
+                put("library_id", s.libraryId)
                 put("seatNumber", s.seatNumber)
+                put("seat_number", s.seatNumber)
                 put("hallId", s.hallId)
+                put("hall_id", s.hallId)
                 put("hallName", s.hallName)
+                put("hall_name", s.hallName)
                 put("sectionId", s.sectionId)
+                put("section_id", s.sectionId)
                 put("sectionName", s.sectionName)
+                put("section_name", s.sectionName)
                 put("floor", s.floor)
                 put("seatType", s.seatType)
+                put("seat_type", s.seatType)
                 put("monthlyFee", s.monthlyFee)
+                put("monthly_fee", s.monthlyFee)
                 put("status", s.status)
             })
         }
@@ -1205,37 +1258,63 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", student.id)
                 put("libraryId", student.libraryId)
+                put("library_id", student.libraryId)
                 put("fullName", student.fullName)
+                put("full_name", student.fullName)
+                put("photoUrl", student.photoUrl)
+                put("photo_url", student.photoUrl)
                 put("studentCode", student.studentCode)
+                put("student_code", student.studentCode)
                 put("mobile", student.mobile)
+                put("phone", student.mobile)
                 put("email", student.email)
+                put("dob", student.dob)
                 put("gender", student.gender)
                 put("address", student.address)
                 put("parentName", student.parentName)
+                put("parent_name", student.parentName)
                 put("parentMobile", student.parentMobile)
+                put("parent_mobile", student.parentMobile)
                 put("courseClass", student.courseClass)
+                put("course_class", student.courseClass)
                 put("college", student.college)
                 put("targetExam", student.targetExam)
+                put("target_exam", student.targetExam)
                 put("category", student.category)
                 put("batch", student.batch)
                 put("planId", student.planId)
+                put("plan_id", student.planId)
                 put("planName", student.planName)
+                put("plan_name", student.planName)
                 put("shiftId", student.shiftId)
+                put("shift_id", student.shiftId)
                 put("shiftName", student.shiftName)
+                put("shift_name", student.shiftName)
                 put("seatId", student.seatId)
+                put("seat_id", student.seatId)
                 put("seatNumber", student.seatNumber)
+                put("seat_number", student.seatNumber)
                 put("hallName", student.hallName)
+                put("hall_name", student.hallName)
                 put("joiningDate", student.joiningDate)
+                put("joining_date", student.joiningDate)
                 put("expiryDate", student.expiryDate)
+                put("expiry_date", student.expiryDate)
                 put("totalFee", student.totalFee)
+                put("total_fee", student.totalFee)
                 put("discount", student.discount)
                 put("paidAmount", student.paidAmount)
+                put("paid_amount", student.paidAmount)
                 put("dueAmount", student.dueAmount)
+                put("due_amount", student.dueAmount)
                 put("status", student.status)
                 put("rfidQrCode", student.rfidQrCode)
+                put("rfid_qr_code", student.rfidQrCode)
                 put("emergencyContact", student.emergencyContact)
+                put("emergency_contact", student.emergencyContact)
                 put("password", student.password)
                 put("createdAt", student.createdAt)
+                put("created_at", student.createdAt)
             })
         }
         SupabaseClient.upsertRecords("students", arr)
@@ -1262,15 +1341,24 @@ class LibDeskRepository(val context: Context? = null) {
                 put(JSONObject().apply {
                     put("id", att.id)
                     put("libraryId", att.libraryId)
+                    put("library_id", att.libraryId)
                     put("studentId", att.studentId)
+                    put("student_id", att.studentId)
                     put("studentName", att.studentName)
+                    put("student_name", att.studentName)
                     put("seatNumber", att.seatNumber)
+                    put("seat_number", att.seatNumber)
                     put("hallName", att.hallName)
+                    put("hall_name", att.hallName)
                     put("shiftName", att.shiftName)
+                    put("shift_name", att.shiftName)
                     put("date", att.date)
                     put("checkInTime", att.checkInTime)
+                    put("check_in_time", att.checkInTime)
                     put("checkOutTime", att.checkOutTime)
+                    put("check_out_time", att.checkOutTime)
                     put("durationMinutes", att.durationMinutes)
+                    put("duration_minutes", att.durationMinutes)
                     put("status", att.status)
                     put("mode", att.mode)
                     put("notes", att.notes)
@@ -1500,8 +1588,11 @@ class LibDeskRepository(val context: Context? = null) {
                 put("author", book.author)
                 put("isbn", book.isbn)
                 put("category", book.category)
+                put("subject", book.subject)
                 put("publisher", book.publisher)
                 put("edition", book.edition)
+                put("accessionNumber", book.accessionNumber)
+                put("accession_number", book.accessionNumber)
                 put("totalCopies", book.totalCopies)
                 put("availableCopies", book.availableCopies)
                 put("issuedCopies", book.issuedCopies)
@@ -1547,6 +1638,37 @@ class LibDeskRepository(val context: Context? = null) {
         )
         _bookIssues.value = _bookIssues.value + issue
 
+        val issueArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", issue.id)
+                put("libraryId", issue.libraryId)
+                put("library_id", issue.libraryId)
+                put("bookId", issue.bookId)
+                put("book_id", issue.bookId)
+                put("bookTitle", issue.bookTitle)
+                put("book_title", issue.bookTitle)
+                put("studentId", issue.studentId)
+                put("student_id", issue.studentId)
+                put("studentName", issue.studentName)
+                put("student_name", issue.studentName)
+                put("studentMobile", issue.studentMobile)
+                put("student_mobile", issue.studentMobile)
+                put("issueDate", issue.issueDate)
+                put("issue_date", issue.issueDate)
+                put("dueDate", issue.dueDate)
+                put("due_date", issue.dueDate)
+                put("returnDate", issue.returnDate)
+                put("return_date", issue.returnDate)
+                put("fineAmount", issue.fineAmount)
+                put("fine_amount", issue.fineAmount)
+                put("finePaid", issue.finePaid)
+                put("fine_paid", issue.finePaid)
+                put("status", issue.status)
+                put("notes", issue.notes)
+            })
+        }
+        SupabaseClient.upsertRecords("book_issues", issueArr)
+
         val updatedBook = book.copy(
             availableCopies = book.availableCopies - 1,
             issuedCopies = book.issuedCopies + 1
@@ -1583,6 +1705,37 @@ class LibDeskRepository(val context: Context? = null) {
         )
         _bookIssues.value = _bookIssues.value.filter { it.id != issue.id } + updatedIssue
 
+        val issueArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", updatedIssue.id)
+                put("libraryId", updatedIssue.libraryId)
+                put("library_id", updatedIssue.libraryId)
+                put("bookId", updatedIssue.bookId)
+                put("book_id", updatedIssue.bookId)
+                put("bookTitle", updatedIssue.bookTitle)
+                put("book_title", updatedIssue.bookTitle)
+                put("studentId", updatedIssue.studentId)
+                put("student_id", updatedIssue.studentId)
+                put("studentName", updatedIssue.studentName)
+                put("student_name", updatedIssue.studentName)
+                put("studentMobile", updatedIssue.studentMobile)
+                put("student_mobile", updatedIssue.studentMobile)
+                put("issueDate", updatedIssue.issueDate)
+                put("issue_date", updatedIssue.issueDate)
+                put("dueDate", updatedIssue.dueDate)
+                put("due_date", updatedIssue.dueDate)
+                put("returnDate", updatedIssue.returnDate)
+                put("return_date", updatedIssue.returnDate)
+                put("fineAmount", updatedIssue.fineAmount)
+                put("fine_amount", updatedIssue.fineAmount)
+                put("finePaid", updatedIssue.finePaid)
+                put("fine_paid", updatedIssue.finePaid)
+                put("status", updatedIssue.status)
+                put("notes", updatedIssue.notes)
+            })
+        }
+        SupabaseClient.upsertRecords("book_issues", issueArr)
+
         if (fineAmount > 0) {
             val fine = FineEntity(
                 id = UUID.randomUUID().toString(),
@@ -1597,6 +1750,27 @@ class LibDeskRepository(val context: Context? = null) {
                 date = today
             )
             _fines.value = _fines.value + fine
+
+            val fineArr = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", fine.id)
+                    put("libraryId", fine.libraryId)
+                    put("library_id", fine.libraryId)
+                    put("studentId", fine.studentId)
+                    put("student_id", fine.studentId)
+                    put("studentName", fine.studentName)
+                    put("student_name", fine.studentName)
+                    put("bookId", fine.bookId)
+                    put("book_id", fine.bookId)
+                    put("bookTitle", fine.bookTitle)
+                    put("book_title", fine.bookTitle)
+                    put("reason", fine.reason)
+                    put("amount", fine.amount)
+                    put("paid", fine.paid)
+                    put("date", fine.date)
+                })
+            }
+            SupabaseClient.upsertRecords("fines", fineArr)
         }
 
         logAudit(libraryId, "Manager", "RETURN_BOOK", "BookIssue", issue.id, "Returned '${issue.bookTitle}'. Fine: ₹$fineAmount")
@@ -1612,11 +1786,28 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", material.id)
                 put("libraryId", material.libraryId)
+                put("library_id", material.libraryId)
                 put("title", material.title)
+                put("description", material.description)
                 put("category", material.category)
-                put("fileUrl", material.fileUrl)
+                put("subject", material.subject)
+                put("exam", material.exam)
                 put("fileType", material.fileType)
+                put("file_type", material.fileType)
+                put("fileSize", material.fileSize)
+                put("file_size", material.fileSize)
+                put("fileUrl", material.fileUrl)
+                put("file_url", material.fileUrl)
+                put("accessPolicy", material.accessPolicy)
+                put("access_policy", material.accessPolicy)
+                put("allowedGroup", material.allowedGroup)
+                put("allowed_group", material.allowedGroup)
+                put("downloadCount", material.downloadCount)
+                put("download_count", material.downloadCount)
+                put("uploadDate", material.uploadDate)
+                put("upload_date", material.uploadDate)
                 put("isBookmarked", material.isBookmarked)
+                put("is_bookmarked", material.isBookmarked)
             })
         }
         SupabaseClient.upsertRecords("digital_materials", arr)
@@ -1692,19 +1883,27 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", payment.id)
                 put("libraryId", payment.libraryId)
+                put("library_id", payment.libraryId)
                 put("receiptNumber", payment.receiptNumber)
+                put("receipt_number", payment.receiptNumber)
                 put("studentId", payment.studentId)
+                put("student_id", payment.studentId)
                 put("studentName", payment.studentName)
+                put("student_name", payment.studentName)
                 put("amount", payment.amount)
                 put("paymentMode", payment.paymentMode)
+                put("payment_mode", payment.paymentMode)
                 put("date", payment.date)
                 put("purpose", payment.purpose)
                 put("referenceNumber", payment.referenceNumber)
+                put("reference_number", payment.referenceNumber)
                 put("notes", payment.notes)
                 put("remarks", payment.remarks)
                 put("period", payment.period)
                 put("dueBalance", payment.dueBalance)
+                put("due_balance", payment.dueBalance)
                 put("createdAt", payment.createdAt)
+                put("created_at", payment.createdAt)
             })
         }
         SupabaseClient.upsertRecords("payments", arr)
@@ -1772,6 +1971,34 @@ class LibDeskRepository(val context: Context? = null) {
 
     suspend fun updatePayment(payment: PaymentEntity) = withContext(Dispatchers.IO) {
         _payments.value = _payments.value.filter { it.id != payment.id } + payment
+        val arr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", payment.id)
+                put("libraryId", payment.libraryId)
+                put("library_id", payment.libraryId)
+                put("receiptNumber", payment.receiptNumber)
+                put("receipt_number", payment.receiptNumber)
+                put("studentId", payment.studentId)
+                put("student_id", payment.studentId)
+                put("studentName", payment.studentName)
+                put("student_name", payment.studentName)
+                put("amount", payment.amount)
+                put("paymentMode", payment.paymentMode)
+                put("payment_mode", payment.paymentMode)
+                put("date", payment.date)
+                put("purpose", payment.purpose)
+                put("referenceNumber", payment.referenceNumber)
+                put("reference_number", payment.referenceNumber)
+                put("notes", payment.notes)
+                put("remarks", payment.remarks)
+                put("period", payment.period)
+                put("dueBalance", payment.dueBalance)
+                put("due_balance", payment.dueBalance)
+                put("createdAt", payment.createdAt)
+                put("created_at", payment.createdAt)
+            })
+        }
+        SupabaseClient.upsertRecords("payments", arr)
         logAudit(payment.libraryId, "Manager", "UPDATE_PAYMENT", "Payment", payment.id, "Updated payment receipt #${payment.receiptNumber}: ₹${payment.amount}")
     }
 
@@ -1790,6 +2017,26 @@ class LibDeskRepository(val context: Context? = null) {
     suspend fun markFinePaid(fine: FineEntity) = withContext(Dispatchers.IO) {
         val updated = fine.copy(paid = true)
         _fines.value = _fines.value.filter { it.id != fine.id } + updated
+        val fineArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", updated.id)
+                put("libraryId", updated.libraryId)
+                put("library_id", updated.libraryId)
+                put("studentId", updated.studentId)
+                put("student_id", updated.studentId)
+                put("studentName", updated.studentName)
+                put("student_name", updated.studentName)
+                put("bookId", updated.bookId)
+                put("book_id", updated.bookId)
+                put("bookTitle", updated.bookTitle)
+                put("book_title", updated.bookTitle)
+                put("reason", updated.reason)
+                put("amount", updated.amount)
+                put("paid", updated.paid)
+                put("date", updated.date)
+            })
+        }
+        SupabaseClient.upsertRecords("fines", fineArr)
     }
 
     // ==========================================
@@ -1817,6 +2064,8 @@ class LibDeskRepository(val context: Context? = null) {
                 put("priority", notice.priority)
                 put("date", notice.date)
                 put("targetAudience", notice.targetAudience)
+                put("senderName", notice.senderName)
+                put("sender_name", notice.senderName)
                 put("isActive", notice.isActive)
             })
         }
@@ -1978,8 +2227,8 @@ class LibDeskRepository(val context: Context? = null) {
                     email = optStringAny(obj, "email", fallback = ""),
                     mobile = optStringAny(obj, "mobile", "phone", "support_whatsapp", "supportWhatsApp", fallback = ""),
                     accessCode = optStringAny(obj, "accessCode", "access_code", fallback = ""),
-                    upiId = optStringAny(obj, "upiId", "upi_id", fallback = "libdesk.billing@upi"),
-                    upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = "LibDesk Cloud Subscriptions"),
+                    upiId = optStringAny(obj, "upiId", "upi_id", fallback = ""),
+                    upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = ""),
                     is2FaEnabled = optBooleanAny(obj, "is2FaEnabled", "is_2fa_enabled", fallback = true),
                     isClaimed = optBooleanAny(obj, "isClaimed", "is_claimed", fallback = optStringAny(obj, "email").isNotBlank())
                 )
@@ -2396,8 +2645,10 @@ class LibDeskRepository(val context: Context? = null) {
             libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
             studentCode = optStringAny(obj, "studentCode", "student_code", fallback = "STU-001"),
             fullName = optStringAny(obj, "fullName", "full_name", "name", fallback = "Unknown"),
+            photoUrl = optStringAny(obj, "photoUrl", "photo_url", fallback = ""),
             mobile = optStringAny(obj, "mobile", "phone", fallback = ""),
             email = optStringAny(obj, "email", fallback = ""),
+            dob = optStringAny(obj, "dob", fallback = ""),
             gender = optStringAny(obj, "gender", fallback = "Other"),
             address = optStringAny(obj, "address", fallback = ""),
             parentName = optStringAny(obj, "parentName", "parent_name", "guardian_name", fallback = ""),
@@ -2437,6 +2688,8 @@ class LibDeskRepository(val context: Context? = null) {
             hallName = optStringAny(obj, "hallName", "hall_name", fallback = ""),
             sectionId = optStringAny(obj, "sectionId", "section_id", fallback = ""),
             sectionName = optStringAny(obj, "sectionName", "section_name", fallback = ""),
+            cabinId = optStringAny(obj, "cabinId", "cabin_id", fallback = ""),
+            cabinName = optStringAny(obj, "cabinName", "cabin_name", fallback = ""),
             floor = optStringAny(obj, "floor", fallback = "Ground Floor"),
             seatType = optStringAny(obj, "seatType", "seat_type", fallback = "Standard"),
             monthlyFee = optDoubleAny(obj, "monthlyFee", "monthly_fee", fallback = 1000.0),
@@ -2447,7 +2700,8 @@ class LibDeskRepository(val context: Context? = null) {
             assignedShiftName = optStringAny(obj, "assignedShiftName", "assigned_shift_name", fallback = ""),
             validUntil = optStringAny(obj, "validUntil", "valid_until", fallback = ""),
             gridRow = optIntAny(obj, "gridRow", "grid_row", fallback = 1),
-            gridCol = optIntAny(obj, "gridCol", "grid_col", fallback = 1)
+            gridCol = optIntAny(obj, "gridCol", "grid_col", fallback = 1),
+            floorZone = optStringAny(obj, "floorZone", "floor_zone", fallback = "General Study Zone")
         )
     }
 
@@ -2461,6 +2715,7 @@ class LibDeskRepository(val context: Context? = null) {
             priority = optStringAny(obj, "priority", fallback = "NORMAL"),
             date = optStringAny(obj, "date", fallback = ""),
             targetAudience = optStringAny(obj, "targetAudience", "target_audience", fallback = "ALL"),
+            senderName = optStringAny(obj, "senderName", "sender_name", fallback = "LibDesk Admin"),
             isActive = optBooleanAny(obj, "isActive", "is_active", fallback = true)
         )
     }
@@ -2515,6 +2770,8 @@ class LibDeskRepository(val context: Context? = null) {
             status = optStringAny(obj, "status", fallback = "ACTIVE"),
             startDate = optStringAny(obj, "startDate", "start_date", fallback = ""),
             expiryDate = optStringAny(obj, "expiryDate", "expiry_date", fallback = ""),
+            durationDays = optIntAny(obj, "durationDays", "duration_days", fallback = 30),
+            durationUnit = optStringAny(obj, "durationUnit", "duration_unit", fallback = "MONTHS"),
             price = optDoubleAny(obj, "price", fallback = 0.0),
             discount = optDoubleAny(obj, "discount", fallback = 0.0),
             maxSeats = optIntAny(obj, "maxSeats", "max_seats", fallback = 100),
@@ -2698,8 +2955,8 @@ class LibDeskRepository(val context: Context? = null) {
             features = optStringAny(obj, "features", fallback = ""),
             badge = optStringAny(obj, "badge", fallback = ""),
             discountPercentage = optDoubleAny(obj, "discountPercentage", "discount_percentage", fallback = 0.0),
-            upiId = optStringAny(obj, "upiId", "upi_id", fallback = "libdesk.billing@upi"),
-            upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = "LibDesk Cloud Subscriptions"),
+            upiId = optStringAny(obj, "upiId", "upi_id", fallback = ""),
+            upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = ""),
             supportWhatsApp = optStringAny(obj, "supportWhatsApp", "support_whatsapp", fallback = ""),
             isActive = optBooleanAny(obj, "isActive", "is_active", fallback = true),
             displayOrder = optIntAny(obj, "displayOrder", "display_order", fallback = 1),

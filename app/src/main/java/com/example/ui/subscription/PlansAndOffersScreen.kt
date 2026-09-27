@@ -734,8 +734,8 @@ private fun ManualUpiPaymentDialog(
 ) {
     val context = LocalContext.current
     val payableAmount = calculateCyclePrice(plan, billingCycle)
-    val upiId = superAdminUpiId?.ifBlank { null } ?: plan.upiId.ifBlank { "libdesk.billing@upi" }
-    val payeeName = superAdminPayeeName?.ifBlank { null } ?: plan.upiPayeeName.ifBlank { "LibDesk Subscriptions" }
+    val upiId = superAdminUpiId?.ifBlank { null } ?: plan.upiId.ifBlank { "" }
+    val payeeName = superAdminPayeeName?.ifBlank { null } ?: plan.upiPayeeName.ifBlank { "" }
 
     // Standard NPCI UPI URI
     val upiDeepLink = remember(plan, billingCycle, payableAmount) {

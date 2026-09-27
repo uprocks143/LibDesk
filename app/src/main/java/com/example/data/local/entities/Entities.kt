@@ -394,8 +394,8 @@ data class SuperAdminUserEntity(
     val accessCode: String = "",
     val is2FaEnabled: Boolean = true,
     val isClaimed: Boolean = false, 
-    val upiId: String = "libdesk.billing@upi",
-    val upiPayeeName: String = "LibDesk Subscriptions",
+    val upiId: String = "",
+    val upiPayeeName: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
