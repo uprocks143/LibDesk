@@ -123,7 +123,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_material_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- 7. Indexes for High Performance
 CREATE INDEX IF NOT EXISTS idx_study_materials_org_cat ON public.study_materials(org_id, category);

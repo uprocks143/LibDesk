@@ -767,13 +767,16 @@ CREATE TABLE public.super_admin_users (
     email TEXT NOT NULL,
     name TEXT NOT NULL,
     mobile TEXT DEFAULT '',
+    phone TEXT DEFAULT '',
     role TEXT DEFAULT 'SUPER_ADMIN',
     "accessCode" TEXT DEFAULT 'ADMIN99',
     "is2FaEnabled" BOOLEAN DEFAULT TRUE,
     "isClaimed" BOOLEAN DEFAULT FALSE,
     "upiId" TEXT DEFAULT '',
     "upiPayeeName" TEXT DEFAULT '',
-    "createdAt" BIGINT DEFAULT 0
+    "supportWhatsApp" TEXT DEFAULT '',
+    "createdAt" BIGINT DEFAULT 0,
+    "updatedAt" BIGINT DEFAULT 0
 );
 
 -- =========================================================================
@@ -781,14 +784,14 @@ CREATE TABLE public.super_admin_users (
 -- =========================================================================
 
 -- Helper function to extract user role securely from JWT app_metadata
-CREATE OR REPLACE FUNCTION auth.get_app_role()
+CREATE OR REPLACE FUNCTION public.get_app_role()
 RETURNS TEXT AS $$
   SELECT COALESCE(
     (auth.jwt() -> 'app_metadata' ->> 'role'),
     (auth.jwt() ->> 'role'),
     'ANON'
   );
-$$ LANGUAGE sql STABLE;
+$$ LANGUAGE sql STABLE SET search_path = public, pg_temp;
 
 -- Enable RLS across all tables
 ALTER TABLE public.libraries ENABLE ROW LEVEL SECURITY;
@@ -854,8 +857,10 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->'role', '"STUDENT"'::jsonb)
   );
   RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 CREATE TRIGGER on_auth_user_created
   BEFORE INSERT ON auth.users

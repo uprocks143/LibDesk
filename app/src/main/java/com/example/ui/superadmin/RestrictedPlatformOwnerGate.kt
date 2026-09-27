@@ -79,12 +79,6 @@ fun RestrictedPlatformOwnerGate(
     val isClaimed = superAdminProfile?.isClaimed == true
     var isClaimMode by rememberSaveable { mutableStateOf(!isClaimed) }
 
-    LaunchedEffect(isClaimed) {
-        if (isClaimed) {
-            isClaimMode = false
-        }
-    }
-
     // If unlocked or already SUPER_ADMIN, show SuperAdminScreen directly
     if (isUnlocked || currentRole == "SUPER_ADMIN") {
         SuperAdminScreen(
@@ -499,100 +493,161 @@ fun RestrictedPlatformOwnerGate(
                         }
                     } else {
                         // Claim Platform Owner Slot: Setup Form
-                        Text(
-                            text = "Set Up Platform Owner Account",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Register as the primary SaaS owner to secure master administrative rights for this platform.",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        OutlinedTextField(
-                            value = claimName,
-                            onValueChange = { claimName = it },
-                            label = { Text("Owner Full Name") },
-                            placeholder = { Text("e.g. Platform Administrator") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = claimEmail,
-                            onValueChange = { claimEmail = it },
-                            label = { Text("Owner Official Email") },
-                            placeholder = { Text("e.g. owner@example.com") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = claimMobile,
-                            onValueChange = { claimMobile = it },
-                            label = { Text("Mobile Number") },
-                            placeholder = { Text("+91 98765 43210") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = claimPin,
-                            onValueChange = { claimPin = it },
-                            label = { Text("Password (at least 6 characters)") },
-                            placeholder = { Text("Enter secure password") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            visualTransformation = PasswordVisualTransformation(),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (errorMessage != null) {
-                            Text(
-                                text = errorMessage ?: "",
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                if (claimEmail.isBlank() || claimPin.length < 6) {
-                                    errorMessage = "Please enter official email and a password with at least 6 characters"
-                                    return@Button
-                                }
-                                isLoading = true
-                                viewModel.claimSuperAdminSlot(
-                                    name = claimName.ifBlank { "Platform Owner" },
-                                    email = claimEmail.trim(),
-                                    mobile = claimMobile.trim(),
-                                    accessCode = claimPin.trim(),
-                                    is2Fa = false,
-                                    onSuccess = {
-                                        isLoading = false
-                                        isUnlocked = true
-                                    },
-                                    onError = { err ->
-                                        isLoading = false
-                                        errorMessage = err
+                        if (isClaimed) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(26.dp)
+                                        )
                                     }
+                                    Text(
+                                        text = "Platform Owner Slot Claimed & Secured",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = "The master SaaS platform owner account is registered to ${superAdminProfile?.email?.let { com.example.util.EmailOtpService.maskEmail(it) } ?: "the platform administrator"}.\n\nFor security reasons, public registration is locked. Please switch to Sign In to authenticate.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 17.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Button(
+                                        onClick = {
+                                            isClaimMode = false
+                                            errorMessage = null
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Switch to Sign In", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "Set Up Platform Owner Account",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Register as the primary SaaS owner. A 6-digit OTP will be dispatched to your email to verify ownership.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            OutlinedTextField(
+                                value = claimName,
+                                onValueChange = { claimName = it },
+                                label = { Text("Owner Full Name") },
+                                placeholder = { Text("e.g. Platform Administrator") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = claimEmail,
+                                onValueChange = { claimEmail = it },
+                                label = { Text("Owner Official Email") },
+                                placeholder = { Text("e.g. owner@example.com") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = claimMobile,
+                                onValueChange = { claimMobile = it },
+                                label = { Text("Mobile Number") },
+                                placeholder = { Text("+91 98765 43210") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = claimPin,
+                                onValueChange = { claimPin = it },
+                                label = { Text("Password (at least 6 characters)") },
+                                placeholder = { Text("Enter secure password") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                visualTransformation = PasswordVisualTransformation(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            if (errorMessage != null) {
+                                Text(
+                                    text = errorMessage ?: "",
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontSize = 12.sp
                                 )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            enabled = !isLoading
-                        ) {
-                            Text("Claim Platform Owner Account", fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (claimEmail.isBlank() || claimPin.length < 6) {
+                                        errorMessage = "Please enter official email and a password with at least 6 characters"
+                                        return@Button
+                                    }
+                                    isLoading = true
+                                    viewModel.claimSuperAdminSlot(
+                                        name = claimName.ifBlank { "Platform Owner" },
+                                        email = claimEmail.trim(),
+                                        mobile = claimMobile.trim(),
+                                        accessCode = claimPin.trim(),
+                                        is2Fa = true, // MANDATORY: Verify Email OTP
+                                        onSuccess = {
+                                            isLoading = false
+                                        },
+                                        onError = { err ->
+                                            isLoading = false
+                                            errorMessage = err
+                                        },
+                                        forceReclaim = false
+                                    )
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                enabled = !isLoading
+                            ) {
+                                Icon(Icons.Default.MarkEmailRead, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Verify Email & Claim Account", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

@@ -650,7 +650,7 @@ BEGIN
   event := jsonb_set(event, '{claims}', claims);
   RETURN event;
 END;
-$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- 3.2. Enable RLS on all tables
 ALTER TABLE public.libraries ENABLE ROW LEVEL SECURITY;
@@ -699,6 +699,8 @@ CREATE POLICY "super_admin_manage_profile" ON public.super_admin_users
   FOR ALL TO authenticated USING (public.is_super_admin()) WITH CHECK (public.is_super_admin());
 CREATE POLICY "anon_select_super_admin_helpline" ON public.super_admin_users
   FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "allow_anon_claim_super_admin" ON public.super_admin_users
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- 3.5. RLS POLICIES: SaaS Subscription Plans
 CREATE POLICY "super_admin_all_subscription_plans" ON public.subscription_plans
@@ -975,31 +977,37 @@ BEGIN
     'LibDesk User'
   );
 
-  INSERT INTO public.users (
-    id,
-    email,
-    name,
-    role,
-    "libraryId",
-    "isActive",
-    "createdAt"
-  ) VALUES (
-    new.id::text,
-    COALESCE(new.email, ''),
-    v_name,
-    v_role,
-    v_org_id,
-    true,
-    EXTRACT(EPOCH FROM now())::BIGINT * 1000
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    name = CASE WHEN EXCLUDED.name <> '' THEN EXCLUDED.name ELSE public.users.name END,
-    role = CASE WHEN EXCLUDED.role <> '' THEN EXCLUDED.role ELSE public.users.role END,
-    "libraryId" = CASE WHEN EXCLUDED."libraryId" <> '' THEN EXCLUDED."libraryId" ELSE public.users."libraryId" END;
+  BEGIN
+    INSERT INTO public.users (
+      id,
+      email,
+      name,
+      role,
+      "libraryId",
+      "isActive",
+      "createdAt"
+    ) VALUES (
+      new.id::text,
+      COALESCE(new.email, ''),
+      v_name,
+      v_role,
+      v_org_id,
+      true,
+      EXTRACT(EPOCH FROM now())::BIGINT * 1000
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      name = CASE WHEN EXCLUDED.name <> '' THEN EXCLUDED.name ELSE public.users.name END,
+      role = CASE WHEN EXCLUDED.role <> '' THEN EXCLUDED.role ELSE public.users.role END,
+      "libraryId" = CASE WHEN EXCLUDED."libraryId" <> '' THEN EXCLUDED."libraryId" ELSE public.users."libraryId" END;
+  EXCEPTION WHEN OTHERS THEN
+    -- Prevent trigger failure from breaking Supabase Auth signup
+    NULL;
+  END;
+
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -1039,8 +1047,8 @@ CREATE INDEX IF NOT EXISTS idx_user_sub_library ON public.user_subscriptions("li
 INSERT INTO public.super_admin_users (
     id, email, name, mobile, phone, role, "accessCode", "is2FaEnabled", "isClaimed", "upiId", "upiPayeeName", "supportWhatsApp", "createdAt", "updatedAt"
 ) VALUES (
-    'SUPER-ADMIN-MASTER', 'smtsharma282.sks@gmail.com', 'Super Administrator', '', '', 'SUPER_ADMIN', 'ADMIN99', TRUE, TRUE, 'libdesk.billing@upi', 'LibDesk Cloud Subscriptions', '', 1700000000000, 1700000000000
-) ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+    'SUPER-ADMIN-MASTER', '', 'Platform Owner', '', '', 'SUPER_ADMIN', '', FALSE, FALSE, 'libdesk.billing@upi', 'LibDesk Cloud Subscriptions', '', 1700000000000, 1700000000000
+) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.subscription_plans (
     id, name, description, price, "durationMonths", "durationDays", "durationType", "maxSeats", features, badge, "discountPercentage", "upiId", "upiPayeeName", "supportWhatsApp", "isActive", "displayOrder", "createdAt"
@@ -1144,7 +1152,7 @@ BEGIN
         updated_at = NOW()
     WHERE id = p_material_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_study_materials_org_cat ON public.study_materials(org_id, category);

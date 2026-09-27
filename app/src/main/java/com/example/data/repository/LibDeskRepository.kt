@@ -498,36 +498,46 @@ class LibDeskRepository(val context: Context? = null) {
         _superAdmin.value = admin
         val arr = JSONArray().apply {
             put(JSONObject().apply {
-                put("id", admin.id)
+                put("id", admin.id.ifBlank { "SUPER-ADMIN-MASTER" })
                 put("name", admin.name)
                 put("email", admin.email)
                 put("mobile", admin.mobile)
                 put("phone", admin.mobile)
-                put("supportWhatsApp", admin.mobile)
-                put("support_whatsapp", admin.mobile)
+                put("role", "SUPER_ADMIN")
                 put("accessCode", admin.accessCode)
-                put("access_code", admin.accessCode)
-                put("upiId", admin.upiId)
-                put("upi_id", admin.upiId)
-                put("upiPayeeName", admin.upiPayeeName)
-                put("upi_payee_name", admin.upiPayeeName)
                 put("is2FaEnabled", admin.is2FaEnabled)
-                put("is_2fa_enabled", admin.is2FaEnabled)
                 put("isClaimed", admin.isClaimed)
-                put("is_claimed", admin.isClaimed)
+                put("upiId", admin.upiId)
+                put("upiPayeeName", admin.upiPayeeName)
+                put("supportWhatsApp", admin.mobile)
+                put("createdAt", admin.createdAt)
                 put("updatedAt", System.currentTimeMillis())
-                put("updated_at", System.currentTimeMillis())
             })
         }
-        SupabaseClient.upsertRecords("super_admin_users", arr)
+        val (ok, msg) = SupabaseClient.upsertRecords("super_admin_users", arr)
+        android.util.Log.i("LibDeskRepository", "saveSuperAdmin to super_admin_users result: ok=$ok, msg=$msg")
 
         // Automatically synchronize the updated contact number and UPI details across all plans
         updateAllPlansUpi(admin.upiId, admin.upiPayeeName, admin.mobile)
 
-        // Cascade update to Super Admin user account if present in users table
-        val superUser = _users.value.find { it.role.equals("SUPER_ADMIN", ignoreCase = true) || it.email.equals(admin.email, ignoreCase = true) }
-        if (superUser != null) {
-            saveUser(superUser.copy(name = admin.name, phone = admin.mobile, email = admin.email))
+        // Ensure Super Admin user account is registered in users table
+        if (admin.email.isNotBlank()) {
+            val superUser = _users.value.find { it.role.equals("SUPER_ADMIN", ignoreCase = true) || it.email.equals(admin.email, ignoreCase = true) }
+            val updatedUser = (superUser ?: UserAccountEntity(
+                id = "SUPER-ADMIN-MASTER",
+                email = admin.email,
+                name = admin.name.ifBlank { "Super Administrator" },
+                role = "SUPER_ADMIN",
+                libraryId = "",
+                phone = admin.mobile,
+                isActive = true,
+                createdAt = admin.createdAt
+            )).copy(
+                name = admin.name.ifBlank { "Super Administrator" },
+                phone = admin.mobile,
+                email = admin.email
+            )
+            saveUser(updatedUser)
         }
     }
 

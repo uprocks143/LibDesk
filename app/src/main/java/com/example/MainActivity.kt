@@ -242,7 +242,7 @@ fun LibDeskApp(
                 viewModel.claimSuperAdminSlot(name, email, mobile, pin, is2Fa, onSuccess, onError)
             },
             onResetAdminSlot = {
-                viewModel.resetSuperAdminSlot()
+                // Public unauthenticated reset is permanently disabled for platform security
             },
             onResetPassword = { email, newPassword, onSuccess, onError ->
                 viewModel.resetUserPassword(email, newPassword, onSuccess, onError)

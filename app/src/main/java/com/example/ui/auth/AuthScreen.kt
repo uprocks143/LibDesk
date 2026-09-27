@@ -2354,152 +2354,211 @@ fun AuthScreen(
                         }
                     } else {
                         // Claim Platform Owner Slot Form
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = LibDeskColors.warningSoft,
-                            border = BorderStroke(1.dp, LibDeskColors.warning.copy(alpha = 0.5f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        if (isSlotClaimed) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(
-                                    Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = LibDeskColors.warning,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Lock,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "Platform Owner Slot Claimed & Secured",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = "The master SaaS platform owner account is registered to ${superAdminProfile?.email?.let { com.example.util.EmailOtpService.maskEmail(it) } ?: "the platform administrator"}.\n\nFor platform security, public registration is locked. Please switch to Sign In to log in with your credentials and Email 2FA.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 17.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Button(
+                                        onClick = {
+                                            adminModalMode = 0
+                                            adminErrorMessage = null
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp)
+                                    ) {
+                                        Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Switch to Sign In", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = LibDeskColors.warningSoft,
+                                border = BorderStroke(1.dp, LibDeskColors.warning.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = LibDeskColors.warning,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Register as the master platform owner. A 6-digit verification OTP will be sent to your email address to confirm ownership.",
+                                        fontSize = 12.sp,
+                                        color = LibDeskColors.warning
+                                    )
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = adminClaimName,
+                                onValueChange = { adminClaimName = it },
+                                label = { Text("Admin Full Name") },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = adminClaimEmail,
+                                onValueChange = { adminClaimEmail = it },
+                                label = { Text("Master Admin Email") },
+                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            CountryCodePhoneField(
+                                mobile = adminClaimMobile,
+                                onMobileChange = { adminClaimMobile = it },
+                                countryCode = adminClaimCountryCode,
+                                onCountryCodeChange = { adminClaimCountryCode = it },
+                                label = "Mobile Number",
+                                placeholder = "98765 43210",
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = adminClaimPin,
+                                onValueChange = { adminClaimPin = it },
+                                label = { Text("Create Password / PIN") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                trailingIcon = {
+                                    IconButton(onClick = { showAdminClaimPin = !showAdminClaimPin }) {
+                                        Icon(
+                                            imageVector = if (showAdminClaimPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = if (showAdminClaimPin) "Hide Password" else "Show Password"
+                                        )
+                                    }
+                                },
+                                visualTransformation = if (showAdminClaimPin) VisualTransformation.None else PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = adminClaimPinConfirm,
+                                onValueChange = { adminClaimPinConfirm = it },
+                                label = { Text("Confirm Password / PIN") },
+                                leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                trailingIcon = {
+                                    IconButton(onClick = { showAdminClaimPinConfirm = !showAdminClaimPinConfirm }) {
+                                        Icon(
+                                            imageVector = if (showAdminClaimPinConfirm) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = if (showAdminClaimPinConfirm) "Hide Password" else "Show Password"
+                                        )
+                                    }
+                                },
+                                visualTransformation = if (showAdminClaimPinConfirm) VisualTransformation.None else PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            if (adminErrorMessage != null) {
                                 Text(
-                                    text = "Register as the master platform owner to activate global SaaS administration rights.",
+                                    text = adminErrorMessage ?: "",
+                                    color = MaterialTheme.colorScheme.error,
                                     fontSize = 12.sp,
-                                    color = LibDeskColors.warning
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
                                 )
                             }
-                        }
 
-                        OutlinedTextField(
-                            value = adminClaimName,
-                            onValueChange = { adminClaimName = it },
-                            label = { Text("Admin Full Name") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = adminClaimEmail,
-                            onValueChange = { adminClaimEmail = it },
-                            label = { Text("Master Admin Email") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        CountryCodePhoneField(
-                            mobile = adminClaimMobile,
-                            onMobileChange = { adminClaimMobile = it },
-                            countryCode = adminClaimCountryCode,
-                            onCountryCodeChange = { adminClaimCountryCode = it },
-                            label = "Mobile Number",
-                            placeholder = "98765 43210",
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = adminClaimPin,
-                            onValueChange = { adminClaimPin = it },
-                            label = { Text("Create Password / PIN") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            trailingIcon = {
-                                IconButton(onClick = { showAdminClaimPin = !showAdminClaimPin }) {
-                                    Icon(
-                                        imageVector = if (showAdminClaimPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = if (showAdminClaimPin) "Hide Password" else "Show Password"
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showAdminClaimPin) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = adminClaimPinConfirm,
-                            onValueChange = { adminClaimPinConfirm = it },
-                            label = { Text("Confirm Password / PIN") },
-                            leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            trailingIcon = {
-                                IconButton(onClick = { showAdminClaimPinConfirm = !showAdminClaimPinConfirm }) {
-                                    Icon(
-                                        imageVector = if (showAdminClaimPinConfirm) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = if (showAdminClaimPinConfirm) "Hide Password" else "Show Password"
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showAdminClaimPinConfirm) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (adminErrorMessage != null) {
-                            Text(
-                                text = adminErrorMessage ?: "",
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                val fullMobile = combineCountryCodeAndPhone(adminClaimCountryCode, adminClaimMobile)
-                                if (adminClaimName.isBlank()) {
-                                    adminErrorMessage = "Please enter your full name"
-                                } else if (adminClaimEmail.isBlank() || !adminClaimEmail.contains("@")) {
-                                    adminErrorMessage = "Please enter a valid Admin Email"
-                                } else if (fullMobile.isBlank()) {
-                                    adminErrorMessage = "Please enter a valid mobile number"
-                                } else if (adminClaimPin.length < 4) {
-                                    adminErrorMessage = "Password must be at least 4 characters"
-                                } else if (adminClaimPin != adminClaimPinConfirm) {
-                                    adminErrorMessage = "Password and Confirmation do not match"
-                                } else {
-                                    adminErrorMessage = null
-                                    onClaimAdminSlot(
-                                        adminClaimName.trim(),
-                                        adminClaimEmail.trim(),
-                                        fullMobile.trim(),
-                                        adminClaimPin.trim(),
-                                        true,
-                                        { otp ->
-                                            showMasterAdminModal = false
-                                            otpInput = otp
-                                        },
-                                        { err ->
-                                            adminErrorMessage = err
-                                        }
-                                    )
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Claim Platform Owner Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Button(
+                                onClick = {
+                                    val fullMobile = combineCountryCodeAndPhone(adminClaimCountryCode, adminClaimMobile)
+                                    if (adminClaimName.isBlank()) {
+                                        adminErrorMessage = "Please enter your full name"
+                                    } else if (adminClaimEmail.isBlank() || !adminClaimEmail.contains("@")) {
+                                        adminErrorMessage = "Please enter a valid Admin Email"
+                                    } else if (fullMobile.isBlank()) {
+                                        adminErrorMessage = "Please enter a valid mobile number"
+                                    } else if (adminClaimPin.length < 6) {
+                                        adminErrorMessage = "Password must be at least 6 characters"
+                                    } else if (adminClaimPin != adminClaimPinConfirm) {
+                                        adminErrorMessage = "Password and Confirmation do not match"
+                                    } else {
+                                        adminErrorMessage = null
+                                        onClaimAdminSlot(
+                                            adminClaimName.trim(),
+                                            adminClaimEmail.trim(),
+                                            fullMobile.trim(),
+                                            adminClaimPin.trim(),
+                                            true, // MANDATORY: Verify Email OTP before claiming
+                                            { _ ->
+                                                showMasterAdminModal = false
+                                                adminErrorMessage = null
+                                            },
+                                            { err ->
+                                                adminErrorMessage = err
+                                            }
+                                        )
+                                    }
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                Icon(Icons.Default.MarkEmailRead, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Verify Email & Claim Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
                         }
                     }
                 }
