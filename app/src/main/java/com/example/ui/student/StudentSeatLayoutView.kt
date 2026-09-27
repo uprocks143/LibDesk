@@ -1955,7 +1955,7 @@ private fun generateDefaultBranchSeats(student: StudentEntity?): List<SeatEntity
     val prefixes = listOf("A", "B", "C", "D")
     prefixes.forEachIndexed { rowIndex, prefix ->
         for (col in 1..8) {
-            val seatNum = "$prefix-${String.format("%02d", col)}"
+            val seatNum = "$prefix-${String.format(java.util.Locale.US, "%02d", col)}"
             val isStudentSeat = mySeat.isNotBlank() && seatNum.equals(mySeat, ignoreCase = true)
 
             val status = when {

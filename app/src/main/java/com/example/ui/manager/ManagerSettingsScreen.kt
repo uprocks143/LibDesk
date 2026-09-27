@@ -613,7 +613,7 @@ fun ManagerSettingsScreen(
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
-                                    text = if (isDailyAlertsActive) "Scheduled daily at ${String.format("%02d:%02d AM", alertTime.first, alertTime.second)}" else "Alerts disabled",
+                                    text = if (isDailyAlertsActive) "Scheduled daily at ${String.format(java.util.Locale.US, "%02d:%02d AM", alertTime.first, alertTime.second)}" else "Alerts disabled",
                                     fontSize = 14.sp,
                                     color = if (isDailyAlertsActive) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant
                                 )

@@ -1047,7 +1047,7 @@ fun BatchGenerateSeatsDialog(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "${prefix.trim().ifBlank { "S" }}-${String.format("%02d", startNumber)}  to  ${prefix.trim().ifBlank { "S" }}-${String.format("%02d", previewEnd)}  ($count seats)",
+                            text = "${prefix.trim().ifBlank { "S" }}-${String.format(java.util.Locale.US, "%02d", startNumber)}  to  ${prefix.trim().ifBlank { "S" }}-${String.format(java.util.Locale.US, "%02d", previewEnd)}  ($count seats)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer

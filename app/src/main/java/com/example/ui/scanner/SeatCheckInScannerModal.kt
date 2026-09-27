@@ -230,7 +230,7 @@ fun SeatCheckInScannerModal(
                     )
                 )
                 if (sessionScans.size > 20) {
-                    sessionScans.removeLast()
+                    sessionScans.removeAt(sessionScans.lastIndex)
                 }
 
                 // In continuous/auto-scan mode for librarian, clear result after 2.5s to scan next ID

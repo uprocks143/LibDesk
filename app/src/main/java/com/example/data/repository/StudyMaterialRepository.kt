@@ -52,9 +52,12 @@ class StudyMaterialRepository(
         return dao.getByOrg(orgId).map { list ->
             list.filter { material ->
                 val createdEpoch = try {
-                    java.time.Instant.parse(material.createdAt).toEpochMilli()
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply {
+                        timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    }
+                    sdf.parse(material.createdAt)?.time ?: material.createdAt.toLongOrNull() ?: 0L
                 } catch (_: Exception) {
-                    0L
+                    material.createdAt.toLongOrNull() ?: 0L
                 }
                 createdEpoch in 1..ninetyDaysAgo && material.downloadCount == 0
             }

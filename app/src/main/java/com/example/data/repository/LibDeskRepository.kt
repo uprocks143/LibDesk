@@ -931,7 +931,7 @@ class LibDeskRepository(val context: Context? = null) {
             maxExisting + 1
         }
         val newSeats = (calculatedStart until (calculatedStart + count)).map { num ->
-            val formattedNum = String.format("%02d", num)
+            val formattedNum = String.format(Locale.US, "%02d", num)
             val seatNumber = "$prefix-$formattedNum"
             SeatEntity(
                 id = UUID.randomUUID().toString(),
@@ -966,7 +966,7 @@ class LibDeskRepository(val context: Context? = null) {
         }
         SupabaseClient.upsertRecords("seats", arr)
         val endNum = calculatedStart + count - 1
-        logAudit(libraryId, "Manager", "BATCH_GENERATE_SEATS", "Seats", "", "Generated $count seats ($prefix-${String.format("%02d", calculatedStart)} to $prefix-${String.format("%02d", endNum)})")
+        logAudit(libraryId, "Manager", "BATCH_GENERATE_SEATS", "Seats", "", "Generated $count seats ($prefix-${String.format(Locale.US, "%02d", calculatedStart)} to $prefix-${String.format(Locale.US, "%02d", endNum)})")
     }
 
     suspend fun assignSeat(
