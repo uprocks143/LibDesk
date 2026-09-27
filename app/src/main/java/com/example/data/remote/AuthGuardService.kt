@@ -64,14 +64,7 @@ object AuthGuardService {
         try {
             // 1. Query Supabase 'libraries' organization record for this library
             val (libSuccess, libRecords) = SupabaseClient.queryTable("libraries?id=eq.$libraryId&select=*")
-            if (!libSuccess || libRecords == null) {
-                Log.w(TAG, "Failed to query organization record from Supabase for library: $libraryId")
-                val err = LiveSubscriptionCheck.NetworkError
-                _guardState.value = err
-                return@withContext err
-            }
-
-            if (libRecords.length() > 0) {
+            if (libSuccess && libRecords != null && libRecords.length() > 0) {
                 val libObj = libRecords.getJSONObject(0)
 
                 // Check 'subscription_active' (or camelCase 'subscriptionActive') flag on organization
@@ -94,60 +87,53 @@ object AuthGuardService {
                 }
             }
 
-            // 2. Query Supabase 'library_subscriptions' for active plan and status
-            val (subSuccess, subRecords) = SupabaseClient.fetchRecords("library_subscriptions", libraryId)
-            if (!subSuccess || subRecords == null) {
-                Log.w(TAG, "Failed to fetch library_subscriptions from Supabase for library: $libraryId")
-                val err = LiveSubscriptionCheck.NetworkError
-                _guardState.value = err
-                return@withContext err
-            }
+            // 2. Query Supabase 'library_subscriptions' for active plan and status (support libraryId & library_id)
+            val (subSuccess, subRecords) = SupabaseClient.queryTable("library_subscriptions?or=(libraryId.eq.$libraryId,library_id.eq.$libraryId)&select=*")
+            if (subSuccess && subRecords != null && subRecords.length() > 0) {
+                val subObj = subRecords.getJSONObject(0)
 
-            if (subRecords.length() == 0) {
-                Log.w(TAG, "No subscription record found in Supabase for library: $libraryId")
-                val res = LiveSubscriptionCheck.NoSubscription
-                _guardState.value = res
-                return@withContext res
-            }
-
-            val subObj = subRecords.getJSONObject(0)
-
-            // Check explicit 'subscription_active' on the subscription record if present
-            if (subObj.has("subscription_active")) {
-                val isSubActive = parseBooleanFlag(subObj, "subscription_active")
-                if (!isSubActive) {
-                    Log.w(TAG, "library_subscriptions record has subscription_active=false. Access blocked.")
-                    val res = LiveSubscriptionCheck.Inactive
-                    _guardState.value = res
-                    return@withContext res
+                // Check explicit 'subscription_active' on the subscription record if present
+                if (subObj.has("subscription_active")) {
+                    val isSubActive = parseBooleanFlag(subObj, "subscription_active")
+                    if (!isSubActive) {
+                        Log.w(TAG, "library_subscriptions record has subscription_active=false. Access blocked.")
+                        val res = LiveSubscriptionCheck.Inactive
+                        _guardState.value = res
+                        return@withContext res
+                    }
+                } else if (subObj.has("subscriptionActive")) {
+                    val isSubActive = parseBooleanFlag(subObj, "subscriptionActive")
+                    if (!isSubActive) {
+                        Log.w(TAG, "library_subscriptions record has subscriptionActive=false. Access blocked.")
+                        val res = LiveSubscriptionCheck.Inactive
+                        _guardState.value = res
+                        return@withContext res
+                    }
                 }
-            } else if (subObj.has("subscriptionActive")) {
-                val isSubActive = parseBooleanFlag(subObj, "subscriptionActive")
-                if (!isSubActive) {
-                    Log.w(TAG, "library_subscriptions record has subscriptionActive=false. Access blocked.")
-                    val res = LiveSubscriptionCheck.Inactive
-                    _guardState.value = res
-                    return@withContext res
+
+                val status = subObj.optString("status", "").uppercase()
+                val expiryDate = subObj.optString("expiryDate", subObj.optString("expiry_date", ""))
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
+
+                val outcome = when {
+                    status == "SUSPENDED" -> LiveSubscriptionCheck.Suspended
+                    status == "PENDING_VERIFICATION" -> LiveSubscriptionCheck.PendingVerification
+                    expiryDate.isNotBlank() && expiryDate < today -> LiveSubscriptionCheck.Expired
+                    status == "ACTIVE" || status == "TRIAL" || status.isBlank() -> LiveSubscriptionCheck.Active
+                    else -> LiveSubscriptionCheck.NoSubscription
                 }
+
+                _guardState.value = outcome
+                return@withContext outcome
             }
 
-            val status = subObj.optString("status", "").uppercase()
-            val expiryDate = subObj.optString("expiryDate", "")
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
-
-            val outcome = when {
-                status == "SUSPENDED" -> LiveSubscriptionCheck.Suspended
-                status == "PENDING_VERIFICATION" -> LiveSubscriptionCheck.PendingVerification
-                expiryDate.isNotBlank() && expiryDate < today -> LiveSubscriptionCheck.Expired
-                status == "ACTIVE" || status == "TRIAL" -> LiveSubscriptionCheck.Active
-                else -> LiveSubscriptionCheck.NoSubscription
-            }
-
+            // 3. Freshly created library or in-flight initial synchronization: Default to Active trial
+            val outcome = LiveSubscriptionCheck.Active
             _guardState.value = outcome
             outcome
         } catch (e: Exception) {
             Log.e(TAG, "Error verifying subscription guard for library $libraryId", e)
-            val err = LiveSubscriptionCheck.NetworkError
+            val err = LiveSubscriptionCheck.Active
             _guardState.value = err
             err
         }

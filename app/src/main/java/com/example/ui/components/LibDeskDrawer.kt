@@ -196,7 +196,7 @@ fun LibDeskDrawerContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = library?.name ?: "Your Library",
+                                text = library?.name?.takeIf { it.isNotBlank() && it != "Library" } ?: (if (currentUserName.isNotBlank()) "$currentUserName's Library" else "My Library"),
                                 color = drawerHeaderSubtext,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,

@@ -260,8 +260,10 @@ fun ManagerDashboardScreen(
                         val heroDisplayName = remember(library?.name, userName) {
                             val lib = library?.name?.trim()
                             when {
+                                !lib.isNullOrEmpty() && lib != "Library" && lib != "Your Library" -> lib
+                                userName.isNotBlank() && !userName.equals("Library Manager", ignoreCase = true) -> "${userName.trim()}'s Library"
                                 !lib.isNullOrEmpty() -> lib
-                                else -> "Your Library"
+                                else -> "My Library"
                             }
                         }
                         val isDark = LocalIsDarkTheme.current

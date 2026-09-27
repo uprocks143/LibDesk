@@ -633,7 +633,20 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             val adminProfile = repository.getSuperAdmin().firstOrNull()
-            val targetEmail = if (adminProfile?.email?.isNotBlank() == true) adminProfile.email else trimmedEmail
+            if (adminProfile == null || !adminProfile.isClaimed) {
+                onError("SaaS Admin account has not been claimed or created yet. Please register the SaaS Admin account first.")
+                return@launch
+            }
+
+            val isMatchingAdmin = trimmedEmail.equals(adminProfile.email, ignoreCase = true) ||
+                    (adminProfile.mobile.isNotBlank() && trimmedEmail == adminProfile.mobile)
+
+            if (!isMatchingAdmin) {
+                onError("The entered credentials do not match the registered SaaS Super Admin.")
+                return@launch
+            }
+
+            val targetEmail = adminProfile.email
 
             // If password was supplied, verify with Supabase Auth
             if (trimmedPassword.isNotBlank()) {
@@ -855,20 +868,24 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             // 1. Super Admin authentication branch
-            if (role.equals("SUPER_ADMIN", ignoreCase = true) || role.equals("OWNER", ignoreCase = true)) {
+            if (role.equals("SUPER_ADMIN", ignoreCase = true)) {
                 val adminProfile = repository.getSuperAdmin().firstOrNull()
 
-                // Resolve admin target email (support login via registered email or registered mobile)
-                val targetEmail = if (adminProfile != null && (
-                    trimmedIdentifier.equals(adminProfile.email, ignoreCase = true) ||
-                    (adminProfile.mobile.isNotBlank() && trimmedIdentifier == adminProfile.mobile)
-                )) {
-                    adminProfile.email
-                } else if (trimmedIdentifier.contains("@")) {
-                    trimmedIdentifier.lowercase()
-                } else {
-                    adminProfile?.email ?: trimmedIdentifier
+                if (adminProfile == null || !adminProfile.isClaimed) {
+                    onError("SaaS Admin account has not been claimed or created yet. Please register the SaaS Admin account first.")
+                    return@launch
                 }
+
+                // Verify that identifier matches the registered super admin's email or mobile
+                val isMatchingAdmin = trimmedIdentifier.equals(adminProfile.email, ignoreCase = true) ||
+                        (adminProfile.mobile.isNotBlank() && trimmedIdentifier == adminProfile.mobile)
+
+                if (!isMatchingAdmin) {
+                    onError("The entered credentials do not match the registered SaaS Super Admin.")
+                    return@launch
+                }
+
+                val targetEmail = adminProfile.email
 
                 // Strictly authenticate credentials against Supabase Auth
                 val supabaseResult = SupabaseAuthService.signInWithPassword(

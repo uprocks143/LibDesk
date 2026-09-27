@@ -1534,7 +1534,7 @@ fun AuthScreen(
             // sign-up/login now lives entirely inside the modal opened below.
             TextButton(
                 onClick = {
-                    adminModalMode = 0
+                    adminModalMode = if (isSaaSAdminCreated) 0 else 1
                     adminErrorMessage = null
                     showMasterAdminModal = true
                 },
@@ -2101,6 +2101,33 @@ fun AuthScreen(
                     }
 
                     if (adminModalMode == 0) {
+                        if (!isSlotClaimed) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "No SaaS Admin account has been registered yet. Please tap 'Claim Slot' above to create your platform owner account.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
+
                         // Direct Sign In Form
                         OutlinedTextField(
                             value = adminLoginEmail,
@@ -2208,6 +2235,10 @@ fun AuthScreen(
                         // Primary Sign In Button
                         Button(
                             onClick = {
+                                if (!isSlotClaimed) {
+                                    adminErrorMessage = "No SaaS Admin account registered yet. Please tap 'Claim Slot' above to create the account first."
+                                    return@Button
+                                }
                                 if (adminLoginEmail.isBlank()) {
                                     adminErrorMessage = "Please enter Super Admin Email"
                                     return@Button
@@ -2267,6 +2298,10 @@ fun AuthScreen(
                         // Secondary 2FA Option
                         OutlinedButton(
                             onClick = {
+                                if (!isSlotClaimed) {
+                                    adminErrorMessage = "No SaaS Admin account registered yet. Please tap 'Claim Slot' above to create the account first."
+                                    return@OutlinedButton
+                                }
                                 if (adminLoginEmail.isBlank()) {
                                     adminErrorMessage = "Please enter Super Admin Email"
                                     return@OutlinedButton

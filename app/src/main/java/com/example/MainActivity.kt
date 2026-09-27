@@ -317,7 +317,7 @@ fun LibDeskApp(
         }
     }
 
-    if (isManagerRole && currentLib != null && liveSubCheck != com.example.viewmodel.LiveSubscriptionCheck.Active) {
+    if (isManagerRole && currentLib != null && liveSubCheck != null && liveSubCheck != com.example.viewmodel.LiveSubscriptionCheck.Active) {
         SubscriptionBlockedScreen(
             check = liveSubCheck,
             supportPhone = superAdminProfile?.mobile?.takeIf { it.isNotBlank() } ?: subscriptionPlans.firstOrNull { it.supportWhatsApp.isNotBlank() }?.supportWhatsApp,

@@ -314,16 +314,24 @@ class LibDeskRepository(val context: Context? = null) {
                 put(JSONObject().apply {
                     put("id", sub.id)
                     put("libraryId", sub.libraryId)
+                    put("library_id", sub.libraryId)
                     put("libraryName", sub.libraryName)
+                    put("library_name", sub.libraryName)
                     put("planId", sub.planId)
+                    put("plan_id", sub.planId)
                     put("planName", sub.planName)
+                    put("plan_name", sub.planName)
                     put("status", sub.status)
                     put("startDate", sub.startDate)
+                    put("start_date", sub.startDate)
                     put("expiryDate", sub.expiryDate)
+                    put("expiry_date", sub.expiryDate)
                     put("price", sub.price)
                     put("discount", sub.discount)
                     put("maxSeats", sub.maxSeats)
+                    put("max_seats", sub.maxSeats)
                     put("autoRenew", sub.autoRenew)
+                    put("auto_renew", sub.autoRenew)
                     put("notes", sub.notes)
                     put("subscriptionActive", isSubActive)
                     put("subscription_active", isSubActive)
@@ -553,22 +561,34 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", library.id)
                 put("name", library.name)
+                put("library_name", library.name)
                 put("code", library.code)
+                put("library_code", library.code)
                 put("logoUrl", library.logoUrl)
+                put("logo_url", library.logoUrl)
                 put("description", library.description)
                 put("establishedDate", library.establishedDate)
+                put("established_date", library.establishedDate)
                 put("regNumber", library.regNumber)
+                put("reg_number", library.regNumber)
                 put("ownerName", library.ownerName)
+                put("owner_name", library.ownerName)
                 put("ownerPhone", library.ownerPhone)
+                put("owner_phone", library.ownerPhone)
                 put("ownerEmail", library.ownerEmail)
+                put("owner_email", library.ownerEmail)
                 put("ownerWhatsApp", library.ownerWhatsApp)
+                put("owner_whatsapp", library.ownerWhatsApp)
                 put("alternateContact", library.alternateContact)
+                put("alternate_contact", library.alternateContact)
                 put("address", library.address)
+                put("street_address", library.address)
                 put("landmark", library.landmark)
                 put("city", library.city)
                 put("district", library.district)
                 put("state", library.state)
                 put("pincode", library.pincode)
+                put("pin_code", library.pincode)
                 put("latitude", library.latitude)
                 put("longitude", library.longitude)
                 put("phone", library.phone)
@@ -576,14 +596,25 @@ class LibDeskRepository(val context: Context? = null) {
                 put("email", library.email)
                 put("website", library.website)
                 put("upiId", library.upiId)
+                put("upi_id", library.upiId)
                 put("upiPayeeName", library.upiPayeeName)
+                put("upi_payee_name", library.upiPayeeName)
                 put("receiptPrefix", library.receiptPrefix)
+                put("receipt_prefix", library.receiptPrefix)
                 put("defaultFinePerDay", library.defaultFinePerDay)
+                put("default_fine_per_day", library.defaultFinePerDay)
                 put("borrowLimit", library.borrowLimit)
+                put("borrow_limit", library.borrowLimit)
                 put("loanDays", library.loanDays)
+                put("loan_days", library.loanDays)
                 put("qrAttendanceStrictShift", library.qrAttendanceStrictShift)
+                put("qr_attendance_strict_shift", library.qrAttendanceStrictShift)
+                put("subscription_active", true)
+                put("subscriptionActive", true)
                 put("createdAt", library.createdAt)
+                put("created_at", library.createdAt)
                 put("updatedAt", library.updatedAt)
+                put("updated_at", library.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("libraries", arr)
@@ -1887,7 +1918,20 @@ class LibDeskRepository(val context: Context? = null) {
                         val local = currentMap[id]
                         val cloud = cloudMap[id]
                         when {
-                            local != null && cloud != null -> if (local.updatedAt >= cloud.updatedAt) local else cloud
+                            local != null && cloud != null -> {
+                                val base = if (local.updatedAt >= cloud.updatedAt) local else cloud
+                                base.copy(
+                                    name = base.name.takeIf { it.isNotBlank() && it != "Library" } ?: local.name.ifBlank { cloud.name },
+                                    ownerName = base.ownerName.ifBlank { local.ownerName.ifBlank { cloud.ownerName } },
+                                    ownerPhone = base.ownerPhone.ifBlank { local.ownerPhone.ifBlank { cloud.ownerPhone } },
+                                    ownerEmail = base.ownerEmail.ifBlank { local.ownerEmail.ifBlank { cloud.ownerEmail } },
+                                    upiId = base.upiId.ifBlank { local.upiId.ifBlank { cloud.upiId } },
+                                    upiPayeeName = base.upiPayeeName.ifBlank { local.upiPayeeName.ifBlank { cloud.upiPayeeName } },
+                                    address = base.address.ifBlank { local.address.ifBlank { cloud.address } },
+                                    city = base.city.ifBlank { local.city.ifBlank { cloud.city } },
+                                    state = base.state.ifBlank { local.state.ifBlank { cloud.state } }
+                                )
+                            }
                             local != null -> local
                             else -> cloud
                         }
@@ -1937,7 +1981,7 @@ class LibDeskRepository(val context: Context? = null) {
                     upiId = optStringAny(obj, "upiId", "upi_id", fallback = "libdesk.billing@upi"),
                     upiPayeeName = optStringAny(obj, "upiPayeeName", "upi_payee_name", fallback = "LibDesk Cloud Subscriptions"),
                     is2FaEnabled = optBooleanAny(obj, "is2FaEnabled", "is_2fa_enabled", fallback = true),
-                    isClaimed = optBooleanAny(obj, "isClaimed", "is_claimed", fallback = true)
+                    isClaimed = optBooleanAny(obj, "isClaimed", "is_claimed", fallback = optStringAny(obj, "email").isNotBlank())
                 )
                 _superAdmin.value = admin
                 // Propagate the latest helpline contact & UPI to plans in memory if plans exist
@@ -1990,8 +2034,22 @@ class LibDeskRepository(val context: Context? = null) {
                 if (libOk && libArr != null && libArr.length() > 0) {
                     val lib = parseLibrary(libArr.getJSONObject(0))
                     val current = _libraries.value.find { it.id == lib.id }
-                    if (current == null || current.updatedAt <= lib.updatedAt) {
+                    if (current == null) {
                         _libraries.value = _libraries.value.filter { it.id != lib.id } + lib
+                    } else {
+                        val base = if (current.updatedAt >= lib.updatedAt) current else lib
+                        val mergedLib = base.copy(
+                            name = base.name.takeIf { it.isNotBlank() && it != "Library" } ?: current.name.ifBlank { lib.name },
+                            ownerName = base.ownerName.ifBlank { current.ownerName.ifBlank { lib.ownerName } },
+                            ownerPhone = base.ownerPhone.ifBlank { current.ownerPhone.ifBlank { lib.ownerPhone } },
+                            ownerEmail = base.ownerEmail.ifBlank { current.ownerEmail.ifBlank { lib.ownerEmail } },
+                            upiId = base.upiId.ifBlank { current.upiId.ifBlank { lib.upiId } },
+                            upiPayeeName = base.upiPayeeName.ifBlank { current.upiPayeeName.ifBlank { lib.upiPayeeName } },
+                            address = base.address.ifBlank { current.address.ifBlank { lib.address } },
+                            city = base.city.ifBlank { current.city.ifBlank { lib.city } },
+                            state = base.state.ifBlank { current.state.ifBlank { lib.state } }
+                        )
+                        _libraries.value = _libraries.value.filter { it.id != lib.id } + mergedLib
                     }
                 }
 
