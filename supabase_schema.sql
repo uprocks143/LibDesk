@@ -113,6 +113,7 @@ CREATE TABLE public.users (
 CREATE TABLE public.students (
     id TEXT PRIMARY KEY,
     "libraryId" TEXT NOT NULL,
+    "userId" TEXT DEFAULT '',
     "studentCode" TEXT NOT NULL,
     "fullName" TEXT NOT NULL,
     "photoUrl" TEXT DEFAULT '',
@@ -397,6 +398,7 @@ CREATE TABLE public.notices (
     date TEXT NOT NULL,
     "targetAudience" TEXT DEFAULT 'ALL',
     "senderName" TEXT DEFAULT 'LibDesk Admin',
+    "isGlobal" BOOLEAN DEFAULT FALSE,
     "isActive" BOOLEAN DEFAULT TRUE
 );
 
@@ -741,12 +743,14 @@ CREATE POLICY "student_self_profile" ON public.students
   FOR ALL TO authenticated USING (
     public.is_student() AND (
       id = public.jwt_student_id() OR
+      id = auth.uid()::text OR
       "userId" = auth.uid()::text OR
       email = (auth.jwt() ->> 'email')
     )
   ) WITH CHECK (
     public.is_student() AND (
       id = public.jwt_student_id() OR
+      id = auth.uid()::text OR
       "userId" = auth.uid()::text OR
       email = (auth.jwt() ->> 'email')
     )
@@ -863,6 +867,7 @@ CREATE POLICY "student_view_org_notices" ON public.notices
     public.is_student() AND (
       "libraryId" = public.jwt_org_id() OR
       "libraryId" = '' OR
+      "targetAudience" = 'ALL' OR
       "isGlobal" = true
     )
   );
@@ -1021,6 +1026,7 @@ CREATE TRIGGER on_auth_user_created
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_library_id ON public.users("libraryId");
 CREATE INDEX IF NOT EXISTS idx_students_library_id ON public.students("libraryId");
+CREATE INDEX IF NOT EXISTS idx_students_user_id ON public.students("userId");
 CREATE INDEX IF NOT EXISTS idx_students_mobile ON public.students(mobile);
 CREATE INDEX IF NOT EXISTS idx_students_status ON public.students(status);
 CREATE INDEX IF NOT EXISTS idx_seats_library_id ON public.seats("libraryId");

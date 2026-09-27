@@ -77,6 +77,7 @@ object NcertCatalogService {
         NcertBookMetadata("Social and Political Life III – Class 8", "Class 8", "Social Science", "CBSE / Middle", "NCERT Class 8 Civics & Constitution textbook.", "https://ncert.nic.in/textbook/pdf/hess301.pdf"),
         NcertBookMetadata("Honeydew English – Class 8", "Class 8", "English", "CBSE / Middle", "NCERT Class 8 Honeydew English textbook.", "https://ncert.nic.in/textbook/pdf/heen101.pdf"),
         NcertBookMetadata("Vasant III Hindi – Class 8", "Class 8", "Hindi", "CBSE / Middle", "NCERT Class 8 Vasant III Hindi textbook.", "https://ncert.nic.in/textbook/pdf/hhhn101.pdf"),
+        NcertBookMetadata("Ruchira III Sanskrit – Class 8", "Class 8", "Sanskrit", "CBSE / Middle", "NCERT Class 8 Ruchira III Sanskrit textbook.", "https://ncert.nic.in/textbook/pdf/hsk101.pdf"),
 
         // ================= CLASS 9 =================
         NcertBookMetadata("Science – Class 9", "Class 9", "Science", "CBSE / Secondary", "Complete NCERT Class 9 Science textbook (Physics, Chemistry & Biology).", "https://ncert.nic.in/textbook/pdf/iesc101.pdf"),
@@ -100,6 +101,7 @@ object NcertCatalogService {
         NcertBookMetadata("First Flight English – Class 10", "Class 10", "English", "CBSE / Class 10 Board", "NCERT Class 10 First Flight English literature textbook.", "https://ncert.nic.in/textbook/pdf/jeff101.pdf"),
         NcertBookMetadata("Footprints without Feet – Class 10", "Class 10", "English", "CBSE / Class 10 Board", "NCERT Class 10 English supplementary reader.", "https://ncert.nic.in/textbook/pdf/jefp101.pdf"),
         NcertBookMetadata("Kshitij II Hindi – Class 10", "Class 10", "Hindi", "CBSE / Class 10 Board", "NCERT Class 10 Kshitij II Hindi literature textbook.", "https://ncert.nic.in/textbook/pdf/jhks101.pdf"),
+        NcertBookMetadata("Shemushi II Sanskrit – Class 10", "Class 10", "Sanskrit", "CBSE / Class 10 Board", "NCERT Class 10 Shemushi II Sanskrit textbook.", "https://ncert.nic.in/textbook/pdf/jsk101.pdf"),
 
         // ================= CLASS 11 =================
         NcertBookMetadata("Physics Part 1 – Class 11", "Class 11", "Physics", "CBSE / NEET / JEE", "NCERT Class 11 Physics Part 1 (Mechanics, Laws of Motion, Gravitation, Work & Energy).", "https://ncert.nic.in/textbook/pdf/keph101.pdf"),
@@ -143,4 +145,31 @@ object NcertCatalogService {
     suspend fun fetchNcertCatalog(): List<NcertBookMetadata> = withContext(Dispatchers.IO) {
         FULL_CLASS_1_TO_12_CATALOG
     }
+
+    suspend fun fetchClass1To10Catalog(): List<NcertBookMetadata> = withContext(Dispatchers.IO) {
+        val class1to10 = (1..10).map { "Class $it" }.toSet()
+        FULL_CLASS_1_TO_12_CATALOG.filter { it.category in class1to10 }
+    }
+
+    fun getAllClasses(): List<String> = listOf("All Classes") + (1..12).map { "Class $it" }
+
+    fun getAllSubjects(): List<String> = listOf(
+        "All Subjects",
+        "Mathematics",
+        "Science",
+        "Social Science",
+        "English",
+        "Hindi",
+        "Sanskrit",
+        "EVS",
+        "Physics",
+        "Chemistry",
+        "Biology",
+        "History",
+        "Geography",
+        "Political Science",
+        "Economics",
+        "Accountancy",
+        "Commerce"
+    )
 }

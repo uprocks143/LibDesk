@@ -2228,11 +2228,18 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun loadCuratedFreeStudyPdfs() {
+    val isFetchingNcertBooks = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    fun loadCuratedFreeStudyPdfs(onlyClass1To10: Boolean = false) {
         viewModelScope.launch {
             val libId = _currentLibraryId.value
+            isFetchingNcertBooks.value = true
             try {
-                val catalog = com.example.data.remote.NcertCatalogService.fetchNcertCatalog()
+                val catalog = if (onlyClass1To10) {
+                    com.example.data.remote.NcertCatalogService.fetchClass1To10Catalog()
+                } else {
+                    com.example.data.remote.NcertCatalogService.fetchNcertCatalog()
+                }
                 val materials = catalog.mapIndexed { index, metadata ->
                     DigitalMaterialEntity(
                         id = "DM-NCERT-${index + 1}-${libId.take(4)}",
@@ -2252,9 +2259,12 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     )
                 }
                 materials.forEach { repository.saveDigitalMaterial(it) }
-                _userMessage.value = "📚 All NCERT Class 1-12 Textbooks (${materials.size} Books) added to Digital Library!"
+                val label = if (onlyClass1To10) "Class 1 to 10th" else "Class 1-12"
+                _userMessage.value = "📚 All NCERT $label Textbooks (${materials.size} Books) successfully fetched & added to Study Materials!"
             } catch (e: Exception) {
                 _userMessage.value = "Could not load NCERT books: ${e.localizedMessage}"
+            } finally {
+                isFetchingNcertBooks.value = false
             }
         }
     }
