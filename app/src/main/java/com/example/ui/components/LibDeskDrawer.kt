@@ -53,6 +53,7 @@ fun LibDeskDrawerContent(
     isTrialExpired: Boolean = false,
     subscriptionPlanName: String? = null,
     onOpenProfile: () -> Unit = {},
+    onOpenNcertCatalog: () -> Unit = {},
     onLogout: () -> Unit = {},
     onCloseDrawer: () -> Unit,
     modifier: Modifier = Modifier
@@ -88,6 +89,13 @@ fun LibDeskDrawerContent(
                         .fillMaxWidth()
                         .padding(20.dp)
                 ) {
+                    val isOwner = currentRole == "OWNER"
+                    val roleBadgeText = when (currentRole) {
+                        "SUPER_ADMIN" -> "SUPER ADMIN"
+                        "OWNER" -> "LIBRARY OWNER"
+                        else -> "STUDENT"
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -99,7 +107,7 @@ fun LibDeskDrawerContent(
                             border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color(0xFF0F172A).copy(alpha = 0.2f))
                         ) {
                             Text(
-                                text = if (currentRole == "MANAGER") "LIBRARY MANAGER" else "STUDENT",
+                                text = roleBadgeText,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0F172A),
@@ -135,9 +143,9 @@ fun LibDeskDrawerContent(
                             }
                     ) {
 
-                        val initials = if (currentRole == "MANAGER") {
-                            val name = currentUserName.ifBlank { library?.ownerName ?: "Manager" }
-                            name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "MG" }
+                        val initials = if (isOwner) {
+                            val name = currentUserName.ifBlank { library?.ownerName ?: "Owner" }
+                            name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "OW" }
                         } else {
                             val name = currentUserName.ifBlank { activeStudent?.fullName ?: "Student" }
                             name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "ST" }
@@ -168,12 +176,12 @@ fun LibDeskDrawerContent(
                         Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            val displayName = if (currentRole == "MANAGER") {
-                                currentUserName.ifBlank { library?.ownerName ?: "Library Manager" }
+                            val displayName = if (isOwner) {
+                                currentUserName.ifBlank { library?.ownerName ?: "Library Owner" }
                             } else {
                                 currentUserName.ifBlank { activeStudent?.fullName ?: "Student Member" }
                             }
-                            val displayEmail = if (currentRole == "MANAGER") {
+                            val displayEmail = if (isOwner) {
                                 currentUserEmail.ifBlank { library?.email ?: "" }
                             } else {
                                 currentUserEmail.ifBlank { activeStudent?.email ?: "" }
@@ -235,14 +243,14 @@ fun LibDeskDrawerContent(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Icon(
-                                imageVector = if (currentRole == "MANAGER") Icons.Default.AdminPanelSettings else Icons.Default.School,
+                                imageVector = if (isOwner) Icons.Default.AdminPanelSettings else Icons.Default.School,
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (currentRole == "MANAGER") "Library Owner / Manager" else "Student",
+                                text = if (isOwner) "Library Owner" else "Student",
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -259,7 +267,7 @@ fun LibDeskDrawerContent(
 
             RoleGate(
                 currentRole = currentRole,
-                allowedRoles = setOf(LibDeskRoles.MANAGER),
+                allowedRoles = setOf(LibDeskRoles.OWNER),
                 fallback = {}
             ) {
                 Column {
@@ -389,6 +397,17 @@ fun LibDeskDrawerContent(
                     )
                 }
             }
+
+            DrawerNavItem(
+                icon = Icons.Default.MenuBook,
+                title = "NCERT Textbooks (Class 1–12)",
+                subtitle = "Official NCERT books for all subjects in Hindi & English",
+                badge = "Open OER",
+                onClick = {
+                    onOpenNcertCatalog()
+                    onCloseDrawer()
+                }
+            )
 
             Divider(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),

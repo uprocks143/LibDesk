@@ -1,56 +1,68 @@
 -- =========================================================================
 -- LibDesk Migration: Study Material Storage & NCERT Official Catalog
 -- Migration: 20260925_study_materials_and_ncert.sql
--- Self-contained: includes all required role helper functions & RLS policies
+-- Self-contained: includes hardened role helper functions & consolidated RLS policies
 -- =========================================================================
 
--- 1. Helper Functions for JWT Custom Claims & Role Checking (O(1) execution)
+-- 1. Helper Functions for JWT Custom Claims & Role Checking (InitPlan Optimized & Search-Path Hardened)
 CREATE OR REPLACE FUNCTION public.jwt_role()
-RETURNS text AS $$
+RETURNS text
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp AS $$
   SELECT COALESCE(
-    (auth.jwt() ->> 'role'),
-    (auth.jwt() -> 'app_metadata' ->> 'role'),
-    (auth.jwt() -> 'user_metadata' ->> 'role'),
+    (SELECT auth.jwt())->>'role',
+    (SELECT auth.jwt())->'app_metadata'->>'role',
+    (SELECT auth.jwt())->'user_metadata'->>'role',
     'anon'
   );
-$$ LANGUAGE sql STABLE;
+$$;
 
 CREATE OR REPLACE FUNCTION public.jwt_org_id()
-RETURNS text AS $$
+RETURNS text
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp AS $$
   SELECT COALESCE(
-    (auth.jwt() ->> 'org_id'),
-    (auth.jwt() -> 'app_metadata' ->> 'org_id'),
-    (auth.jwt() -> 'app_metadata' ->> 'library_id'),
-    (auth.jwt() -> 'user_metadata' ->> 'org_id'),
-    (auth.jwt() -> 'user_metadata' ->> 'library_id'),
+    (SELECT auth.jwt())->>'org_id',
+    (SELECT auth.jwt())->'app_metadata'->>'org_id',
+    (SELECT auth.jwt())->'app_metadata'->>'library_id',
+    (SELECT auth.jwt())->'user_metadata'->>'org_id',
+    (SELECT auth.jwt())->'user_metadata'->>'library_id',
     ''
   );
-$$ LANGUAGE sql STABLE;
+$$;
 
 CREATE OR REPLACE FUNCTION public.jwt_student_id()
-RETURNS text AS $$
+RETURNS text
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp AS $$
   SELECT COALESCE(
-    (auth.jwt() ->> 'student_id'),
-    (auth.jwt() -> 'app_metadata' ->> 'student_id'),
-    (auth.jwt() -> 'user_metadata' ->> 'student_id'),
+    (SELECT auth.jwt())->>'student_id',
+    (SELECT auth.jwt())->'app_metadata'->>'student_id',
+    (SELECT auth.jwt())->'user_metadata'->>'student_id',
     ''
   );
-$$ LANGUAGE sql STABLE;
+$$;
 
 CREATE OR REPLACE FUNCTION public.is_super_admin()
-RETURNS boolean AS $$
-  SELECT public.jwt_role() IN ('SUPER_ADMIN', 'MASTER_ADMIN');
-$$ LANGUAGE sql STABLE;
+RETURNS boolean
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp AS $$
+  SELECT (SELECT public.jwt_role()) = 'SUPER_ADMIN';
+$$;
 
 CREATE OR REPLACE FUNCTION public.is_library_owner()
-RETURNS boolean AS $$
-  SELECT public.jwt_role() IN ('OWNER', 'MANAGER', 'ADMIN', 'STAFF');
-$$ LANGUAGE sql STABLE;
+RETURNS boolean
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp AS $$
+  SELECT (SELECT public.jwt_role()) = 'OWNER';
+$$;
 
 CREATE OR REPLACE FUNCTION public.is_student()
-RETURNS boolean AS $$
-  SELECT public.jwt_role() IN ('STUDENT', 'MEMBER');
-$$ LANGUAGE sql STABLE;
+RETURNS boolean
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp AS $$
+  SELECT (SELECT public.jwt_role()) = 'STUDENT';
+$$;
 
 -- 2. Create Private Supabase Storage Bucket for Study Materials (Max 20 MB, PDF only)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -116,14 +128,20 @@ CREATE TABLE IF NOT EXISTS public.download_logs (
 
 -- 6. RPC Function: Increment Download Count Safely
 CREATE OR REPLACE FUNCTION public.increment_download_count(p_material_id UUID)
-RETURNS void AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, pg_temp AS $$
 BEGIN
+    IF (SELECT auth.uid()) IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
     UPDATE public.study_materials
     SET download_count = download_count + 1,
         updated_at = NOW()
-    WHERE id = p_material_id;
+    WHERE id = p_material_id AND deleted_at IS NULL
+      AND ((SELECT public.is_super_admin())
+           OR (org_id = (SELECT public.jwt_org_id())
+               AND ((SELECT public.is_library_owner()) OR ((SELECT public.is_student()) AND is_free = true))));
+    IF NOT FOUND THEN RAISE EXCEPTION 'Material not found or access denied'; END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$;
 
 -- 7. Indexes for High Performance
 CREATE INDEX IF NOT EXISTS idx_study_materials_org_cat ON public.study_materials(org_id, category);
@@ -139,85 +157,151 @@ ALTER TABLE public.study_materials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ncert_catalog ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.download_logs ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if already defined to allow idempotent re-runs
+-- Clean drop of legacy / duplicate policies
 DROP POLICY IF EXISTS "owner_full_study_materials" ON public.study_materials;
 DROP POLICY IF EXISTS "student_select_study_materials" ON public.study_materials;
 DROP POLICY IF EXISTS "super_admin_select_study_materials" ON public.study_materials;
+DROP POLICY IF EXISTS "study_materials_select" ON public.study_materials;
+DROP POLICY IF EXISTS "study_materials_insert" ON public.study_materials;
+DROP POLICY IF EXISTS "study_materials_update" ON public.study_materials;
+DROP POLICY IF EXISTS "study_materials_delete" ON public.study_materials;
+
 DROP POLICY IF EXISTS "auth_view_ncert_catalog" ON public.ncert_catalog;
 DROP POLICY IF EXISTS "anon_view_ncert_catalog" ON public.ncert_catalog;
 DROP POLICY IF EXISTS "super_admin_manage_ncert_catalog" ON public.ncert_catalog;
+DROP POLICY IF EXISTS "ncert_select" ON public.ncert_catalog;
+DROP POLICY IF EXISTS "ncert_insert" ON public.ncert_catalog;
+DROP POLICY IF EXISTS "ncert_update" ON public.ncert_catalog;
+DROP POLICY IF EXISTS "ncert_delete" ON public.ncert_catalog;
+
 DROP POLICY IF EXISTS "auth_insert_download_logs" ON public.download_logs;
 DROP POLICY IF EXISTS "owner_view_download_logs" ON public.download_logs;
+DROP POLICY IF EXISTS "download_logs_select" ON public.download_logs;
+DROP POLICY IF EXISTS "download_logs_insert" ON public.download_logs;
+DROP POLICY IF EXISTS "download_logs_update" ON public.download_logs;
+DROP POLICY IF EXISTS "download_logs_delete" ON public.download_logs;
+
 DROP POLICY IF EXISTS "owner_upload_study_materials_storage" ON storage.objects;
+DROP POLICY IF EXISTS "owner_update_study_materials_storage" ON storage.objects;
 DROP POLICY IF EXISTS "owner_delete_study_materials_storage" ON storage.objects;
 DROP POLICY IF EXISTS "student_download_study_materials_storage" ON storage.objects;
 
--- 9. RLS Policies: study_materials
-CREATE POLICY "owner_full_study_materials" ON public.study_materials
-    FOR ALL TO authenticated
-    USING (public.is_library_owner() AND org_id = public.jwt_org_id())
-    WITH CHECK (public.is_library_owner() AND org_id = public.jwt_org_id());
+-- 9. Consolidated RLS Policies: study_materials (1 policy per action)
+CREATE POLICY "study_materials_select" ON public.study_materials FOR SELECT TO authenticated
+USING (
+  (SELECT public.is_super_admin())
+  OR ((SELECT public.is_library_owner()) AND org_id = (SELECT public.jwt_org_id()))
+  OR ((SELECT public.is_student()) AND org_id = (SELECT public.jwt_org_id()) AND deleted_at IS NULL AND is_free = true)
+);
 
-CREATE POLICY "student_select_study_materials" ON public.study_materials
-    FOR SELECT TO authenticated
-    USING (
-        public.is_student()
-        AND org_id = public.jwt_org_id()
-        AND deleted_at IS NULL
-        AND is_free = true
-    );
+CREATE POLICY "study_materials_insert" ON public.study_materials FOR INSERT TO authenticated
+WITH CHECK (
+  (SELECT public.is_super_admin())
+  OR ((SELECT public.is_library_owner()) AND org_id = (SELECT public.jwt_org_id()))
+);
 
-CREATE POLICY "super_admin_select_study_materials" ON public.study_materials
-    FOR SELECT TO authenticated
-    USING (public.is_super_admin());
+CREATE POLICY "study_materials_update" ON public.study_materials FOR UPDATE TO authenticated
+USING (
+  (SELECT public.is_super_admin())
+  OR ((SELECT public.is_library_owner()) AND org_id = (SELECT public.jwt_org_id()))
+)
+WITH CHECK (
+  (SELECT public.is_super_admin())
+  OR ((SELECT public.is_library_owner()) AND org_id = (SELECT public.jwt_org_id()))
+);
 
--- 10. RLS Policies: ncert_catalog
-CREATE POLICY "auth_view_ncert_catalog" ON public.ncert_catalog
-    FOR SELECT TO authenticated
-    USING (is_active = true);
+CREATE POLICY "study_materials_delete" ON public.study_materials FOR DELETE TO authenticated
+USING (
+  (SELECT public.is_super_admin())
+  OR ((SELECT public.is_library_owner()) AND org_id = (SELECT public.jwt_org_id()))
+);
 
-CREATE POLICY "anon_view_ncert_catalog" ON public.ncert_catalog
-    FOR SELECT TO anon
-    USING (is_active = true);
+-- 10. Consolidated RLS Policies: ncert_catalog (1 policy per action)
+CREATE POLICY "ncert_select" ON public.ncert_catalog FOR SELECT TO authenticated
+USING (is_active = true OR (SELECT public.is_super_admin()));
 
-CREATE POLICY "super_admin_manage_ncert_catalog" ON public.ncert_catalog
-    FOR ALL TO authenticated
-    USING (public.is_super_admin())
-    WITH CHECK (public.is_super_admin());
+CREATE POLICY "ncert_insert" ON public.ncert_catalog FOR INSERT TO authenticated
+WITH CHECK ((SELECT public.is_super_admin()));
 
--- 11. RLS Policies: download_logs
-CREATE POLICY "auth_insert_download_logs" ON public.download_logs
-    FOR INSERT TO authenticated
-    WITH CHECK (true);
+CREATE POLICY "ncert_update" ON public.ncert_catalog FOR UPDATE TO authenticated
+USING ((SELECT public.is_super_admin()))
+WITH CHECK ((SELECT public.is_super_admin()));
 
-CREATE POLICY "owner_view_download_logs" ON public.download_logs
-    FOR SELECT TO authenticated
-    USING (public.is_library_owner() OR public.is_super_admin());
+CREATE POLICY "ncert_delete" ON public.ncert_catalog FOR DELETE TO authenticated
+USING ((SELECT public.is_super_admin()));
+
+-- 11. Consolidated RLS Policies: download_logs (1 policy per action)
+CREATE POLICY "download_logs_select" ON public.download_logs FOR SELECT TO authenticated
+USING (
+  (SELECT public.is_super_admin())
+  OR ((SELECT public.is_library_owner()) AND EXISTS (
+    SELECT 1 FROM public.study_materials sm
+    WHERE sm.id::text = material_id AND sm.org_id = (SELECT public.jwt_org_id())
+  ))
+);
+
+CREATE POLICY "download_logs_insert" ON public.download_logs FOR INSERT TO authenticated
+WITH CHECK (
+  (SELECT public.is_student())
+  AND student_id = (SELECT public.jwt_student_id())
+  AND EXISTS (
+    SELECT 1 FROM public.study_materials sm
+    WHERE sm.id::text = material_id AND sm.org_id = (SELECT public.jwt_org_id())
+      AND sm.deleted_at IS NULL AND sm.is_free = true
+  )
+);
+
+CREATE POLICY "download_logs_update" ON public.download_logs FOR UPDATE TO authenticated
+USING ((SELECT public.is_super_admin()))
+WITH CHECK ((SELECT public.is_super_admin()));
+
+CREATE POLICY "download_logs_delete" ON public.download_logs FOR DELETE TO authenticated
+USING ((SELECT public.is_super_admin()));
 
 -- 12. Storage Objects RLS Policies for study-materials bucket
 CREATE POLICY "owner_upload_study_materials_storage" ON storage.objects
-    FOR INSERT TO authenticated
-    WITH CHECK (
-        bucket_id = 'study-materials'
-        AND split_part(name, '/', 1) = public.jwt_org_id()
-        AND public.is_library_owner()
-    );
+FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'study-materials'
+  AND split_part(name, '/', 1) = (SELECT public.jwt_org_id())
+  AND (SELECT public.is_library_owner())
+);
+
+CREATE POLICY "owner_update_study_materials_storage" ON storage.objects
+FOR UPDATE TO authenticated
+USING (
+  bucket_id = 'study-materials'
+  AND split_part(name, '/', 1) = (SELECT public.jwt_org_id())
+  AND (SELECT public.is_library_owner())
+)
+WITH CHECK (
+  bucket_id = 'study-materials'
+  AND split_part(name, '/', 1) = (SELECT public.jwt_org_id())
+  AND (SELECT public.is_library_owner())
+);
 
 CREATE POLICY "owner_delete_study_materials_storage" ON storage.objects
-    FOR DELETE TO authenticated
-    USING (
-        bucket_id = 'study-materials'
-        AND split_part(name, '/', 1) = public.jwt_org_id()
-        AND public.is_library_owner()
-    );
+FOR DELETE TO authenticated
+USING (
+  bucket_id = 'study-materials'
+  AND split_part(name, '/', 1) = (SELECT public.jwt_org_id())
+  AND (SELECT public.is_library_owner())
+);
 
 CREATE POLICY "student_download_study_materials_storage" ON storage.objects
-    FOR SELECT TO authenticated
-    USING (
-        bucket_id = 'study-materials'
-        AND split_part(name, '/', 1) = public.jwt_org_id()
-        AND (public.is_student() OR public.is_library_owner())
-    );
+FOR SELECT TO authenticated
+USING (
+  bucket_id = 'study-materials'
+  AND (
+    ((SELECT public.is_library_owner()) AND split_part(name, '/', 1) = (SELECT public.jwt_org_id()))
+    OR
+    ((SELECT public.is_student()) AND EXISTS(
+      SELECT 1 FROM public.study_materials sm
+      WHERE sm.org_id = (SELECT public.jwt_org_id()) AND sm.storage_path = name
+        AND sm.deleted_at IS NULL AND sm.is_free = true
+    ))
+  )
+);
 
 -- 13. Realtime Enablement
 ALTER TABLE public.study_materials REPLICA IDENTITY FULL;

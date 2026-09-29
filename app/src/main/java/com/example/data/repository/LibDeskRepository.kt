@@ -189,43 +189,25 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", sub.id)
                 put("libraryId", sub.libraryId)
-                put("library_id", sub.libraryId)
                 put("userId", sub.userId)
-                put("user_id", sub.userId)
                 put("ownerName", sub.ownerName)
-                put("owner_name", sub.ownerName)
                 put("ownerMobile", sub.ownerMobile)
-                put("owner_mobile", sub.ownerMobile)
                 put("ownerEmail", sub.ownerEmail)
-                put("owner_email", sub.ownerEmail)
                 put("libraryName", sub.libraryName)
-                put("library_name", sub.libraryName)
                 put("planId", sub.planId)
-                put("plan_id", sub.planId)
                 put("planName", sub.planName)
-                put("plan_name", sub.planName)
                 put("amountPaid", sub.amountPaid)
-                put("amount_paid", sub.amountPaid)
                 put("billingCycle", sub.billingCycle)
-                put("billing_cycle", sub.billingCycle)
                 put("status", sub.status)
                 put("startDate", sub.startDate)
-                put("start_date", sub.startDate)
                 put("expiryDate", sub.expiryDate)
-                put("expiry_date", sub.expiryDate)
                 put("paymentMethod", sub.paymentMethod)
-                put("payment_method", sub.paymentMethod)
                 put("paymentReferenceId", sub.paymentReferenceId)
-                put("payment_reference_id", sub.paymentReferenceId)
                 put("receiptImageUrl", sub.receiptImageUrl)
-                put("receipt_image_url", sub.receiptImageUrl)
                 put("isVerifiedByAdmin", sub.isVerifiedByAdmin)
-                put("is_verified_by_admin", sub.isVerifiedByAdmin)
                 put("notes", sub.notes)
                 put("createdAt", sub.createdAt)
-                put("created_at", sub.createdAt)
                 put("updatedAt", sub.updatedAt)
-                put("updated_at", sub.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("user_subscriptions", arr)
@@ -332,33 +314,22 @@ class LibDeskRepository(val context: Context? = null) {
                 put(JSONObject().apply {
                     put("id", sub.id)
                     put("libraryId", sub.libraryId)
-                    put("library_id", sub.libraryId)
                     put("libraryName", sub.libraryName)
-                    put("library_name", sub.libraryName)
                     put("planId", sub.planId)
-                    put("plan_id", sub.planId)
                     put("planName", sub.planName)
-                    put("plan_name", sub.planName)
                     put("status", sub.status)
                     put("startDate", sub.startDate)
-                    put("start_date", sub.startDate)
                     put("expiryDate", sub.expiryDate)
-                    put("expiry_date", sub.expiryDate)
                     put("durationDays", sub.durationDays)
-                    put("duration_days", sub.durationDays)
                     put("durationUnit", sub.durationUnit)
-                    put("duration_unit", sub.durationUnit)
                     put("price", sub.price)
                     put("discount", sub.discount)
                     put("maxSeats", sub.maxSeats)
-                    put("max_seats", sub.maxSeats)
                     put("autoRenew", sub.autoRenew)
-                    put("auto_renew", sub.autoRenew)
                     put("notes", sub.notes)
                     put("subscriptionActive", isSubActive)
                     put("subscription_active", isSubActive)
                     put("updatedAt", System.currentTimeMillis())
-                    put("updated_at", System.currentTimeMillis())
                 })
             }
             SupabaseClient.upsertRecords("library_subscriptions", subArray)
@@ -523,19 +494,18 @@ class LibDeskRepository(val context: Context? = null) {
         // Ensure Super Admin user account is registered in users table
         if (admin.email.isNotBlank()) {
             val superUser = _users.value.find { it.role.equals("SUPER_ADMIN", ignoreCase = true) || it.email.equals(admin.email, ignoreCase = true) }
-            val updatedUser = (superUser ?: UserAccountEntity(
-                id = "SUPER-ADMIN-MASTER",
+            val finalId = superUser?.id?.takeIf { it.isNotBlank() } ?: admin.id.takeIf { it.isNotBlank() } ?: "SUPER-ADMIN-MASTER"
+            val finalPassword = admin.accessCode.takeIf { it.isNotBlank() } ?: superUser?.password ?: ""
+            val updatedUser = UserAccountEntity(
+                id = finalId,
                 email = admin.email,
+                password = finalPassword,
                 name = admin.name.ifBlank { "Super Administrator" },
                 role = "SUPER_ADMIN",
                 libraryId = "",
                 phone = admin.mobile,
                 isActive = true,
-                createdAt = admin.createdAt
-            )).copy(
-                name = admin.name.ifBlank { "Super Administrator" },
-                phone = admin.mobile,
-                email = admin.email
+                createdAt = if (superUser != null && superUser.createdAt > 0) superUser.createdAt else admin.createdAt
             )
             saveUser(updatedUser)
         }
@@ -595,34 +565,22 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", library.id)
                 put("name", library.name)
-                put("library_name", library.name)
                 put("code", library.code)
-                put("library_code", library.code)
                 put("logoUrl", library.logoUrl)
-                put("logo_url", library.logoUrl)
                 put("description", library.description)
                 put("establishedDate", library.establishedDate)
-                put("established_date", library.establishedDate)
                 put("regNumber", library.regNumber)
-                put("reg_number", library.regNumber)
                 put("ownerName", library.ownerName)
-                put("owner_name", library.ownerName)
                 put("ownerPhone", library.ownerPhone)
-                put("owner_phone", library.ownerPhone)
                 put("ownerEmail", library.ownerEmail)
-                put("owner_email", library.ownerEmail)
                 put("ownerWhatsApp", library.ownerWhatsApp)
-                put("owner_whatsapp", library.ownerWhatsApp)
                 put("alternateContact", library.alternateContact)
-                put("alternate_contact", library.alternateContact)
                 put("address", library.address)
-                put("street_address", library.address)
                 put("landmark", library.landmark)
                 put("city", library.city)
                 put("district", library.district)
                 put("state", library.state)
                 put("pincode", library.pincode)
-                put("pin_code", library.pincode)
                 put("latitude", library.latitude)
                 put("longitude", library.longitude)
                 put("phone", library.phone)
@@ -630,25 +588,15 @@ class LibDeskRepository(val context: Context? = null) {
                 put("email", library.email)
                 put("website", library.website)
                 put("upiId", library.upiId)
-                put("upi_id", library.upiId)
                 put("upiPayeeName", library.upiPayeeName)
-                put("upi_payee_name", library.upiPayeeName)
                 put("receiptPrefix", library.receiptPrefix)
-                put("receipt_prefix", library.receiptPrefix)
                 put("defaultFinePerDay", library.defaultFinePerDay)
-                put("default_fine_per_day", library.defaultFinePerDay)
                 put("borrowLimit", library.borrowLimit)
-                put("borrow_limit", library.borrowLimit)
                 put("loanDays", library.loanDays)
-                put("loan_days", library.loanDays)
                 put("qrAttendanceStrictShift", library.qrAttendanceStrictShift)
-                put("qr_attendance_strict_shift", library.qrAttendanceStrictShift)
                 put("subscription_active", true)
-                put("subscriptionActive", true)
                 put("createdAt", library.createdAt)
-                put("created_at", library.createdAt)
                 put("updatedAt", library.updatedAt)
-                put("updated_at", library.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("libraries", arr)
@@ -679,9 +627,14 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     suspend fun getUserByIdentifierAndRole(identifier: String, role: String): UserAccountEntity? = withContext(Dispatchers.IO) {
-        _users.value.find { (it.email.equals(identifier, ignoreCase = true) || it.phone == identifier) && it.role.equals(role, ignoreCase = true) }
+        val canonicalRole = when (role.trim().uppercase()) {
+            "SUPER_ADMIN" -> "SUPER_ADMIN"
+            "OWNER" -> "OWNER"
+            else -> "STUDENT"
+        }
+        _users.value.find { (it.email.equals(identifier, ignoreCase = true) || it.phone == identifier) && it.role.equals(canonicalRole, ignoreCase = true) }
             ?: run {
-                val (ok, arr) = SupabaseClient.queryTable("users?or=(email.ilike.$identifier,phone.eq.$identifier)&role=ilike.$role&select=*")
+                val (ok, arr) = SupabaseClient.queryTable("users?or=(email.ilike.$identifier,phone.eq.$identifier)&role=ilike.$canonicalRole&select=*")
                 if (ok && arr != null && arr.length() > 0) {
                     parseUser(arr.getJSONObject(0))
                 } else null
@@ -708,23 +661,31 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     suspend fun saveUser(user: UserAccountEntity) = withContext(Dispatchers.IO) {
-        _users.value = _users.value.filter { it.id != user.id } + user
+        val canonicalRole = when (user.role.trim().uppercase()) {
+            "SUPER_ADMIN" -> "SUPER_ADMIN"
+            "OWNER" -> "OWNER"
+            else -> "STUDENT"
+        }
+        val safeUser = (if (user.id.isBlank()) user.copy(id = UUID.randomUUID().toString()) else user).copy(role = canonicalRole)
+        _users.value = _users.value.filter { it.id != safeUser.id } + safeUser
         val arr = JSONArray().apply {
             put(JSONObject().apply {
-                put("id", user.id)
-                put("email", user.email)
-                put("password", user.password)
-                put("role", user.role)
-                put("libraryId", user.libraryId)
-                put("name", user.name)
-                put("phone", user.phone)
-                put("avatarUrl", user.avatarUrl)
-                put("studentIdRef", user.studentIdRef)
-                put("isActive", user.isActive)
-                put("createdAt", user.createdAt)
+                put("id", safeUser.id)
+                put("email", safeUser.email)
+                put("role", safeUser.role)
+                put("libraryId", safeUser.libraryId)
+                put("name", safeUser.name)
+                put("phone", safeUser.phone)
+                put("avatarUrl", safeUser.avatarUrl)
+                put("studentIdRef", safeUser.studentIdRef)
+                put("isActive", safeUser.isActive)
+                put("createdAt", safeUser.createdAt)
             })
         }
-        SupabaseClient.upsertRecords("users", arr)
+        val (ok, msg) = SupabaseClient.upsertRecords("users", arr)
+        if (!ok) {
+            android.util.Log.e("LibDeskRepository", "saveUser failed: $msg")
+        }
     }
 
     // ==========================================
@@ -949,43 +910,25 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", seat.id)
                 put("libraryId", seat.libraryId)
-                put("library_id", seat.libraryId)
                 put("seatNumber", seat.seatNumber)
-                put("seat_number", seat.seatNumber)
                 put("hallId", seat.hallId)
-                put("hall_id", seat.hallId)
                 put("hallName", seat.hallName)
-                put("hall_name", seat.hallName)
                 put("sectionId", seat.sectionId)
-                put("section_id", seat.sectionId)
                 put("sectionName", seat.sectionName)
-                put("section_name", seat.sectionName)
                 put("cabinId", seat.cabinId)
-                put("cabin_id", seat.cabinId)
                 put("cabinName", seat.cabinName)
-                put("cabin_name", seat.cabinName)
                 put("floor", seat.floor)
                 put("seatType", seat.seatType)
-                put("seat_type", seat.seatType)
                 put("monthlyFee", seat.monthlyFee)
-                put("monthly_fee", seat.monthlyFee)
                 put("status", seat.status)
                 put("assignedStudentId", seat.assignedStudentId)
-                put("assigned_student_id", seat.assignedStudentId)
                 put("assignedStudentName", seat.assignedStudentName)
-                put("assigned_student_name", seat.assignedStudentName)
                 put("assignedShiftId", seat.assignedShiftId)
-                put("assigned_shift_id", seat.assignedShiftId)
                 put("assignedShiftName", seat.assignedShiftName)
-                put("assigned_shift_name", seat.assignedShiftName)
                 put("validUntil", seat.validUntil)
-                put("valid_until", seat.validUntil)
                 put("gridRow", seat.gridRow)
-                put("grid_row", seat.gridRow)
                 put("gridCol", seat.gridCol)
-                put("grid_col", seat.gridCol)
                 put("floorZone", seat.floorZone)
-                put("floor_zone", seat.floorZone)
             })
         }
         SupabaseClient.upsertRecords("seats", arr)
@@ -1039,22 +982,14 @@ class LibDeskRepository(val context: Context? = null) {
             arr.put(JSONObject().apply {
                 put("id", s.id)
                 put("libraryId", s.libraryId)
-                put("library_id", s.libraryId)
                 put("seatNumber", s.seatNumber)
-                put("seat_number", s.seatNumber)
                 put("hallId", s.hallId)
-                put("hall_id", s.hallId)
                 put("hallName", s.hallName)
-                put("hall_name", s.hallName)
                 put("sectionId", s.sectionId)
-                put("section_id", s.sectionId)
                 put("sectionName", s.sectionName)
-                put("section_name", s.sectionName)
                 put("floor", s.floor)
                 put("seatType", s.seatType)
-                put("seat_type", s.seatType)
                 put("monthlyFee", s.monthlyFee)
-                put("monthly_fee", s.monthlyFee)
                 put("status", s.status)
             })
         }
@@ -1109,6 +1044,26 @@ class LibDeskRepository(val context: Context? = null) {
             notes = "Assigned to ${student.fullName}"
         )
         _seatAssignments.value = _seatAssignments.value + assignment
+
+        val assignArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", assignment.id)
+                put("libraryId", assignment.libraryId)
+                put("seatId", assignment.seatId)
+                put("seatNumber", assignment.seatNumber)
+                put("studentId", assignment.studentId)
+                put("studentName", assignment.studentName)
+                put("shiftId", assignment.shiftId)
+                put("shiftName", assignment.shiftName)
+                put("startDate", assignment.startDate)
+                put("endDate", assignment.endDate)
+                put("planId", assignment.planId)
+                put("status", assignment.status)
+                put("notes", assignment.notes)
+                put("createdAt", System.currentTimeMillis())
+            })
+        }
+        SupabaseClient.upsertRecords("seat_assignments", assignArr)
 
         logAudit(libraryId, "Manager", "ASSIGN_SEAT", "Seat", seat.id, "Assigned ${seat.seatNumber} to ${student.fullName}")
     }
@@ -1264,70 +1219,50 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     private suspend fun pushStudentToSupabase(student: StudentEntity) {
+        val safeStudent = if (student.id.isBlank()) student.copy(id = UUID.randomUUID().toString()) else student
         val arr = JSONArray().apply {
             put(JSONObject().apply {
-                put("id", student.id)
-                put("libraryId", student.libraryId)
-                put("library_id", student.libraryId)
-                put("fullName", student.fullName)
-                put("full_name", student.fullName)
-                put("photoUrl", student.photoUrl)
-                put("photo_url", student.photoUrl)
-                put("studentCode", student.studentCode)
-                put("student_code", student.studentCode)
-                put("mobile", student.mobile)
-                put("phone", student.mobile)
-                put("email", student.email)
-                put("dob", student.dob)
-                put("gender", student.gender)
-                put("address", student.address)
-                put("parentName", student.parentName)
-                put("parent_name", student.parentName)
-                put("parentMobile", student.parentMobile)
-                put("parent_mobile", student.parentMobile)
-                put("courseClass", student.courseClass)
-                put("course_class", student.courseClass)
-                put("college", student.college)
-                put("targetExam", student.targetExam)
-                put("target_exam", student.targetExam)
-                put("category", student.category)
-                put("batch", student.batch)
-                put("planId", student.planId)
-                put("plan_id", student.planId)
-                put("planName", student.planName)
-                put("plan_name", student.planName)
-                put("shiftId", student.shiftId)
-                put("shift_id", student.shiftId)
-                put("shiftName", student.shiftName)
-                put("shift_name", student.shiftName)
-                put("seatId", student.seatId)
-                put("seat_id", student.seatId)
-                put("seatNumber", student.seatNumber)
-                put("seat_number", student.seatNumber)
-                put("hallName", student.hallName)
-                put("hall_name", student.hallName)
-                put("joiningDate", student.joiningDate)
-                put("joining_date", student.joiningDate)
-                put("expiryDate", student.expiryDate)
-                put("expiry_date", student.expiryDate)
-                put("totalFee", student.totalFee)
-                put("total_fee", student.totalFee)
-                put("discount", student.discount)
-                put("paidAmount", student.paidAmount)
-                put("paid_amount", student.paidAmount)
-                put("dueAmount", student.dueAmount)
-                put("due_amount", student.dueAmount)
-                put("status", student.status)
-                put("rfidQrCode", student.rfidQrCode)
-                put("rfid_qr_code", student.rfidQrCode)
-                put("emergencyContact", student.emergencyContact)
-                put("emergency_contact", student.emergencyContact)
-                put("password", student.password)
-                put("createdAt", student.createdAt)
-                put("created_at", student.createdAt)
+                put("id", safeStudent.id)
+                put("libraryId", safeStudent.libraryId)
+                put("userId", safeStudent.userId)
+                put("fullName", safeStudent.fullName)
+                put("photoUrl", safeStudent.photoUrl)
+                put("studentCode", safeStudent.studentCode)
+                put("mobile", safeStudent.mobile)
+                put("email", safeStudent.email)
+                put("dob", safeStudent.dob)
+                put("gender", safeStudent.gender)
+                put("address", safeStudent.address)
+                put("parentName", safeStudent.parentName)
+                put("parentMobile", safeStudent.parentMobile)
+                put("courseClass", safeStudent.courseClass)
+                put("college", safeStudent.college)
+                put("targetExam", safeStudent.targetExam)
+                put("category", safeStudent.category)
+                put("batch", safeStudent.batch)
+                put("planId", safeStudent.planId)
+                put("planName", safeStudent.planName)
+                put("shiftId", safeStudent.shiftId)
+                put("shiftName", safeStudent.shiftName)
+                put("seatId", safeStudent.seatId)
+                put("seatNumber", safeStudent.seatNumber)
+                put("hallName", safeStudent.hallName)
+                put("joiningDate", safeStudent.joiningDate)
+                put("expiryDate", safeStudent.expiryDate)
+                put("totalFee", safeStudent.totalFee)
+                put("discount", safeStudent.discount)
+                put("paidAmount", safeStudent.paidAmount)
+                put("dueAmount", safeStudent.dueAmount)
+                put("status", safeStudent.status)
+                put("rfidQrCode", safeStudent.rfidQrCode)
+                put("emergencyContact", safeStudent.emergencyContact)
+                put("createdAt", safeStudent.createdAt)
             })
         }
-        SupabaseClient.upsertRecords("students", arr)
+        val (ok, msg) = SupabaseClient.upsertRecords("students", arr)
+        if (!ok) {
+            android.util.Log.e("LibDeskRepository", "pushStudentToSupabase failed: $msg")
+        }
     }
 
     // ==========================================
@@ -1351,27 +1286,22 @@ class LibDeskRepository(val context: Context? = null) {
                 put(JSONObject().apply {
                     put("id", att.id)
                     put("libraryId", att.libraryId)
-                    put("library_id", att.libraryId)
                     put("studentId", att.studentId)
-                    put("student_id", att.studentId)
                     put("studentName", att.studentName)
-                    put("student_name", att.studentName)
+                    put("seatId", att.seatId)
                     put("seatNumber", att.seatNumber)
-                    put("seat_number", att.seatNumber)
+                    put("hallId", att.hallId)
                     put("hallName", att.hallName)
-                    put("hall_name", att.hallName)
+                    put("shiftId", att.shiftId)
                     put("shiftName", att.shiftName)
-                    put("shift_name", att.shiftName)
                     put("date", att.date)
                     put("checkInTime", att.checkInTime)
-                    put("check_in_time", att.checkInTime)
                     put("checkOutTime", att.checkOutTime)
-                    put("check_out_time", att.checkOutTime)
                     put("durationMinutes", att.durationMinutes)
-                    put("duration_minutes", att.durationMinutes)
                     put("status", att.status)
                     put("mode", att.mode)
                     put("notes", att.notes)
+                    put("createdAt", att.createdAt)
                     put("timestamp", att.timestamp)
                 })
             }
@@ -1602,13 +1532,14 @@ class LibDeskRepository(val context: Context? = null) {
                 put("publisher", book.publisher)
                 put("edition", book.edition)
                 put("accessionNumber", book.accessionNumber)
-                put("accession_number", book.accessionNumber)
                 put("totalCopies", book.totalCopies)
                 put("availableCopies", book.availableCopies)
                 put("issuedCopies", book.issuedCopies)
                 put("rack", book.rack)
                 put("shelf", book.shelf)
                 put("coverUrl", book.coverUrl)
+                put("createdAt", book.createdAt)
+                put("updatedAt", book.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("physical_books", arr)
@@ -1652,27 +1583,16 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", issue.id)
                 put("libraryId", issue.libraryId)
-                put("library_id", issue.libraryId)
                 put("bookId", issue.bookId)
-                put("book_id", issue.bookId)
                 put("bookTitle", issue.bookTitle)
-                put("book_title", issue.bookTitle)
                 put("studentId", issue.studentId)
-                put("student_id", issue.studentId)
                 put("studentName", issue.studentName)
-                put("student_name", issue.studentName)
                 put("studentMobile", issue.studentMobile)
-                put("student_mobile", issue.studentMobile)
                 put("issueDate", issue.issueDate)
-                put("issue_date", issue.issueDate)
                 put("dueDate", issue.dueDate)
-                put("due_date", issue.dueDate)
                 put("returnDate", issue.returnDate)
-                put("return_date", issue.returnDate)
                 put("fineAmount", issue.fineAmount)
-                put("fine_amount", issue.fineAmount)
                 put("finePaid", issue.finePaid)
-                put("fine_paid", issue.finePaid)
                 put("status", issue.status)
                 put("notes", issue.notes)
             })
@@ -1719,27 +1639,16 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", updatedIssue.id)
                 put("libraryId", updatedIssue.libraryId)
-                put("library_id", updatedIssue.libraryId)
                 put("bookId", updatedIssue.bookId)
-                put("book_id", updatedIssue.bookId)
                 put("bookTitle", updatedIssue.bookTitle)
-                put("book_title", updatedIssue.bookTitle)
                 put("studentId", updatedIssue.studentId)
-                put("student_id", updatedIssue.studentId)
                 put("studentName", updatedIssue.studentName)
-                put("student_name", updatedIssue.studentName)
                 put("studentMobile", updatedIssue.studentMobile)
-                put("student_mobile", updatedIssue.studentMobile)
                 put("issueDate", updatedIssue.issueDate)
-                put("issue_date", updatedIssue.issueDate)
                 put("dueDate", updatedIssue.dueDate)
-                put("due_date", updatedIssue.dueDate)
                 put("returnDate", updatedIssue.returnDate)
-                put("return_date", updatedIssue.returnDate)
                 put("fineAmount", updatedIssue.fineAmount)
-                put("fine_amount", updatedIssue.fineAmount)
                 put("finePaid", updatedIssue.finePaid)
-                put("fine_paid", updatedIssue.finePaid)
                 put("status", updatedIssue.status)
                 put("notes", updatedIssue.notes)
             })
@@ -1765,15 +1674,10 @@ class LibDeskRepository(val context: Context? = null) {
                 put(JSONObject().apply {
                     put("id", fine.id)
                     put("libraryId", fine.libraryId)
-                    put("library_id", fine.libraryId)
                     put("studentId", fine.studentId)
-                    put("student_id", fine.studentId)
                     put("studentName", fine.studentName)
-                    put("student_name", fine.studentName)
                     put("bookId", fine.bookId)
-                    put("book_id", fine.bookId)
                     put("bookTitle", fine.bookTitle)
-                    put("book_title", fine.bookTitle)
                     put("reason", fine.reason)
                     put("amount", fine.amount)
                     put("paid", fine.paid)
@@ -1796,28 +1700,21 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", material.id)
                 put("libraryId", material.libraryId)
-                put("library_id", material.libraryId)
                 put("title", material.title)
                 put("description", material.description)
                 put("category", material.category)
                 put("subject", material.subject)
                 put("exam", material.exam)
                 put("fileType", material.fileType)
-                put("file_type", material.fileType)
                 put("fileSize", material.fileSize)
-                put("file_size", material.fileSize)
                 put("fileUrl", material.fileUrl)
-                put("file_url", material.fileUrl)
                 put("accessPolicy", material.accessPolicy)
-                put("access_policy", material.accessPolicy)
                 put("allowedGroup", material.allowedGroup)
-                put("allowed_group", material.allowedGroup)
                 put("downloadCount", material.downloadCount)
-                put("download_count", material.downloadCount)
                 put("uploadDate", material.uploadDate)
-                put("upload_date", material.uploadDate)
                 put("isBookmarked", material.isBookmarked)
-                put("is_bookmarked", material.isBookmarked)
+                put("createdAt", material.createdAt)
+                put("updatedAt", material.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("digital_materials", arr)
@@ -1893,27 +1790,19 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", payment.id)
                 put("libraryId", payment.libraryId)
-                put("library_id", payment.libraryId)
                 put("receiptNumber", payment.receiptNumber)
-                put("receipt_number", payment.receiptNumber)
                 put("studentId", payment.studentId)
-                put("student_id", payment.studentId)
                 put("studentName", payment.studentName)
-                put("student_name", payment.studentName)
                 put("amount", payment.amount)
                 put("paymentMode", payment.paymentMode)
-                put("payment_mode", payment.paymentMode)
                 put("date", payment.date)
                 put("purpose", payment.purpose)
                 put("referenceNumber", payment.referenceNumber)
-                put("reference_number", payment.referenceNumber)
                 put("notes", payment.notes)
                 put("remarks", payment.remarks)
                 put("period", payment.period)
                 put("dueBalance", payment.dueBalance)
-                put("due_balance", payment.dueBalance)
                 put("createdAt", payment.createdAt)
-                put("created_at", payment.createdAt)
             })
         }
         SupabaseClient.upsertRecords("payments", arr)
@@ -1965,6 +1854,7 @@ class LibDeskRepository(val context: Context? = null) {
                 put("paymentMode", expense.paymentMode)
                 put("status", expense.status)
                 put("receiptRef", expense.receiptRef)
+                put("createdAt", expense.createdAt)
             })
         }
         SupabaseClient.upsertRecords("expenses", arr)
@@ -1985,27 +1875,19 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", payment.id)
                 put("libraryId", payment.libraryId)
-                put("library_id", payment.libraryId)
                 put("receiptNumber", payment.receiptNumber)
-                put("receipt_number", payment.receiptNumber)
                 put("studentId", payment.studentId)
-                put("student_id", payment.studentId)
                 put("studentName", payment.studentName)
-                put("student_name", payment.studentName)
                 put("amount", payment.amount)
                 put("paymentMode", payment.paymentMode)
-                put("payment_mode", payment.paymentMode)
                 put("date", payment.date)
                 put("purpose", payment.purpose)
                 put("referenceNumber", payment.referenceNumber)
-                put("reference_number", payment.referenceNumber)
                 put("notes", payment.notes)
                 put("remarks", payment.remarks)
                 put("period", payment.period)
                 put("dueBalance", payment.dueBalance)
-                put("due_balance", payment.dueBalance)
                 put("createdAt", payment.createdAt)
-                put("created_at", payment.createdAt)
             })
         }
         SupabaseClient.upsertRecords("payments", arr)
@@ -2031,19 +1913,15 @@ class LibDeskRepository(val context: Context? = null) {
             put(JSONObject().apply {
                 put("id", updated.id)
                 put("libraryId", updated.libraryId)
-                put("library_id", updated.libraryId)
                 put("studentId", updated.studentId)
-                put("student_id", updated.studentId)
                 put("studentName", updated.studentName)
-                put("student_name", updated.studentName)
                 put("bookId", updated.bookId)
-                put("book_id", updated.bookId)
                 put("bookTitle", updated.bookTitle)
-                put("book_title", updated.bookTitle)
                 put("reason", updated.reason)
                 put("amount", updated.amount)
                 put("paid", updated.paid)
                 put("date", updated.date)
+                put("createdAt", updated.createdAt)
             })
         }
         SupabaseClient.upsertRecords("fines", fineArr)
@@ -2075,8 +1953,11 @@ class LibDeskRepository(val context: Context? = null) {
                 put("date", notice.date)
                 put("targetAudience", notice.targetAudience)
                 put("senderName", notice.senderName)
-                put("sender_name", notice.senderName)
+                put("senderId", notice.senderId)
+                put("isGlobal", notice.isGlobal)
                 put("isActive", notice.isActive)
+                put("createdAt", notice.createdAt)
+                put("updatedAt", notice.updatedAt)
             })
         }
         SupabaseClient.upsertRecords("notices", arr)
@@ -2111,6 +1992,7 @@ class LibDeskRepository(val context: Context? = null) {
                 put("libraryId", feedback.libraryId)
                 put("studentId", feedback.studentId)
                 put("studentName", feedback.studentName)
+                put("seatId", feedback.seatId)
                 put("seatNumber", feedback.seatNumber)
                 put("type", feedback.type)
                 put("subject", feedback.subject)
@@ -2119,6 +2001,7 @@ class LibDeskRepository(val context: Context? = null) {
                 put("reply", feedback.reply)
                 put("date", feedback.date)
                 put("resolvedDate", feedback.resolvedDate)
+                put("createdAt", feedback.createdAt)
             })
         }
         SupabaseClient.upsertRecords("feedback_complaints", arr)
@@ -2143,19 +2026,43 @@ class LibDeskRepository(val context: Context? = null) {
         action: String,
         recordType: String,
         recordId: String,
-        details: String
+        details: String,
+        userId: String = "",
+        role: String = "OWNER"
     ) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
         val log = AuditLogEntity(
             id = UUID.randomUUID().toString(),
             libraryId = libraryId,
+            userId = userId,
+            userName = performedBy,
             performedBy = performedBy,
+            role = role,
             action = action,
             recordType = recordType,
             recordId = recordId,
             details = details,
-            timestamp = System.currentTimeMillis()
+            createdAt = now,
+            timestamp = now
         )
         _auditLogs.value = _auditLogs.value + log
+        val logArr = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", log.id)
+                put("libraryId", log.libraryId)
+                put("userId", log.userId)
+                put("userName", log.userName)
+                put("performedBy", log.performedBy)
+                put("role", log.role)
+                put("action", log.action)
+                put("recordType", log.recordType)
+                put("recordId", log.recordId)
+                put("details", log.details)
+                put("createdAt", log.createdAt)
+                put("timestamp", log.timestamp)
+            })
+        }
+        SupabaseClient.upsertRecords("audit_logs", logArr)
     }
 
     // ==========================================
@@ -2585,11 +2492,17 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     private fun parseUser(obj: JSONObject): UserAccountEntity {
+        val rawRole = optStringAny(obj, "role", fallback = "STUDENT").trim().uppercase()
+        val canonicalRole = when (rawRole) {
+            "SUPER_ADMIN" -> "SUPER_ADMIN"
+            "OWNER" -> "OWNER"
+            else -> "STUDENT"
+        }
         return UserAccountEntity(
             id = optStringAny(obj, "id", "user_id", fallback = UUID.randomUUID().toString()),
             email = optStringAny(obj, "email", fallback = ""),
-            password = optStringAny(obj, "password", fallback = "password123"),
-            role = optStringAny(obj, "role", fallback = "Student"),
+            password = optStringAny(obj, "password", fallback = ""),
+            role = canonicalRole,
             libraryId = optStringAny(obj, "libraryId", "library_id", fallback = ""),
             name = optStringAny(obj, "name", "full_name", fallback = ""),
             phone = optStringAny(obj, "phone", "mobile", fallback = ""),
@@ -2653,6 +2566,7 @@ class LibDeskRepository(val context: Context? = null) {
         return StudentEntity(
             id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
             libraryId = optStringAny(obj, "libraryId", "library_id", fallback = defaultLibId),
+            userId = optStringAny(obj, "userId", "user_id", fallback = ""),
             studentCode = optStringAny(obj, "studentCode", "student_code", fallback = "STU-001"),
             fullName = optStringAny(obj, "fullName", "full_name", "name", fallback = "Unknown"),
             photoUrl = optStringAny(obj, "photoUrl", "photo_url", fallback = ""),
@@ -2684,7 +2598,7 @@ class LibDeskRepository(val context: Context? = null) {
             status = optStringAny(obj, "status", fallback = "ACTIVE"),
             rfidQrCode = optStringAny(obj, "rfidQrCode", "rfid_qr_code", "qr_code", fallback = ""),
             emergencyContact = optStringAny(obj, "emergencyContact", "emergency_contact", fallback = ""),
-            password = optStringAny(obj, "password", fallback = "password123"),
+            password = optStringAny(obj, "password", fallback = ""),
             createdAt = optLongAny(obj, "createdAt", "created_at", fallback = System.currentTimeMillis())
         )
     }

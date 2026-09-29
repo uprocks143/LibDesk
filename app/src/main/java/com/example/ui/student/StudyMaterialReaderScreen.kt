@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +64,14 @@ fun StudyMaterialReaderScreen(
     var isNightMode by remember { mutableStateOf(false) }
     var bookmarks by remember { mutableStateOf(setOf<Int>()) }
     var showJumpDialog by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (showJumpDialog) {
+            showJumpDialog = false
+        } else {
+            onNavigateBack()
+        }
+    }
 
     // Zoom and pan state
     var scale by remember { mutableFloatStateOf(1f) }

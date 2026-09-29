@@ -361,8 +361,8 @@ object SupabaseAuthService {
                 }
             }
 
-            // 2. If role is OWNER or ADMIN (or fallback check for library owner)
-            if (role == UserRole.OWNER || role == UserRole.ADMIN) {
+            // 2. If role is OWNER (or fallback check for library owner)
+            if (role == UserRole.OWNER) {
                 val (lOk, lArr) = SupabaseClient.queryTable("libraries?ownerEmail=eq.$cleanEmail&select=id,name,code")
                 if (lOk && lArr != null && lArr.length() > 0) {
                     val libObj = lArr.getJSONObject(0)
@@ -471,20 +471,20 @@ object SupabaseAuthService {
                         UserRole.fromString(rawRoleStr)
                     } else if (expectedRole == "SUPER_ADMIN") {
                         UserRole.SUPER_ADMIN
-                    } else if (expectedRole == "MANAGER" || expectedRole == "OWNER") {
+                    } else if (expectedRole == "OWNER") {
                         UserRole.OWNER
                     } else {
                         UserRole.STUDENT
                     }
 
                     // Role validation if expectedRole was specified
-                    if (expectedRole == "STUDENT" && (role == UserRole.ADMIN || role == UserRole.OWNER || role == UserRole.SUPER_ADMIN)) {
+                    if (expectedRole == "STUDENT" && (role == UserRole.OWNER || role == UserRole.SUPER_ADMIN)) {
                         // User is an administrator trying to log in under Student tab
                         return@withContext Result.failure(
-                            Exception("This account is registered as an Administrator. Please select the appropriate management login.")
+                            Exception("This account is registered as a Library Owner. Please select the 'Owner' tab.")
                         )
-                    } else if ((expectedRole == "MANAGER" || expectedRole == "OWNER") && role == UserRole.STUDENT) {
-                        // User is a student trying to log in under Manager tab
+                    } else if (expectedRole == "OWNER" && role == UserRole.STUDENT) {
+                        // User is a student trying to log in under Owner tab
                         return@withContext Result.failure(
                             Exception("This account is registered as a Student Member. Please select the 'Student' tab to access your student pass.")
                         )
@@ -581,21 +581,30 @@ object SupabaseAuthService {
         password: String,
         name: String,
         role: UserRole,
-        libraryId: String = ""
+        libraryId: String = "",
+        phone: String = ""
     ): Result<UserSession> = withContext(Dispatchers.IO) {
         try {
             val cleanEmail = email.trim().lowercase()
+            val cleanPassword = password.trim()
             val url = "${getBaseUrl()}/auth/v1/signup?redirect_to=io.libdesk.app://auth-callback"
 
             val metadata = JSONObject().apply {
                 put("full_name", name)
+                put("name", name)
                 put("role", role.roleKey)
                 put("library_id", libraryId)
+                put("libraryId", libraryId)
+                put("password", cleanPassword)
+                if (phone.isNotBlank()) {
+                    put("phone", phone.trim())
+                    put("mobile", phone.trim())
+                }
             }
 
             val payload = JSONObject().apply {
                 put("email", cleanEmail)
-                put("password", password.trim())
+                put("password", cleanPassword)
                 put("data", metadata)
             }
 
@@ -720,7 +729,7 @@ object SupabaseAuthService {
                     success = true,
                     userId = "usr-${System.currentTimeMillis()}",
                     email = email,
-                    temporaryPassword = suggestedPassword ?: "password123",
+                    temporaryPassword = suggestedPassword ?: "",
                     message = "Local registration successful. Supabase Auth sync queued."
                 )
             )

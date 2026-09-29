@@ -22,16 +22,15 @@ import java.util.concurrent.TimeUnit
 
 enum class UserRole(val roleKey: String, val title: String) {
     SUPER_ADMIN("SUPER_ADMIN", "SaaS Platform Owner"),
-    OWNER("OWNER", "Library Owner / Manager"),
-    ADMIN("ADMIN", "Library Owner / Manager"),
+    OWNER("OWNER", "Library Owner"),
     STUDENT("STUDENT", "Student Member");
 
     companion object {
         fun fromString(value: String?): UserRole {
             return when (value?.trim()?.uppercase()) {
-                "SUPER_ADMIN", "MASTER_ADMIN", "PLATFORM_ADMIN" -> SUPER_ADMIN
-                "OWNER", "ADMIN", "MANAGER" -> OWNER
-                "STUDENT", "MEMBER", "USER" -> STUDENT
+                "SUPER_ADMIN" -> SUPER_ADMIN
+                "OWNER" -> OWNER
+                "STUDENT" -> STUDENT
                 else -> STUDENT
             }
         }

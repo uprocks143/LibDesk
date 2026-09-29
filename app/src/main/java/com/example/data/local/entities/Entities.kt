@@ -43,7 +43,7 @@ data class LibraryEntity(
 data class UserAccountEntity(
     val id: String,
     val email: String,
-    val password: String = "password123",
+    val password: String = "",
     val role: String, 
     val libraryId: String,
     val name: String,
@@ -149,6 +149,7 @@ data class SeatEntity(
 data class StudentEntity(
     val id: String,
     val libraryId: String,
+    val userId: String = "",
     val studentCode: String, 
     val fullName: String,
     val photoUrl: String = "",
@@ -180,7 +181,7 @@ data class StudentEntity(
     val status: String = "ACTIVE", 
     val rfidQrCode: String = "",
     val emergencyContact: String = "",
-    val password: String = "password123",
+    val password: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -206,8 +207,11 @@ data class AttendanceEntity(
     val libraryId: String,
     val studentId: String,
     val studentName: String,
+    val seatId: String = "",
     val seatNumber: String = "",
+    val hallId: String = "",
     val hallName: String = "",
+    val shiftId: String = "",
     val shiftName: String = "",
     val date: String, 
     val checkInTime: String, 
@@ -216,7 +220,8 @@ data class AttendanceEntity(
     val status: String = "CHECKED_IN", 
     val mode: String = "QR_SCAN", 
     val notes: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val timestamp: Long = createdAt
 )
 
 data class PhysicalBookEntity(
@@ -235,7 +240,9 @@ data class PhysicalBookEntity(
     val totalCopies: Int = 1,
     val availableCopies: Int = 1,
     val issuedCopies: Int = 0,
-    val coverUrl: String = ""
+    val coverUrl: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt
 )
 
 data class BookIssueEntity(
@@ -252,7 +259,8 @@ data class BookIssueEntity(
     val fineAmount: Double = 0.0,
     val finePaid: Boolean = false,
     val status: String = "ISSUED", 
-    val notes: String = ""
+    val notes: String = "",
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 data class DigitalMaterialEntity(
@@ -270,7 +278,9 @@ data class DigitalMaterialEntity(
     val allowedGroup: String = "All",
     val downloadCount: Int = 0,
     val uploadDate: String = "",
-    val isBookmarked: Boolean = false
+    val isBookmarked: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt
 )
 
 data class PaymentEntity(
@@ -300,7 +310,8 @@ data class ExpenseEntity(
     val description: String = "",
     val paymentMode: String = "UPI",
     val status: String = "PAID", 
-    val receiptRef: String = ""
+    val receiptRef: String = "",
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 data class FineEntity(
@@ -313,7 +324,8 @@ data class FineEntity(
     val reason: String = "Late Book Return",
     val amount: Double = 25.0,
     val paid: Boolean = false,
-    val date: String = ""
+    val date: String = "",
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 data class NoticeEntity(
@@ -323,10 +335,14 @@ data class NoticeEntity(
     val content: String,
     val category: String = "GENERAL", 
     val priority: String = "NORMAL", 
-    val date: String,
+    val date: String, 
     val targetAudience: String = "ALL",
     val senderName: String = "LibDesk Admin",
-    val isActive: Boolean = true
+    val senderId: String = "",
+    val isGlobal: Boolean = false,
+    val isActive: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = createdAt
 )
 
 data class FeedbackComplaintEntity(
@@ -334,6 +350,7 @@ data class FeedbackComplaintEntity(
     val libraryId: String,
     val studentId: String,
     val studentName: String,
+    val seatId: String = "",
     val seatNumber: String = "",
     val type: String = "COMPLAINT", 
     val subject: String,
@@ -341,18 +358,23 @@ data class FeedbackComplaintEntity(
     val status: String = "PENDING", 
     val reply: String = "",
     val date: String,
-    val resolvedDate: String = ""
+    val resolvedDate: String = "",
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 data class AuditLogEntity(
     val id: String,
     val libraryId: String,
-    val performedBy: String,
+    val userId: String = "",
+    val userName: String = "",
+    val performedBy: String = userName,
+    val role: String = "OWNER",
     val action: String,
     val recordType: String,
     val recordId: String,
     val details: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val timestamp: Long = createdAt
 )
 
 data class SaaSSubscriptionPlanEntity(

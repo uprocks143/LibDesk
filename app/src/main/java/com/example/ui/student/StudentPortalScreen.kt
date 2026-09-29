@@ -80,6 +80,17 @@ fun StudentPortalScreen(
     var selectedNoticeForDetail by remember { mutableStateOf<NoticeEntity?>(null) }
     var bookCatalogQuery by remember { mutableStateOf("") }
     var selectedPdfToView by remember { mutableStateOf<DigitalMaterialEntity?>(null) }
+    var selectedNcertBookToRead by remember { mutableStateOf<com.example.data.model.NcertBook?>(null) }
+
+    BackHandler(enabled = selectedNcertBookToRead != null || selectedPdfToView != null || selectedNoticeForDetail != null || showComplaintModal || selectedTab != 0) {
+        when {
+            selectedNcertBookToRead != null -> selectedNcertBookToRead = null
+            selectedPdfToView != null -> selectedPdfToView = null
+            selectedNoticeForDetail != null -> selectedNoticeForDetail = null
+            showComplaintModal -> showComplaintModal = false
+            selectedTab != 0 -> selectedTab = 0
+        }
+    }
 
     // SECURITY: this must NEVER fall back to `students.firstOrNull()`.
     // That fallback (plus the "Select Active Student" picker further below,
@@ -270,19 +281,41 @@ fun StudentPortalScreen(
             }
 
         
+        val tabList = remember {
+            listOf(
+                0 to "Dashboard",
+                7 to "NCERT Books",
+                6 to "Seat Layout",
+                5 to "Profile & Seat",
+                1 to "E-Resources",
+                2 to "My Books",
+                3 to "Fee & Dues",
+                4 to "Help & Notices"
+            )
+        }
+        val activeTabIndex = remember(selectedTab) {
+            tabList.indexOfFirst { it.first == selectedTab }.coerceAtLeast(0)
+        }
+
         ScrollableTabRow(
-            selectedTabIndex = selectedTab,
+            selectedTabIndex = activeTabIndex,
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             edgePadding = 12.dp
         ) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Dashboard", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) })
-            Tab(selected = selectedTab == 6, onClick = { selectedTab = 6 }, text = { Text("Seat Layout", fontWeight = if (selectedTab == 6) FontWeight.Bold else FontWeight.Normal) })
-            Tab(selected = selectedTab == 5, onClick = { selectedTab = 5 }, text = { Text("Profile & Seat", fontWeight = if (selectedTab == 5) FontWeight.Bold else FontWeight.Normal) })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("E-Resources", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) })
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("My Books", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) })
-            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Fee & Dues", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal) })
-            Tab(selected = selectedTab == 4, onClick = { selectedTab = 4 }, text = { Text("Help & Notices", fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal) })
+            tabList.forEach { (id, title) ->
+                Tab(
+                    selected = selectedTab == id,
+                    onClick = { selectedTab = id },
+                    text = {
+                        Text(
+                            text = title,
+                            fontWeight = if (selectedTab == id) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 13.5.sp
+                        )
+                    }
+                )
+            }
         }
 
         when (selectedTab) {
@@ -300,6 +333,7 @@ fun StudentPortalScreen(
                     onGoToFeeTab = { selectedTab = 3 },
                     onGoToProfileTab = { selectedTab = 5 },
                     onGoToSeatLayout = { selectedTab = 6 },
+                    onOpenNcertBooks = { selectedTab = 7 },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -320,6 +354,55 @@ fun StudentPortalScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedTab = 7 }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MenuBook,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Official NCERT Books (Class 1–12)",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.5.sp,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Class 1 to 12 All Subjects • Hindi & English Medium",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+
                     item {
                         OutlinedTextField(
                             value = searchQuery,
@@ -1006,6 +1089,16 @@ fun StudentPortalScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            7 -> {
+                NcertCatalogScreen(
+                    studentId = student.id,
+                    onNavigateBack = { selectedTab = 0 },
+                    onOpenBook = { book ->
+                        selectedNcertBookToRead = book
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 
@@ -1035,6 +1128,13 @@ fun StudentPortalScreen(
             fileUriOrUrl = pdf.fileUrl,
             description = pdf.description,
             onDismiss = { selectedPdfToView = null }
+        )
+    }
+
+    selectedNcertBookToRead?.let { book ->
+        NcertReaderScreen(
+            book = book,
+            onNavigateBack = { selectedNcertBookToRead = null }
         )
     }
 }

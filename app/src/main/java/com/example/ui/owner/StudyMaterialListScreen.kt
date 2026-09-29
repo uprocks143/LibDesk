@@ -1,6 +1,7 @@
 package com.example.ui.owner
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -47,6 +48,14 @@ fun StudyMaterialListScreen(
     val inactiveMaterials by repository.getOldInactiveMaterials(orgId).collectAsState(initial = emptyList())
 
     var materialToDelete by remember { mutableStateOf<StudyMaterial?>(null) }
+
+    BackHandler {
+        if (materialToDelete != null) {
+            materialToDelete = null
+        } else {
+            onNavigateBack()
+        }
+    }
 
     LaunchedEffect(orgId) {
         if (orgId.isNotBlank()) {

@@ -103,6 +103,17 @@ class NcertRepository(
     }
 
     /**
+     * Seeds or syncs the full Class 1-12 NCERT catalog to Supabase database.
+     */
+    suspend fun seedCatalogToDatabase(): Result<Int> = withContext(Dispatchers.IO) {
+        val result = catalogDataSource.seedCatalogToSupabase()
+        if (result.isSuccess) {
+            refreshCatalog()
+        }
+        result
+    }
+
+    /**
      * Triggers Edge Function sync for Super Admin.
      */
     suspend fun triggerSyncFromOfficial(): Result<String> {

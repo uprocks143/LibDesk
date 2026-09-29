@@ -356,7 +356,7 @@ CREATE TABLE public.libraries (
 CREATE TABLE public.users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL,
-    password TEXT DEFAULT 'password123',
+    password TEXT DEFAULT '',
     role TEXT NOT NULL, -- 'SUPER_ADMIN', 'MANAGER', 'STUDENT'
     "libraryId" TEXT DEFAULT '',
     name TEXT NOT NULL,
@@ -402,7 +402,7 @@ CREATE TABLE public.students (
     status TEXT DEFAULT 'ACTIVE',
     "rfidQrCode" TEXT DEFAULT '',
     "emergencyContact" TEXT DEFAULT '',
-    password TEXT DEFAULT 'password123',
+    password TEXT DEFAULT '',
     "createdAt" BIGINT DEFAULT 0
 );
 

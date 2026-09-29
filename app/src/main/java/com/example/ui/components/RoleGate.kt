@@ -35,19 +35,19 @@ import com.example.ui.theme.*
 
 object LibDeskRoles {
     const val SUPER_ADMIN = "SUPER_ADMIN"
-    const val MANAGER = "MANAGER"
+    const val OWNER = "OWNER"
     const val STUDENT = "STUDENT"
 
-    val ADMIN_ROLES = setOf(SUPER_ADMIN, MANAGER)
-    val ALL_ROLES = setOf(SUPER_ADMIN, MANAGER, STUDENT)
+    val ADMIN_ROLES = setOf(SUPER_ADMIN, OWNER)
+    val ALL_ROLES = setOf(SUPER_ADMIN, OWNER, STUDENT)
 }
 
 
 fun normalizeUserRole(role: String?): String {
     return when (role?.trim()?.uppercase()) {
-        "SUPER_ADMIN", "MASTER_ADMIN", "PLATFORM_ADMIN" -> LibDeskRoles.SUPER_ADMIN
-        "OWNER", "MANAGER", "ADMIN" -> LibDeskRoles.MANAGER
-        "STUDENT", "MEMBER", "USER" -> LibDeskRoles.STUDENT
+        "SUPER_ADMIN" -> LibDeskRoles.SUPER_ADMIN
+        "OWNER" -> LibDeskRoles.OWNER
+        "STUDENT" -> LibDeskRoles.STUDENT
         else -> LibDeskRoles.STUDENT
     }
 }
@@ -101,8 +101,8 @@ fun RequireAdminRole(
     content: @Composable () -> Unit
 ) {
     val allowed = remember(allowSuperAdmin) {
-        if (allowSuperAdmin) setOf(LibDeskRoles.MANAGER, LibDeskRoles.SUPER_ADMIN)
-        else setOf(LibDeskRoles.MANAGER)
+        if (allowSuperAdmin) setOf(LibDeskRoles.OWNER, LibDeskRoles.SUPER_ADMIN)
+        else setOf(LibDeskRoles.OWNER)
     }
 
     RoleGate(

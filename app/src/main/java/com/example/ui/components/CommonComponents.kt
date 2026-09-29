@@ -234,7 +234,7 @@ fun LibDeskHeader(
                             .take(2)
                             .map { it.first().uppercaseChar() }
                             .joinToString("")
-                    } else if (currentRole == "MANAGER") "MG" else "ST"
+                    } else if (currentRole == "SUPER_ADMIN") "SA" else if (currentRole == "OWNER") "OW" else "ST"
                 }
 
                 Box(

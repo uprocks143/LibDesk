@@ -398,7 +398,7 @@ data class Student(
     @SerialName("emergency_contact")
     val emergencyContact: String = "",
     @SerialName("password")
-    val password: String = "password123",
+    val password: String = "",
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")

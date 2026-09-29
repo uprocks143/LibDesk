@@ -1,9 +1,12 @@
 package com.example.ui.superadmin
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -37,6 +40,14 @@ fun NcertCatalogManagerScreen(
     var books by remember { mutableStateOf<List<NcertBook>>(emptyList()) }
     var bookToEditUrl by remember { mutableStateOf<NcertBook?>(null) }
     var newUrlInput by remember { mutableStateOf("") }
+
+    BackHandler {
+        if (bookToEditUrl != null) {
+            bookToEditUrl = null
+        } else {
+            onNavigateBack()
+        }
+    }
 
     fun reloadCatalog() {
         coroutineScope.launch {
@@ -115,6 +126,27 @@ fun NcertCatalogManagerScreen(
                     }
                 },
                 actions = {
+                    // Seed / Sync Class 1-12 full catalog button
+                    FilledTonalButton(
+                        onClick = {
+                            isSyncing = true
+                            coroutineScope.launch {
+                                val res = repository.seedCatalogToDatabase()
+                                isSyncing = false
+                                if (res.isSuccess) {
+                                    Toast.makeText(context, "Synced ${res.getOrNull()} textbooks to Supabase!", Toast.LENGTH_SHORT).show()
+                                    reloadCatalog()
+                                } else {
+                                    Toast.makeText(context, "Seeded locally: ${res.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = !isSyncing,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text("Seed 1–12", fontSize = 12.sp)
+                    }
+
                     // Manual "Sync Now" button that triggers Supabase Edge Function
                     Button(
                         onClick = {
@@ -144,7 +176,7 @@ fun NcertCatalogManagerScreen(
                         } else {
                             Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Sync Now", fontSize = 12.sp)
+                            Text("Sync Edge", fontSize = 12.sp)
                         }
                     }
                 }
@@ -152,115 +184,130 @@ fun NcertCatalogManagerScreen(
         },
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "Super Admin Legal & Catalog Governance",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Textbooks are strictly NEVER hosted on Supabase Storage. You can audit live official URLs, trigger the Supabase Edge Function 'sync-ncert-catalog', or toggle active listings.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            val isTablet = maxWidth >= 600.dp
+            val gridColumns = when {
+                maxWidth >= 960.dp -> GridCells.Fixed(3)
+                maxWidth >= 600.dp -> GridCells.Fixed(2)
+                else -> GridCells.Fixed(1)
             }
 
-            items(books, key = { it.id }) { book ->
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("manager_book_${book.id}")
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = book.bookTitle,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                )
-                                Text(
-                                    text = "${book.displayLabel} • Edition: ${book.editionYear}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (book.lastVerified.isNotBlank()) {
-                                    Text(
-                                        text = "Last verified: ${book.lastVerified.take(10)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                }
-                            }
-
-                            // Active / Inactive Toggle Switch
-                            Switch(
-                                checked = book.isActive,
-                                onCheckedChange = { activeState ->
-                                    coroutineScope.launch {
-                                        repository.toggleActive(book.id, activeState)
-                                        books = books.map { if (it.id == book.id) it.copy(isActive = activeState) else it }
-                                    }
-                                }
+            LazyVerticalGrid(
+                columns = gridColumns,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (isTablet) 24.dp else 16.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "Super Admin Legal & Catalog Governance",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Textbooks are strictly NEVER hosted on Supabase Storage. You can audit live official URLs, trigger the Supabase Edge Function 'sync-ncert-catalog', or toggle active listings. (Total registered: ${books.size})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Source: ${book.sourceUrl}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        val isLive = repository.verifySourceUrl(book.sourceUrl)
-                                        Toast.makeText(
-                                            context,
-                                            if (isLive) "✓ Official URL is live (HEAD 200 OK)" else "⚠️ Warning: URL returned error",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
+                items(books, key = { it.id }) { book ->
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("manager_book_${book.id}")
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Check Link", fontSize = 12.sp)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = book.bookTitle,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                    Text(
+                                        text = "${book.displayLabel} • Edition: ${book.editionYear}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (book.lastVerified.isNotBlank()) {
+                                        Text(
+                                            text = "Last verified: ${book.lastVerified.take(10)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+
+                                // Active / Inactive Toggle Switch
+                                Switch(
+                                    checked = book.isActive,
+                                    onCheckedChange = { activeState ->
+                                        coroutineScope.launch {
+                                            repository.toggleActive(book.id, activeState)
+                                            books = books.map { if (it.id == book.id) it.copy(isActive = activeState) else it }
+                                        }
+                                    }
+                                )
                             }
 
-                            FilledTonalButton(
-                                onClick = {
-                                    bookToEditUrl = book
-                                    newUrlInput = book.sourceUrl
-                                },
-                                modifier = Modifier.weight(1f)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Source: ${book.sourceUrl}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Edit URL", fontSize = 12.sp)
+                                OutlinedButton(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            val isLive = repository.verifySourceUrl(book.sourceUrl)
+                                            Toast.makeText(
+                                                context,
+                                                if (isLive) "✓ Official URL is live (HEAD 200 OK)" else "⚠️ Warning: URL returned error",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Check Link", fontSize = 12.sp)
+                                }
+
+                                FilledTonalButton(
+                                    onClick = {
+                                        bookToEditUrl = book
+                                        newUrlInput = book.sourceUrl
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Edit URL", fontSize = 12.sp)
+                                }
                             }
                         }
                     }

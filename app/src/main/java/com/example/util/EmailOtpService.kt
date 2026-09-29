@@ -188,7 +188,7 @@ object EmailOtpService {
                             val roleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
                                 ?: userMetadata?.optString("role")
                                 ?: when (purpose) {
-                                    OtpPurpose.SUPER_ADMIN_2FA -> "OWNER"
+                                    OtpPurpose.SUPER_ADMIN_2FA -> "SUPER_ADMIN"
                                     else -> "STUDENT"
                                 }
 

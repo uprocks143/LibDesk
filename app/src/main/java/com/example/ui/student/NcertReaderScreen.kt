@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,11 +48,21 @@ fun NcertReaderScreen(
     var totalPages by remember { mutableIntStateOf(0) }
     var currentPageIndex by remember { mutableIntStateOf(0) }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var downloadProgress by remember { mutableIntStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var isNightMode by remember { mutableStateOf(false) }
     var bookmarks by remember { mutableStateOf(setOf<Int>()) }
     var showJumpDialog by remember { mutableStateOf(false) }
+
+    BackHandler {
+        if (showJumpDialog) {
+            showJumpDialog = false
+        } else {
+            onNavigateBack()
+        }
+    }
 
     // Zoom and pan state
     var scale by remember { mutableFloatStateOf(1f) }
@@ -89,13 +100,7 @@ fun NcertReaderScreen(
         }
     }
 
-    LaunchedEffect(book.id) {
-        val file: File? = repository.getDownloadedFile(book)
-        if (file == null || !file.exists()) {
-            errorMessage = "Textbook file is not downloaded yet. Please download from the catalog screen first."
-            return@LaunchedEffect
-        }
-
+    fun initializeRenderer(file: File) {
         try {
             val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             val renderer = PdfRenderer(fd)
@@ -103,8 +108,37 @@ fun NcertReaderScreen(
             pdfRenderer = renderer
             totalPages = renderer.pageCount
             renderPage(renderer, 0)
+            isLoading = false
+            errorMessage = null
         } catch (e: Exception) {
             errorMessage = "Unable to render PDF: ${e.localizedMessage}"
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(book.id) {
+        isLoading = true
+        errorMessage = null
+        val existingFile: File? = repository.getDownloadedFile(book)
+        if (existingFile != null && existingFile.exists()) {
+            initializeRenderer(existingFile)
+        } else {
+            // Auto-fetch textbook from official URL
+            repository.downloadBook(book).collect { state ->
+                when (state) {
+                    is com.example.data.download.DownloadState.Progress -> {
+                        downloadProgress = state.percentage
+                    }
+                    is com.example.data.download.DownloadState.Success -> {
+                        repository.markBookDownloaded(book.id, state.file)
+                        initializeRenderer(state.file)
+                    }
+                    is com.example.data.download.DownloadState.Error -> {
+                        errorMessage = state.message
+                        isLoading = false
+                    }
+                }
+            }
         }
     }
 
@@ -303,6 +337,29 @@ fun NcertReaderScreen(
                                     translationY = offsetY
                                 )
                                 .testTag("ncert_rendered_page")
+                        )
+                    }
+                }
+                isLoading -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Loading NCERT Textbook...",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (downloadProgress > 0) "Downloading from official NCERT server: $downloadProgress%" else "Rendering pages in high resolution...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

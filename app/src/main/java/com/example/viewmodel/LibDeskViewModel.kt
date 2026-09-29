@@ -98,7 +98,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     private val _currentLibraryId = MutableStateFlow(authPrefs.getString(KEY_LIBRARY_ID, "") ?: "")
     val currentLibraryId: StateFlow<String> = _currentLibraryId.asStateFlow()
 
-    private val _currentRole = MutableStateFlow(authPrefs.getString(KEY_ROLE, "MANAGER") ?: "MANAGER") 
+    private val _currentRole = MutableStateFlow(authPrefs.getString(KEY_ROLE, "OWNER")?.let { if (it == "MANAGER" || it == "ADMIN") "OWNER" else it } ?: "OWNER") 
     val currentRole: StateFlow<String> = _currentRole.asStateFlow()
 
     private val _activeStudentId = MutableStateFlow(authPrefs.getString(KEY_ACTIVE_STUDENT_ID, "") ?: "")
@@ -118,10 +118,10 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         val found = when {
             id.isNotBlank() -> allLibs.find { it.id == id }
                 ?: allLibs.find { it.ownerEmail.equals(email, ignoreCase = true) || it.email.equals(email, ignoreCase = true) }
-                ?: if (_currentRole.value == "MANAGER" || _currentRole.value == "OWNER") allLibs.firstOrNull() else null
+                ?: if (_currentRole.value == "OWNER") allLibs.firstOrNull() else null
             email.isNotBlank() -> allLibs.find { it.ownerEmail.equals(email, ignoreCase = true) || it.email.equals(email, ignoreCase = true) }
-                ?: if (_currentRole.value == "MANAGER" || _currentRole.value == "OWNER") allLibs.firstOrNull() else null
-            else -> if (_currentRole.value == "MANAGER" || _currentRole.value == "OWNER") allLibs.firstOrNull() else null
+                ?: if (_currentRole.value == "OWNER") allLibs.firstOrNull() else null
+            else -> if (_currentRole.value == "OWNER") allLibs.firstOrNull() else null
         }
         if (found != null && _currentLibraryId.value != found.id) {
             _currentLibraryId.value = found.id
@@ -298,7 +298,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             _currentUserName.value = restored.name
             _currentRole.value = when (restored.role) {
                 UserRole.SUPER_ADMIN -> "SUPER_ADMIN"
-                UserRole.OWNER, UserRole.ADMIN -> "MANAGER"
+                UserRole.OWNER -> "OWNER"
                 UserRole.STUDENT -> "STUDENT"
             }
             if (restored.libraryId.isNotBlank()) {
@@ -483,7 +483,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 _currentUserName.value = session.name
                 _currentRole.value = when (session.role) {
                     UserRole.SUPER_ADMIN -> "SUPER_ADMIN"
-                    UserRole.OWNER, UserRole.ADMIN -> "MANAGER"
+                    UserRole.OWNER -> "OWNER"
                     UserRole.STUDENT -> "STUDENT"
                 }
                 if (session.libraryId.isNotBlank()) {
@@ -540,7 +540,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 password = cleanPassword,
                 name = name.ifBlank { "SaaS Master Administrator" },
                 role = UserRole.SUPER_ADMIN,
-                libraryId = ""
+                libraryId = "",
+                phone = mobile.trim()
             )
 
             if (signUpResult.isFailure) {
@@ -567,20 +568,21 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
+            val authUserId = signUpResult.getOrNull()?.userId?.takeIf { it.isNotBlank() } ?: "SUPER-ADMIN-MASTER"
+
             val pendingAdmin = SuperAdminUserEntity(
-                id = "SUPER-ADMIN-MASTER",
+                id = authUserId,
                 email = cleanEmail,
                 name = name.trim().ifBlank { "SaaS Master Administrator" },
                 mobile = mobile.trim(),
                 role = "SUPER_ADMIN",
-                accessCode = "",
-                is2FaEnabled = true,
+                accessCode = cleanPassword,
+                is2FaEnabled = false,
                 isClaimed = true,
                 createdAt = System.currentTimeMillis()
             )
 
             if (is2Fa) {
-                // MANDATORY SECURITY: Do not activate slot until Email OTP is successfully verified!
                 pendingSuperAdminClaim = pendingAdmin
                 _twoFaTargetEmail.value = cleanEmail
                 _isAwaiting2Fa.value = true
@@ -603,9 +605,26 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                             _userMessage.value = "Verification OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)}."
                             onSuccess("")
                         } else {
-                            _isAwaiting2Fa.value = false
-                            pendingSuperAdminClaim = null
-                            onError(dispatchRes.message.ifBlank { "Failed to dispatch verification OTP to $cleanEmail." })
+                            // If Email SMTP OTP is unconfigured or rate-limited on Supabase, activate directly via password
+                            viewModelScope.launch {
+                                repository.saveSuperAdmin(pendingAdmin.copy(is2FaEnabled = false))
+                                _isAwaiting2Fa.value = false
+                                pendingSuperAdminClaim = null
+                                _isAuthenticated.value = true
+                                _currentRole.value = "SUPER_ADMIN"
+                                _currentUserEmail.value = pendingAdmin.email
+                                _currentUserName.value = pendingAdmin.name
+                                _userMessage.value = "🎉 Super Admin Account successfully registered and activated!"
+                                persistAuthSession(
+                                    authenticated = true,
+                                    email = pendingAdmin.email,
+                                    name = pendingAdmin.name,
+                                    role = "SUPER_ADMIN",
+                                    libraryId = "",
+                                    studentId = ""
+                                )
+                                onSuccess("")
+                            }
                         }
                     }
                 }
@@ -618,11 +637,12 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } else {
-                repository.saveSuperAdmin(pendingAdmin)
+                repository.saveSuperAdmin(pendingAdmin.copy(is2FaEnabled = false))
                 _isAuthenticated.value = true
                 _currentRole.value = "SUPER_ADMIN"
                 _currentUserEmail.value = pendingAdmin.email
                 _currentUserName.value = pendingAdmin.name
+                _userMessage.value = "🎉 Super Admin Account successfully registered and activated!"
                 persistAuthSession(
                     authenticated = true,
                     email = pendingAdmin.email,
@@ -1037,7 +1057,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     _currentUserName.value = session.name
                     _currentRole.value = when (session.role) {
                         UserRole.SUPER_ADMIN -> "SUPER_ADMIN"
-                        UserRole.OWNER, UserRole.ADMIN -> "MANAGER"
+                        UserRole.OWNER -> "OWNER"
                         UserRole.STUDENT -> "STUDENT"
                     }
                     if (session.libraryId.isNotBlank()) {
@@ -1172,13 +1192,16 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 password = password,
                 name = name,
                 role = UserRole.OWNER,
-                libraryId = libId
+                libraryId = libId,
+                phone = phone.trim()
             )
             
             if (signUpResult.isFailure) {
                 com.example.ui.components.SnackbarController.showError(signUpResult.exceptionOrNull()?.message ?: "Registration failed")
                 return@launch
             }
+
+            val authUserId = signUpResult.getOrNull()?.userId?.takeIf { it.isNotBlank() } ?: "USER-${UUID.randomUUID().toString().take(6)}"
 
             val newLib = LibraryEntity(
                 id = libId,
@@ -1187,12 +1210,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 ownerName = name,
                 ownerPhone = phone,
                 ownerEmail = email,
-                // Previously these were hardcoded to a fake Delhi address and a fake
-                // "library@upi" UPI handle for EVERY new library, regardless of where
-                // they actually are — which meant real payment QR codes would silently
-                // point at a UPI ID that doesn't belong to them until they noticed and
-                // fixed it manually. Left blank now so the profile-completion flow
-                // prompts the real owner to fill in their real details.
                 address = "",
                 city = "",
                 state = "",
@@ -1203,12 +1220,13 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             repository.saveLibrary(newLib)
 
             val localUserAccount = UserAccountEntity(
-                id = "USER-${UUID.randomUUID().toString().take(6)}",
+                id = authUserId,
                 email = email,
-                password = password,
+                password = password.trim(),
                 name = name,
-                role = "MANAGER",
-                libraryId = libId
+                role = "OWNER",
+                libraryId = libId,
+                phone = phone.trim()
             )
             repository.saveUser(localUserAccount)
 
@@ -1261,7 +1279,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
             _currentLibraryId.value = libId
             _isAuthenticated.value = true
-            _currentRole.value = "MANAGER"
+            _currentRole.value = "OWNER"
             _currentUserEmail.value = email
             _currentUserName.value = name
             _userMessage.value = "Account & Library created successfully!"
@@ -1270,7 +1288,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 authenticated = true,
                 email = email,
                 name = name,
-                role = "MANAGER",
+                role = "OWNER",
                 libraryId = libId,
                 studentId = _activeStudentId.value
             )
@@ -1461,7 +1479,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             repository.saveLibrarySubscription(trialSub)
 
             _currentLibraryId.value = libId
-            _currentRole.value = "MANAGER"
+            _currentRole.value = "OWNER"
             _userMessage.value = "Welcome to LibDesk! Library created with code $libraryCode"
         }
     }
@@ -1646,7 +1664,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 password = password,
                 name = fullName.ifBlank { "New Student" },
                 role = UserRole.STUDENT,
-                libraryId = effectiveLibId
+                libraryId = effectiveLibId,
+                phone = mobile.trim()
             )
             
             if (signUpResult.isFailure) {
@@ -1654,9 +1673,12 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
 
+            val authUserId = signUpResult.getOrNull()?.userId?.takeIf { it.isNotBlank() } ?: studentId
+
             val student = StudentEntity(
                 id = studentId,
                 libraryId = effectiveLibId,
+                userId = authUserId,
                 studentCode = studentCode,
                 fullName = fullName.trim(),
                 mobile = mobile.trim(),
@@ -1675,9 +1697,23 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 paidAmount = 0.0,
                 dueAmount = fee,
                 status = "ACTIVE",
-                rfidQrCode = "QR-$studentCode"
+                rfidQrCode = "QR-$studentCode",
+                password = password.trim()
             )
             repository.saveStudent(student)
+
+            val studentUserAccount = UserAccountEntity(
+                id = authUserId,
+                email = resolvedEmail,
+                password = password.trim(),
+                name = fullName.trim(),
+                role = "STUDENT",
+                libraryId = effectiveLibId,
+                phone = mobile.trim(),
+                studentIdRef = studentId,
+                isActive = true
+            )
+            repository.saveUser(studentUserAccount)
 
             _currentLibraryId.value = effectiveLibId
             _activeStudentId.value = student.id

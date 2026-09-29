@@ -285,7 +285,7 @@ fun UserProfileModal(
                                     Icon(
                                         imageVector = when (normRole) {
                                             LibDeskRoles.SUPER_ADMIN -> Icons.Default.Shield
-                                            LibDeskRoles.MANAGER -> Icons.Default.AccountBalance
+                                            LibDeskRoles.OWNER -> Icons.Default.AccountBalance
                                             else -> Icons.Default.Person
                                         },
                                         contentDescription = null,
@@ -298,7 +298,7 @@ fun UserProfileModal(
                                     Text(
                                         text = when (normRole) {
                                             LibDeskRoles.SUPER_ADMIN -> "Super Admin (SaaS Manager) Profile"
-                                            LibDeskRoles.MANAGER -> "Library & Manager Profile"
+                                            LibDeskRoles.OWNER -> "Library Owner Profile"
                                             else -> "Student Member Profile"
                                         },
                                         style = MaterialTheme.typography.titleMedium.copy(
@@ -309,7 +309,7 @@ fun UserProfileModal(
                                     Text(
                                         text = when (normRole) {
                                             LibDeskRoles.SUPER_ADMIN -> "Platform governance & SaaS billing settings"
-                                            LibDeskRoles.MANAGER -> "Manage institute details & billing"
+                                            LibDeskRoles.OWNER -> "Manage library details & billing"
                                             else -> "Update personal & study info"
                                         },
                                         style = MaterialTheme.typography.bodySmall.copy(
@@ -521,7 +521,7 @@ fun UserProfileModal(
                                     }
                                 }
                             }
-                        } else if (normRole == LibDeskRoles.MANAGER) {
+                        } else if (normRole == LibDeskRoles.OWNER) {
 
                             Text(
                                 text = "INSTITUTE & STUDY HALL DETAILS",
@@ -1246,14 +1246,14 @@ fun UserProfileModal(
                                             adminUpiPayeeName.trim().ifBlank { adminName.trim() }
                                         )
                                         onClose()
-                                    } else if (normRole == LibDeskRoles.MANAGER) {
+                                    } else if (normRole == LibDeskRoles.OWNER) {
                                         val fullOwnerPhone = combineCountryCodeAndPhone(ownerCountryCode, ownerPhone).trim()
                                         if (libName.isBlank()) {
                                             profileFormError = "Please enter Institute / Library Name."
                                             return@Button
                                         }
                                         if (ownerName.isBlank()) {
-                                            profileFormError = "Please enter Owner / Manager Full Name."
+                                            profileFormError = "Please enter Library Owner Full Name."
                                             return@Button
                                         }
                                         if (upiId.isBlank()) {

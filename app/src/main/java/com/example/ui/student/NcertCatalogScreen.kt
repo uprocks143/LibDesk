@@ -1,10 +1,14 @@
 package com.example.ui.student
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,19 +56,50 @@ fun NcertCatalogScreen(
         query = searchQuery
     ).collectAsState(initial = emptyList())
 
-    // Initial background catalog refresh
+    // Initial background catalog refresh & sync
     LaunchedEffect(Unit) {
         repository.refreshCatalog()
     }
 
     val classes = (1..12).toList()
     val mediums = listOf("All", "English", "Hindi", "Urdu")
-    val subjects = listOf("All", "Science", "Mathematics", "Social Science", "Physics", "Chemistry", "Biology", "English", "Hindi")
+    val subjects = listOf(
+        "All",
+        "Science",
+        "Mathematics",
+        "Social Science",
+        "EVS",
+        "Physics",
+        "Chemistry",
+        "Biology",
+        "History",
+        "Geography",
+        "Political Science",
+        "Economics",
+        "Accountancy",
+        "Commerce",
+        "English",
+        "Hindi",
+        "Sanskrit"
+    )
+
+    BackHandler {
+        onNavigateBack()
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("NCERT Official Textbooks") },
+                title = {
+                    Column {
+                        Text("NCERT Official Textbooks", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text(
+                            text = "Class 1–12 • Open Educational Resources",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack, modifier = Modifier.testTag("ncert_catalog_back")) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -74,8 +109,19 @@ fun NcertCatalogScreen(
                     IconButton(
                         onClick = {
                             coroutineScope.launch {
+                                repository.seedCatalogToDatabase()
                                 repository.refreshCatalog()
-                                Toast.makeText(context, "Catalog refreshed from official repository.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Synced Class 1–12 NCERT library with cloud database.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.CloudSync, contentDescription = "Sync Cloud DB")
+                    }
+                    IconButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                repository.refreshCatalog()
+                                Toast.makeText(context, "Catalog refreshed.", Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) {
@@ -86,169 +132,226 @@ fun NcertCatalogScreen(
         },
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Search Bar
-            item {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search textbook title or subject...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("ncert_search_input"),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
+            val isTabletOrLandscape = maxWidth >= 600.dp
+            val gridColumns = when {
+                maxWidth >= 960.dp -> GridCells.Fixed(3)
+                maxWidth >= 600.dp -> GridCells.Fixed(2)
+                else -> GridCells.Fixed(1)
             }
 
-            // Class Filter Chips
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Select Class:",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(classes) { cls ->
-                            FilterChip(
-                                selected = selectedClass == cls,
-                                onClick = { selectedClass = if (selectedClass == cls) null else cls },
-                                label = { Text("Class $cls") }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Medium & Subject Dropdowns Row
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    // Medium Dropdown
-                    var mediumExpanded by remember { mutableStateOf(false) }
-                    Box(modifier = Modifier.weight(1f)) {
-                        OutlinedTextField(
-                            value = selectedMedium,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Medium") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.clickable { mediumExpanded = !mediumExpanded }
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth().clickable { mediumExpanded = true }
-                        )
-                        DropdownMenu(
-                            expanded = mediumExpanded,
-                            onDismissRequest = { mediumExpanded = false }
-                        ) {
-                            mediums.forEach { med ->
-                                DropdownMenuItem(
-                                    text = { Text(med) },
-                                    onClick = {
-                                        selectedMedium = med
-                                        mediumExpanded = false
-                                    }
-                                )
+            LazyVerticalGrid(
+                columns = gridColumns,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = if (isTabletOrLandscape) 24.dp else 16.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Search Bar (Full Span)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search textbook title or subject (e.g. Science, Maths, Physics)...") },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotBlank()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                                }
                             }
-                        }
-                    }
-
-                    // Subject Dropdown
-                    var subjectExpanded by remember { mutableStateOf(false) }
-                    Box(modifier = Modifier.weight(1f)) {
-                        OutlinedTextField(
-                            value = selectedSubject,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Subject") },
-                            trailingIcon = {
-                                Icon(
-                                    Icons.Default.ArrowDropDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.clickable { subjectExpanded = !subjectExpanded }
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth().clickable { subjectExpanded = true }
-                        )
-                        DropdownMenu(
-                            expanded = subjectExpanded,
-                            onDismissRequest = { subjectExpanded = false }
-                        ) {
-                            subjects.forEach { subj ->
-                                DropdownMenuItem(
-                                    text = { Text(subj) },
-                                    onClick = {
-                                        selectedSubject = subj
-                                        subjectExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (books.isEmpty()) {
-                item {
-                    Box(
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.MenuBook,
-                                contentDescription = null,
-                                modifier = Modifier.size(56.dp),
-                                tint = MaterialTheme.colorScheme.outline
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            .testTag("ncert_search_input"),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                // Class Filter Chips (Full Span)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "No textbooks matching criteria",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = "Select Class:",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = "Try changing Class, Medium, or clearing filters.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
+                            if (selectedClass != null) {
+                                TextButton(
+                                    onClick = { selectedClass = null },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Show All Classes", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(classes) { cls ->
+                                FilterChip(
+                                    selected = selectedClass == cls,
+                                    onClick = { selectedClass = if (selectedClass == cls) null else cls },
+                                    label = { Text("Class $cls", fontWeight = if (selectedClass == cls) FontWeight.Bold else FontWeight.Normal) }
+                                )
+                            }
                         }
                     }
                 }
-            } else {
-                items(books, key = { it.id }) { book ->
-                    NcertBookCard(
-                        book = book,
-                        studentId = studentId,
-                        repository = repository,
-                        onOpen = { onOpenBook(book) }
+
+                // Medium & Subject Dropdowns Row (Full Span)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Medium Dropdown
+                        var mediumExpanded by remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = selectedMedium,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Medium") },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.clickable { mediumExpanded = !mediumExpanded }
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().clickable { mediumExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = mediumExpanded,
+                                onDismissRequest = { mediumExpanded = false }
+                            ) {
+                                mediums.forEach { med ->
+                                    DropdownMenuItem(
+                                        text = { Text(med) },
+                                        onClick = {
+                                            selectedMedium = med
+                                            mediumExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Subject Dropdown
+                        var subjectExpanded by remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = selectedSubject,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Subject") },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.clickable { subjectExpanded = !subjectExpanded }
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().clickable { subjectExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = subjectExpanded,
+                                onDismissRequest = { subjectExpanded = false }
+                            ) {
+                                subjects.forEach { subj ->
+                                    DropdownMenuItem(
+                                        text = { Text(subj) },
+                                        onClick = {
+                                            selectedSubject = subj
+                                            subjectExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Results Counter (Full Span)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "Showing ${books.size} NCERT Textbooks ${if (selectedClass != null) "for Class $selectedClass" else ""}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
-            }
 
-            // Task 2: Official Attribution Footer
-            item {
-                NcertAttributionFooter(modifier = Modifier.padding(top = 10.dp, bottom = 20.dp))
+                if (books.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(56.dp),
+                                    tint = MaterialTheme.colorScheme.outline
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = "No textbooks matching criteria",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Try changing Class, Medium, or clearing filters.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedClass = 10
+                                        selectedSubject = "All"
+                                        selectedMedium = "All"
+                                        searchQuery = ""
+                                    }
+                                ) {
+                                    Text("Reset Filters")
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    items(books, key = { it.id }) { book ->
+                        NcertBookCard(
+                            book = book,
+                            studentId = studentId,
+                            repository = repository,
+                            onOpen = { onOpenBook(book) }
+                        )
+                    }
+                }
+
+                // Official Attribution Footer (Full Span)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    NcertAttributionFooter(modifier = Modifier.padding(top = 10.dp, bottom = 20.dp))
+                }
             }
         }
     }

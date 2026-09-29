@@ -59,6 +59,7 @@ fun StudentMemberDashboard(
     onGoToFeeTab: () -> Unit,
     onGoToProfileTab: () -> Unit,
     onGoToSeatLayout: () -> Unit = {},
+    onOpenNcertBooks: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val todayDateStr = remember {
@@ -123,66 +124,151 @@ fun StudentMemberDashboard(
         }
     }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("student_member_dashboard"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    BoxWithConstraints(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // 1. Today's Briefing & Status Overview
-        item {
-            StudentTodayBriefingCard(
-                student = student,
-                todayFormatted = todayFormatted,
-                seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "Allocated Desk" },
-                daysRemaining = expirationInfo.daysRemaining,
-                isCurrentlyCheckedIn = isCurrentlyCheckedIn
-            )
-        }
+        val isTablet = maxWidth >= 720.dp
 
-        // 2. Quick-Action QR Code Check-In Hub (Hero Element)
-        item {
-            StudentQuickActionQrCard(
-                seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "Allocated Desk" },
-                shiftName = student.shiftName.ifBlank { assignedShift?.name ?: "Regular Shift" },
-                isCurrentlyCheckedIn = isCurrentlyCheckedIn,
-                checkInTime = todayAttendance?.checkInTime.orEmpty(),
-                onOpenQrScanner = onOpenQrScanner,
-                onViewIdCard = { onViewIdCard(student) }
-            )
-        }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .widthIn(max = 1000.dp)
+                .testTag("student_member_dashboard"),
+            contentPadding = PaddingValues(horizontal = if (isTablet) 24.dp else 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 1. Today's Briefing & Status Overview
+            item {
+                StudentTodayBriefingCard(
+                    student = student,
+                    todayFormatted = todayFormatted,
+                    seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "Allocated Desk" },
+                    daysRemaining = expirationInfo.daysRemaining,
+                    isCurrentlyCheckedIn = isCurrentlyCheckedIn
+                )
+            }
 
-        // 3. Upcoming Seat Reservation Card
-        item {
-            StudentUpcomingSeatReservationCard(
-                student = student,
-                seat = assignedSeat,
-                hall = assignedHall,
-                shift = assignedShift,
-                isCurrentlyCheckedIn = isCurrentlyCheckedIn,
-                onOpenQrScanner = onOpenQrScanner,
-                onGoToSeatLayout = onGoToSeatLayout
-            )
-        }
+            // 2. Quick-Action QR Code Check-In Hub (Hero Element)
+            item {
+                StudentQuickActionQrCard(
+                    seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "Allocated Desk" },
+                    shiftName = student.shiftName.ifBlank { assignedShift?.name ?: "Regular Shift" },
+                    isCurrentlyCheckedIn = isCurrentlyCheckedIn,
+                    checkInTime = todayAttendance?.checkInTime.orEmpty(),
+                    onOpenQrScanner = onOpenQrScanner,
+                    onViewIdCard = { onViewIdCard(student) }
+                )
+            }
 
-        // 4. Active Membership Card with Validity Progress & Fee Status
-        item {
-            StudentActiveMembershipCard(
-                student = student,
-                plan = assignedPlan,
-                expirationInfo = expirationInfo,
-                onRenewOrPay = onGoToFeeTab
-            )
-        }
+            // 2b. Official NCERT Textbooks Hub Card (Class 1 to 12)
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                    ),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenNcertBooks() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MenuBook,
+                                contentDescription = "NCERT Books",
+                                tint = Color.White,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
 
-        // 5. At-a-Glance Attendance & Study Activity
-        item {
-            StudentStudyActivityCard(
-                todayAttendance = todayAttendance,
-                monthAttendanceCount = monthAttendanceCount,
-                recentAttendance = attendanceList.filter { it.studentId == student.id }.take(3)
-            )
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "NCERT Books (Class 1–12)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = "FREE",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = "All subjects • English & Hindi medium • Built-in PDF reader",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = "Open NCERT",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            // 3. Upcoming Seat Reservation Card
+            item {
+                StudentUpcomingSeatReservationCard(
+                    student = student,
+                    seat = assignedSeat,
+                    hall = assignedHall,
+                    shift = assignedShift,
+                    isCurrentlyCheckedIn = isCurrentlyCheckedIn,
+                    onOpenQrScanner = onOpenQrScanner,
+                    onGoToSeatLayout = onGoToSeatLayout
+                )
+            }
+
+            // 4. Active Membership Card with Validity Progress & Fee Status
+            item {
+                StudentActiveMembershipCard(
+                    student = student,
+                    plan = assignedPlan,
+                    expirationInfo = expirationInfo,
+                    onRenewOrPay = onGoToFeeTab
+                )
+            }
+
+            // 5. At-a-Glance Attendance & Study Activity
+            item {
+                StudentStudyActivityCard(
+                    todayAttendance = todayAttendance,
+                    monthAttendanceCount = monthAttendanceCount,
+                    recentAttendance = attendanceList.filter { it.studentId == student.id }.take(3)
+                )
+            }
         }
     }
 }

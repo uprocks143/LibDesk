@@ -46,7 +46,7 @@ import java.util.Locale
 fun NotificationsAlertsModal(
     students: List<StudentEntity>,
     notices: List<NoticeEntity>,
-    currentRole: String = "MANAGER",
+    currentRole: String = "OWNER",
     initialTab: Int = 0,
     onClose: () -> Unit,
     onOpenPostNotice: (() -> Unit)? = null,
@@ -302,7 +302,7 @@ fun NotificationsAlertsModal(
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             letterSpacing = 0.5.sp
                                         )
-                                        if (currentRole == "MANAGER" && onOpenPostNotice != null) {
+                                        if ((currentRole == "OWNER" || currentRole == "SUPER_ADMIN") && onOpenPostNotice != null) {
                                             TextButton(
                                                 onClick = {
                                                     onClose()

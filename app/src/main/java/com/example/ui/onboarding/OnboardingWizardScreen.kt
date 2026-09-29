@@ -1,5 +1,6 @@
 package com.example.ui.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -50,6 +51,14 @@ fun OnboardingWizardScreen(
     var upiPayeeName by remember { mutableStateOf("") }
     var initialHallName by remember { mutableStateOf("Main Reading Hall") }
     var initialSeatCountText by remember { mutableStateOf("24") }
+
+    BackHandler {
+        if (step > 1) {
+            step--
+        } else {
+            onCancel()
+        }
+    }
 
     Scaffold(
         topBar = {

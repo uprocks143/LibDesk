@@ -3,6 +3,7 @@ package com.example.ui.owner
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -57,6 +58,10 @@ fun StudyMaterialUploadScreen(
     var uploadProgress by remember { mutableIntStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showWarning10Mb by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = !isUploading) {
+        onNavigateBack()
+    }
 
     val categories = listOf(
         "notes" to "Faculty / Study Notes",

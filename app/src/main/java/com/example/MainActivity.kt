@@ -167,6 +167,8 @@ fun LibDeskApp(
     var showBackupScreen by remember { mutableStateOf(false) }
     var editingStudentForProfile by remember { mutableStateOf<StudentEntity?>(null) }
     var showSaaSOffersModal by remember { mutableStateOf(false) }
+    var viewingNcertCatalog by remember { mutableStateOf(false) }
+    var readingNcertBook by remember { mutableStateOf<com.example.data.model.NcertBook?>(null) }
 
     val currentSubscription by viewModel.currentSubscription.collectAsStateWithLifecycle()
     val saasPlans by viewModel.saasPlans.collectAsStateWithLifecycle()
@@ -273,8 +275,7 @@ fun LibDeskApp(
     // rest of the app until they fill these in, instead of silently running
     // with placeholder/missing business details (which previously broke
     // things like UPI payment QR codes pointing at nobody's account).
-    val isOwnerRole = normalizeUserRole(currentRole) == LibDeskRoles.MANAGER ||
-        normalizeUserRole(currentRole) == LibDeskRoles.SUPER_ADMIN
+    val isOwnerRole = normalizeUserRole(currentRole) == LibDeskRoles.OWNER
     val currentLib = library
     val libraryProfileIncomplete = isOwnerRole && currentLib != null && (
         currentLib.address.isBlank() || currentLib.city.isBlank() ||
@@ -283,7 +284,7 @@ fun LibDeskApp(
 
     if (libraryProfileIncomplete && currentLib != null) {
         UserProfileModal(
-            currentRole = "MANAGER",
+            currentRole = "OWNER",
             library = currentLib,
             userName = currentUserName,
             userEmail = currentUserEmail,
@@ -309,7 +310,7 @@ fun LibDeskApp(
     // Fails CLOSED: anything except a confirmed Active result (including network error) blocks access.
     var liveSubCheck by remember(currentLib?.id) { mutableStateOf<com.example.viewmodel.LiveSubscriptionCheck?>(null) }
     var subCheckAttempt by remember(currentLib?.id) { mutableIntStateOf(0) }
-    val isManagerRole = normalizeUserRole(currentRole) == LibDeskRoles.MANAGER
+    val isManagerRole = isOwnerRole
 
     LaunchedEffect(currentLib?.id, subCheckAttempt) {
         if (isManagerRole && currentLib != null) {
@@ -367,6 +368,8 @@ fun LibDeskApp(
 
         val hasAnyOpenModal = viewingIdCardForStudent != null ||
                 viewingReceiptForPayment != null ||
+                viewingNcertCatalog ||
+                readingNcertBook != null ||
                 showQrScannerModal ||
                 showLibraryQrModal ||
                 showSaaSOffersModal ||
@@ -386,12 +389,18 @@ fun LibDeskApp(
                 showLibraryConfigView ||
                 showNoticesAndHelpView ||
                 (currentRole == "SUPER_ADMIN" && superAdminTab != 0) ||
-                (currentRole == "MANAGER" && (managerDashboardSection != 0 || currentManagerTab != 0))
+                (currentRole == "OWNER" && (managerDashboardSection != 0 || currentManagerTab != 0))
 
         BackHandler(enabled = shouldInterceptBack) {
             when {
                 drawerState.isOpen -> {
                     coroutineScope.launch { drawerState.close() }
+                }
+                readingNcertBook != null -> {
+                    readingNcertBook = null
+                }
+                viewingNcertCatalog -> {
+                    viewingNcertCatalog = false
                 }
                 isSpeedDialFabExpanded -> {
                     isSpeedDialFabExpanded = false
@@ -448,10 +457,10 @@ fun LibDeskApp(
                 currentRole == "SUPER_ADMIN" && superAdminTab != 0 -> {
                     superAdminTab = 0
                 }
-                currentRole == "MANAGER" && managerDashboardSection != 0 -> {
+                currentRole == "OWNER" && managerDashboardSection != 0 -> {
                     managerDashboardSection = 0
                 }
-                currentRole == "MANAGER" && currentManagerTab != 0 -> {
+                currentRole == "OWNER" && currentManagerTab != 0 -> {
                     currentManagerTab = 0
                 }
             }
@@ -474,7 +483,7 @@ fun LibDeskApp(
                         if (currentRole == "SUPER_ADMIN") {
                             superAdminTab = tabIndex
                         } else {
-                            if (currentRole != "MANAGER") {
+                            if (currentRole != "OWNER") {
                                 viewModel.switchRole()
                             }
                             showLibraryConfigView = false
@@ -484,21 +493,21 @@ fun LibDeskApp(
                         }
                     },
                     onOpenSettings = {
-                        if (currentRole != "MANAGER") {
+                        if (currentRole != "OWNER") {
                             viewModel.switchRole()
                         }
                         showLibraryConfigView = true
                         showNoticesAndHelpView = false
                     },
                     onOpenNoticesAndHelp = {
-                        if (currentRole != "MANAGER") {
+                        if (currentRole != "OWNER") {
                             viewModel.switchRole()
                         }
                         showNoticesAndHelpView = true
                         showLibraryConfigView = false
                     },
                     onOpenAttendanceHistory = {
-                        if (currentRole != "MANAGER") {
+                        if (currentRole != "OWNER") {
                             viewModel.switchRole()
                         }
                         showLibraryConfigView = false
@@ -522,6 +531,9 @@ fun LibDeskApp(
                         } else {
                             showUserProfileModal = true
                         }
+                    },
+                    onOpenNcertCatalog = {
+                        viewingNcertCatalog = true
                     },
                     onLogout = { showLogoutConfirmationDialog = true },
                     onCloseDrawer = {
@@ -555,7 +567,7 @@ onOpenSyncBackup = { showBackupScreen = true },
                     )
                 },
                 bottomBar = {
-                    if (currentRole == "MANAGER" && !showLibraryConfigView && !showNoticesAndHelpView) {
+                    if (currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView) {
                         NavigationBar(
                             containerColor = MaterialTheme.colorScheme.surface,
                             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -600,7 +612,7 @@ onOpenSyncBackup = { showBackupScreen = true },
                     }
                 },
                 floatingActionButton = {
-                    if (currentRole == "MANAGER" && !showLibraryConfigView && !showNoticesAndHelpView && currentManagerTab == 0) {
+                    if (currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView && currentManagerTab == 0) {
                         LibDeskSpeedDialFab(
                             actions = listOf(
                                 SpeedDialAction(
@@ -677,10 +689,10 @@ onOpenSyncBackup = { showBackupScreen = true },
                         )
                     }
 
-                    if (normalizeUserRole(currentRole) == LibDeskRoles.MANAGER) {
+                    if (normalizeUserRole(currentRole) == LibDeskRoles.OWNER) {
                         RoleGate(
                             currentRole = currentRole,
-                            requiredRole = LibDeskRoles.MANAGER,
+                            requiredRole = LibDeskRoles.OWNER,
                             onSignOut = { showLogoutConfirmationDialog = true },
                             onSwitchToAllowedView = {
                                 // Previously called login(currentUserEmail, STUDENT, ...) which
@@ -1324,6 +1336,37 @@ onOpenSyncBackup = { showBackupScreen = true },
             com.example.ui.subscription.PlansAndOffersScreen(
                 viewModel = viewModel,
                 onNavigateBack = { showSaaSOffersModal = false },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+
+    // Official NCERT Textbooks Catalog (Class 1 to 12)
+    if (viewingNcertCatalog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { viewingNcertCatalog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            com.example.ui.student.NcertCatalogScreen(
+                studentId = activeStudent?.id ?: "",
+                onNavigateBack = { viewingNcertCatalog = false },
+                onOpenBook = { ncertBook ->
+                    readingNcertBook = ncertBook
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+
+    // High-Craft PDF Reader for NCERT Books with Zoom & Jump Controls
+    if (readingNcertBook != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { readingNcertBook = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            com.example.ui.student.NcertReaderScreen(
+                book = readingNcertBook!!,
+                onNavigateBack = { readingNcertBook = null },
                 modifier = Modifier.fillMaxSize()
             )
         }

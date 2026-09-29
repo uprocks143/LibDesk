@@ -77,7 +77,12 @@ fun AuthScreen(
         mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_password", "") ?: "" else "")
     }
     var selectedRole by remember {
-        mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_role", "MANAGER") ?: "MANAGER" else "MANAGER")
+        mutableStateOf(
+            if (savedRememberMe) {
+                val r = rememberPrefs.getString("saved_main_role", "OWNER") ?: "OWNER"
+                if (r == "MANAGER") "OWNER" else r
+            } else "OWNER"
+        )
     }
     var showLoginPassword by remember { mutableStateOf(false) }
     var authMode by remember { mutableStateOf(0) } 
@@ -648,18 +653,17 @@ fun AuthScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
-                                            color = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                            color = if (selectedRole == "OWNER") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                             border = BorderStroke(
                                                 1.5.dp,
-                                                if (selectedRole == "MANAGER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                                if (selectedRole == "OWNER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                                             ),
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .clickable {
-                                                    selectedRole = "MANAGER"
+                                                    selectedRole = "OWNER"
                                                     otpErrorMessage = null
                                                 }
                                         ) {
@@ -670,7 +674,7 @@ fun AuthScreen(
                                                 Icon(
                                                     imageVector = Icons.Default.AdminPanelSettings,
                                                     contentDescription = null,
-                                                    tint = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    tint = if (selectedRole == "OWNER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                                     modifier = Modifier.size(20.dp)
                                                 )
                                                 Spacer(modifier = Modifier.height(3.dp))
@@ -678,12 +682,12 @@ fun AuthScreen(
                                                     text = "Owner",
                                                     fontWeight = FontWeight.Bold,
                                                     style = MaterialTheme.typography.labelMedium,
-                                                    color = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    color = if (selectedRole == "OWNER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                                 Text(
                                                     text = "Library",
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = if (selectedRole == "MANAGER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                                    color = if (selectedRole == "OWNER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                                 )
                                             }
                                         }
@@ -739,7 +743,7 @@ fun AuthScreen(
                                             Text(
                                                 when (selectedRole) {
                                                     "SUPER_ADMIN" -> "Super Admin Email"
-                                                    "MANAGER" -> "Manager Email or Mobile"
+                                                    "OWNER" -> "Owner Email or Mobile"
                                                     else -> "Student Email, Mobile, or ID"
                                                 }
                                             ) 
@@ -816,6 +820,7 @@ fun AuthScreen(
                                     }
 
                                     
+
                                     if (selectedRole == "STUDENT") {
                                         Surface(
                                             shape = RoundedCornerShape(12.dp),
@@ -929,7 +934,7 @@ fun AuthScreen(
                                         Text(
                                             text = when (selectedRole) {
                                                 "SUPER_ADMIN" -> "Sign In as Super Admin"
-                                                "MANAGER" -> "Sign In as Library Owner / Admin"
+                                                "OWNER" -> "Sign In as Library Owner"
                                                 "STUDENT" -> "Sign In as Student"
                                                 else -> "Sign In"
                                             },
@@ -1533,6 +1538,7 @@ fun AuthScreen(
             // sign-up/login now lives entirely inside the modal opened below.
             TextButton(
                 onClick = {
+                    selectedRole = "SUPER_ADMIN"
                     adminModalMode = if (isSaaSAdminCreated) 0 else 1
                     adminErrorMessage = null
                     showMasterAdminModal = true
@@ -1540,16 +1546,17 @@ fun AuthScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Icon(
-                    imageVector = Icons.Default.AdminPanelSettings,
+                    imageVector = Icons.Default.Shield,
                     contentDescription = null,
-                    modifier = Modifier.size(13.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
-                    text = "SaaS Admin: Admin Access",
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "SaaS Admin: Super Admin Portal",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
@@ -2538,7 +2545,7 @@ fun AuthScreen(
                                             adminClaimEmail.trim(),
                                             fullMobile.trim(),
                                             adminClaimPin.trim(),
-                                            true, // MANDATORY: Verify Email OTP before claiming
+                                            false, // Direct secure registration with password
                                             { _ ->
                                                 showMasterAdminModal = false
                                                 adminErrorMessage = null
@@ -2555,9 +2562,9 @@ fun AuthScreen(
                                     .fillMaxWidth()
                                     .height(48.dp)
                             ) {
-                                Icon(Icons.Default.MarkEmailRead, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Verify Email & Claim Account", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Register & Claim Platform Owner Account", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
                             }
                         }
                     }
