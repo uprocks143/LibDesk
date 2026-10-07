@@ -233,22 +233,56 @@ object SessionManager {
                     val appMetadata = userObj.optJSONObject("app_metadata")
                     val userMetadata = userObj.optJSONObject("user_metadata")
 
-                    val roleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
-                        ?: userMetadata?.optString("role")
-                        ?: "STUDENT"
+                    val rawRoleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
+                        ?: userMetadata?.optString("role")?.takeIf { it.isNotBlank() }
 
-                    val role = UserRole.fromString(roleStr)
+                    val cleanEmail = email.trim().lowercase()
+                    val existingRole = _sessionState.value?.role ?: _currentRole.value
+
+                    var role = when {
+                        existingRole == UserRole.SUPER_ADMIN -> UserRole.SUPER_ADMIN
+                        existingRole == UserRole.OWNER -> UserRole.OWNER
+                        !rawRoleStr.isNullOrBlank() -> UserRole.fromString(rawRoleStr)
+                        else -> UserRole.STUDENT
+                    }
+
+                    // Check database if role still unresolved or defaulted to student
+                    if (role == UserRole.STUDENT && existingRole != UserRole.STUDENT) {
+                        try {
+                            val (lOk, lArr) = SupabaseClient.queryTable("libraries?or=(ownerEmail.eq.$cleanEmail,email.eq.$cleanEmail)&select=id,name")
+                            if (lOk && lArr != null && lArr.length() > 0) {
+                                role = UserRole.OWNER
+                            } else {
+                                val (uOk, uArr) = SupabaseClient.queryTable("users?email=eq.$cleanEmail&select=role,libraryId")
+                                if (uOk && uArr != null && uArr.length() > 0) {
+                                    val dbRole = uArr.getJSONObject(0).optString("role", "")
+                                    if (dbRole.isNotBlank()) {
+                                        role = UserRole.fromString(dbRole)
+                                    }
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
 
                     val name = userMetadata?.optString("full_name")
                         ?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("name")
                         ?: email.substringBefore("@")
 
-                    val libraryId = appMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
+                    var libraryId = appMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
                         ?: appMetadata?.optString("library_id")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("org_id")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("library_id")
                         ?: _sessionState.value?.libraryId ?: ""
+
+                    if (libraryId.isBlank() && role == UserRole.OWNER) {
+                        try {
+                            val (lOk, lArr) = SupabaseClient.queryTable("libraries?or=(ownerEmail.eq.$cleanEmail,email.eq.$cleanEmail)&select=id")
+                            if (lOk && lArr != null && lArr.length() > 0) {
+                                libraryId = lArr.getJSONObject(0).optString("id", "")
+                            }
+                        } catch (_: Exception) {}
+                    }
 
                     val studentId = appMetadata?.optString("student_id")
                         ?.takeIf { it.isNotBlank() }

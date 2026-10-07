@@ -733,13 +733,13 @@ fun SeatCheckInScannerModal(
                 OutlinedTextField(
                     value = manualInput,
                     onValueChange = { manualInput = it },
-                    label = { Text(if (isStudentMode) "Enter Seat Number (e.g. A-12) or Code" else "Enter Student Code / Mobile / Seat No.") },
+                    label = { Text(if (isStudentMode) "Seat Number or Code" else "Student Code or Seat") },
                     placeholder = {
                         Text(
                             if (isStudentMode) {
-                                if (allocatedSeatNumber.isNotBlank()) "e.g. $allocatedSeatNumber" else "e.g. A-12"
+                                if (allocatedSeatNumber.isNotBlank()) allocatedSeatNumber else "A-12"
                             } else {
-                                "e.g. STU-1001, 9876543210, A-12"
+                                "Code, mobile, or seat"
                             }
                         )
                     },

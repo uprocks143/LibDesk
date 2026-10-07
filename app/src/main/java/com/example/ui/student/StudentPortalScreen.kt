@@ -43,6 +43,7 @@ import com.example.ui.manager.NoticeDetailDialog
 import com.example.notification.StudentNotificationHelper
 import com.example.ui.pdf.PdfViewerDialog
 import com.example.ui.theme.*
+import com.example.viewmodel.LibDeskViewModel
 import com.example.R
 import com.example.util.ImageShareUtils
 import androidx.compose.ui.res.painterResource
@@ -72,22 +73,26 @@ fun StudentPortalScreen(
     onOpenQrScanner: () -> Unit = {},
     onOpenProfile: () -> Unit = {},
     onRequestLogout: () -> Unit = {},
+    viewModel: LibDeskViewModel? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf(0) } 
     var showComplaintModal by remember { mutableStateOf(false) }
+    var showSeatShiftRequestModal by remember { mutableStateOf(false) }
+    var showDecibelMeterModal by remember { mutableStateOf(false) }
     var selectedNoticeForDetail by remember { mutableStateOf<NoticeEntity?>(null) }
     var bookCatalogQuery by remember { mutableStateOf("") }
     var selectedPdfToView by remember { mutableStateOf<DigitalMaterialEntity?>(null) }
     var selectedNcertBookToRead by remember { mutableStateOf<com.example.data.model.NcertBook?>(null) }
 
-    BackHandler(enabled = selectedNcertBookToRead != null || selectedPdfToView != null || selectedNoticeForDetail != null || showComplaintModal || selectedTab != 0) {
+    BackHandler(enabled = selectedNcertBookToRead != null || selectedPdfToView != null || selectedNoticeForDetail != null || showComplaintModal || showDecibelMeterModal || selectedTab != 0) {
         when {
             selectedNcertBookToRead != null -> selectedNcertBookToRead = null
             selectedPdfToView != null -> selectedPdfToView = null
             selectedNoticeForDetail != null -> selectedNoticeForDetail = null
             showComplaintModal -> showComplaintModal = false
+            showDecibelMeterModal -> showDecibelMeterModal = false
             selectedTab != 0 -> selectedTab = 0
         }
     }
@@ -284,6 +289,8 @@ fun StudentPortalScreen(
         val tabList = remember {
             listOf(
                 0 to "Dashboard",
+                9 to "💬 Desk Chat",
+                8 to "🔥 Focus & Streaks",
                 7 to "NCERT Books",
                 6 to "Seat Layout",
                 5 to "Profile & Seat",
@@ -334,6 +341,11 @@ fun StudentPortalScreen(
                     onGoToProfileTab = { selectedTab = 5 },
                     onGoToSeatLayout = { selectedTab = 6 },
                     onOpenNcertBooks = { selectedTab = 7 },
+                    onUpdateTargetExam = { examName, examDate ->
+                        viewModel?.updateStudentTargetExam(student.id, examName, examDate)
+                    },
+                    onOpenDecibelMeter = { showDecibelMeterModal = true },
+                    onOpenChat = { selectedTab = 9 },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -407,7 +419,7 @@ fun StudentPortalScreen(
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search notes, PDFs, PYQs...") },
+                            placeholder = { Text("Search...") },
                             leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
@@ -648,7 +660,7 @@ fun StudentPortalScreen(
                         OutlinedTextField(
                             value = bookCatalogQuery,
                             onValueChange = { bookCatalogQuery = it },
-                            placeholder = { Text("Search by title, author, subject...") },
+                            placeholder = { Text("Search...") },
                             leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
@@ -1099,7 +1111,41 @@ fun StudentPortalScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            8 -> {
+                if (viewModel != null) {
+                    StudentStudyTrackerScreen(
+                        viewModel = viewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Focus & Streak Tracker")
+                    }
+                }
+            }
+            9 -> {
+                if (viewModel != null) {
+                    com.example.ui.chat.StudentSignalChatScreen(
+                        student = student,
+                        library = library,
+                        viewModel = viewModel,
+                        onNavigateBack = { selectedTab = 0 },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Real-time Desk Chat")
+                    }
+                }
+            }
         }
+    }
+
+    if (showSeatShiftRequestModal && viewModel != null) {
+        StudentSeatShiftRequestModal(
+            viewModel = viewModel,
+            onDismiss = { showSeatShiftRequestModal = false }
+        )
     }
 
     if (showComplaintModal) {
@@ -1109,6 +1155,13 @@ fun StudentPortalScreen(
                 onSubmitComplaint(subj, msg, type)
                 showComplaintModal = false
             }
+        )
+    }
+
+    if (showDecibelMeterModal) {
+        com.example.ui.components.SilentZoneDecibelMeterModal(
+            hallName = library?.name ?: "Library Study Hall",
+            onDismiss = { showDecibelMeterModal = false }
         )
     }
 
@@ -1443,7 +1496,13 @@ fun StudentComplaintDialog(
                 .systemBarsPadding()
                 .imePadding()
         ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text("Submit Library Grievance", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
 
                 Text("Category:", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -1463,7 +1522,7 @@ fun StudentComplaintDialog(
                 OutlinedTextField(
                     value = subject,
                     onValueChange = { subject = it },
-                    label = { Text("Issue Subject *") },
+                    label = { Text("Subject") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1471,7 +1530,7 @@ fun StudentComplaintDialog(
                 OutlinedTextField(
                     value = message,
                     onValueChange = { message = it },
-                    label = { Text("Detailed Description *") },
+                    label = { Text("Description") },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )

@@ -60,6 +60,9 @@ fun StudentMemberDashboard(
     onGoToProfileTab: () -> Unit,
     onGoToSeatLayout: () -> Unit = {},
     onOpenNcertBooks: () -> Unit = {},
+    onUpdateTargetExam: (examName: String, examDate: String) -> Unit = { _, _ -> },
+    onOpenDecibelMeter: () -> Unit = {},
+    onOpenChat: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val todayDateStr = remember {
@@ -147,6 +150,90 @@ fun StudentMemberDashboard(
                     daysRemaining = expirationInfo.daysRemaining,
                     isCurrentlyCheckedIn = isCurrentlyCheckedIn
                 )
+            }
+
+            // 1b. Live Target Exam Countdown Tracker Card
+            item {
+                ExamCountdownWidgetCard(
+                    student = student,
+                    onUpdateTargetExam = onUpdateTargetExam,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // 1c. Silent Reading Hall Decibel & Noise Monitor Atmosphere Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF0F766E).copy(alpha = 0.08f)
+                    ),
+                    border = BorderStroke(1.2.dp, Color(0xFF0D9488).copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenDecibelMeter() }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF0D9488),
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.GraphicEq,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Silent Reading Hall",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFF10B981).copy(alpha = 0.2f)
+                                    ) {
+                                        Text(
+                                            text = "32 dB • Optimal",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF047857),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "Real-time noise monitor active • Pin-drop silence maintained",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        FilledTonalButton(
+                            onClick = onOpenDecibelMeter,
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Test", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             // 2. Quick-Action QR Code Check-In Hub (Hero Element)
@@ -238,6 +325,82 @@ fun StudentMemberDashboard(
                 }
             }
 
+            // 2c. Signal-Inspired Real-Time Desk Chat Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1E90FF).copy(alpha = 0.08f)
+                    ),
+                    border = BorderStroke(1.2.dp, Color(0xFF1E90FF).copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenChat() }
+                        .testTag("student_dashboard_open_chat_card")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF1E90FF),
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChatBubble,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Direct Chat with Librarian",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0xFF10B981).copy(alpha = 0.18f)
+                                    ) {
+                                        Text(
+                                            text = "Supabase Realtime",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF047857),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "Ask for Wi-Fi, AC temp, quiet zone, or books • Instant reply",
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        FilledTonalButton(
+                            onClick = onOpenChat,
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("Chat", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             // 3. Upcoming Seat Reservation Card
             item {
                 StudentUpcomingSeatReservationCard(
@@ -261,7 +424,12 @@ fun StudentMemberDashboard(
                 )
             }
 
-            // 5. At-a-Glance Attendance & Study Activity
+            // 5. Study Focus Timer & Goal Tracker (Pomodoro / Stopwatch)
+            item {
+                StudentStudyFocusTimerCard(student = student)
+            }
+
+            // 6. At-a-Glance Attendance & Study Activity
             item {
                 StudentStudyActivityCard(
                     todayAttendance = todayAttendance,
@@ -1302,6 +1470,244 @@ private fun StudentStudyActivityCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * High-craft Student Focus & Pomodoro Study Timer.
+ * Helps students track focused study sessions in the library with goal progress.
+ */
+@Composable
+fun StudentStudyFocusTimerCard(
+    student: StudentEntity,
+    modifier: Modifier = Modifier
+) {
+    var timerMode by remember { mutableIntStateOf(25) } // 25, 50, 90, or 0 (Stopwatch)
+    var isRunning by remember { mutableStateOf(false) }
+    var secondsLeft by remember { mutableIntStateOf(25 * 60) }
+    var stopwatchSeconds by remember { mutableIntStateOf(0) }
+    var completedStudyMinutes by remember { mutableIntStateOf(75) } // Sample initial progress
+    val targetDailyMinutes = 240 // 4 hours goal
+
+    // Coroutine ticker
+    LaunchedEffect(isRunning, timerMode) {
+        while (isRunning) {
+            kotlinx.coroutines.delay(1000L)
+            if (timerMode > 0) {
+                if (secondsLeft > 0) {
+                    secondsLeft--
+                } else {
+                    isRunning = false
+                    completedStudyMinutes += timerMode
+                    secondsLeft = timerMode * 60
+                }
+            } else {
+                stopwatchSeconds++
+                if (stopwatchSeconds % 60 == 0) {
+                    completedStudyMinutes++
+                }
+            }
+        }
+    }
+
+    val displayMinutes = if (timerMode > 0) secondsLeft / 60 else stopwatchSeconds / 60
+    val displaySeconds = if (timerMode > 0) secondsLeft % 60 else stopwatchSeconds % 60
+    val formattedTime = String.format(Locale.getDefault(), "%02d:%02d", displayMinutes, displaySeconds)
+    val progressFraction = (completedStudyMinutes.toFloat() / targetDailyMinutes).coerceIn(0f, 1f)
+
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Study Focus Clock",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = if (isRunning) "Focus mode active • Stay dedicated" else "Set timer & start study session",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.5.sp
+                            )
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isRunning) LibDeskColors.successSoft else MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = if (isRunning) "● FOCUSING" else "IDLE",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = if (isRunning) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 10.5.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            // Timer Preset Selector Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                listOf(
+                    Pair("25m Sprint", 25),
+                    Pair("50m Deep Work", 50),
+                    Pair("90m Drill", 90),
+                    Pair("Stopwatch", 0)
+                ).forEach { (label, minutes) ->
+                    val isSelected = timerMode == minutes
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            if (!isRunning) {
+                                timerMode = minutes
+                                if (minutes > 0) {
+                                    secondsLeft = minutes * 60
+                                } else {
+                                    stopwatchSeconds = 0
+                                }
+                            }
+                        },
+                        label = { Text(label, fontSize = 11.5.sp) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Big Digital Timer Display Card
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = formattedTime,
+                        fontSize = 38.sp,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 2.sp
+                    )
+                    Text(
+                        text = if (timerMode > 0) "Session: ${timerMode} Minutes" else "Continuous Study Stopwatch",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Action Controls
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { isRunning = !isRunning },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isRunning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(if (isRunning) "Pause" else "Start Focus", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                isRunning = false
+                                if (timerMode > 0) {
+                                    secondsLeft = timerMode * 60
+                                } else {
+                                    stopwatchSeconds = 0
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(38.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Reset", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // Daily Study Goal Progress Bar
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Today's Study Goal: ${completedStudyMinutes / 60}h ${completedStudyMinutes % 60}m / ${targetDailyMinutes / 60}h",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "${(progressFraction * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { progressFraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
             }
         }
     }

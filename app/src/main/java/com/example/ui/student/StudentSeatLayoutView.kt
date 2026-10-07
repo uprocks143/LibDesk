@@ -593,7 +593,7 @@ private fun SeatFilterControlBar(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                placeholder = { Text("Search desk (e.g. A-04)", fontSize = 13.sp) },
+                placeholder = { Text("Search desk...", fontSize = 13.sp) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -1890,6 +1890,7 @@ private fun StudentSeatRequestDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1921,8 +1922,8 @@ private fun StudentSeatRequestDialog(
                 OutlinedTextField(
                     value = reasonText,
                     onValueChange = { reasonText = it },
-                    label = { Text("Reason or shift note (optional)") },
-                    placeholder = { Text("e.g., Prefer window seat / morning study") },
+                    label = { Text("Note (optional)") },
+                    placeholder = { Text("Optional note") },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3

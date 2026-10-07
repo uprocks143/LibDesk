@@ -86,6 +86,42 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         authPrefs.edit().putBoolean(KEY_DARK_MODE, next).apply()
     }
 
+    private val _isAmoledMode = MutableStateFlow(authPrefs.getBoolean(KEY_AMOLED_MODE, false))
+    val isAmoledMode: StateFlow<Boolean> = _isAmoledMode.asStateFlow()
+
+    fun toggleAmoledMode(enabled: Boolean? = null) {
+        val next = enabled ?: !_isAmoledMode.value
+        _isAmoledMode.value = next
+        authPrefs.edit().putBoolean(KEY_AMOLED_MODE, next).apply()
+        if (next && !_isDarkMode.value) {
+            toggleDarkMode(true)
+        }
+    }
+
+    private val _isBiometricEnabled = MutableStateFlow(authPrefs.getBoolean(KEY_BIOMETRIC, false))
+    val isBiometricEnabled: StateFlow<Boolean> = _isBiometricEnabled.asStateFlow()
+
+    fun toggleBiometric(enabled: Boolean? = null) {
+        val next = enabled ?: !_isBiometricEnabled.value
+        _isBiometricEnabled.value = next
+        authPrefs.edit().putBoolean(KEY_BIOMETRIC, next).apply()
+    }
+
+    // Pomodoro Timer State
+    private val _pomodoroSecondsLeft = MutableStateFlow(25 * 60)
+    val pomodoroSecondsLeft: StateFlow<Int> = _pomodoroSecondsLeft.asStateFlow()
+
+    private val _isPomodoroRunning = MutableStateFlow(false)
+    val isPomodoroRunning: StateFlow<Boolean> = _isPomodoroRunning.asStateFlow()
+
+    private val _isPomodoroBreak = MutableStateFlow(false)
+    val isPomodoroBreak: StateFlow<Boolean> = _isPomodoroBreak.asStateFlow()
+
+    private val _pomodoroSessionMinutes = MutableStateFlow(25)
+    val pomodoroSessionMinutes: StateFlow<Int> = _pomodoroSessionMinutes.asStateFlow()
+
+    private var pomodoroJob: kotlinx.coroutines.Job? = null
+
     private val _isAuthenticated = MutableStateFlow(authPrefs.getBoolean(KEY_IS_AUTHENTICATED, false))
     val isAuthenticated: StateFlow<Boolean> = _isAuthenticated.asStateFlow()
 
@@ -161,6 +197,12 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         .flatMapLatest { stId -> repository.getStudentById(stId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val currentStudent: StateFlow<StudentEntity?> = activeStudent
+
+    val availableSeats: StateFlow<List<SeatEntity>> = seats.map { list ->
+        list.filter { it.status == "AVAILABLE" }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _checkInConfirmation = MutableStateFlow<SeatCheckInDetails?>(null)
     val checkInConfirmation: StateFlow<SeatCheckInDetails?> = _checkInConfirmation.asStateFlow()
 
@@ -210,6 +252,13 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     val auditLogs: StateFlow<List<AuditLogEntity>> = _currentLibraryId
         .flatMapLatest { id -> repository.getAuditLogs(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val chatMessages: StateFlow<List<ChatMessageEntity>> = repository.chatMessages
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val unreadStudentChatCount: StateFlow<Int> = repository.chatMessages.map { list ->
+        list.count { it.senderRole == "STUDENT" && !it.isRead }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     // NOTE: saasPlans/SaaSSubscriptionPlanEntity below was a completely
     // separate, disconnected plan catalog — the Super Admin dashboard could
@@ -272,15 +321,37 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     val superAdminProfile: StateFlow<SuperAdminUserEntity?> = repository.getSuperAdmin()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val lockers: StateFlow<List<LockerEntity>> = _currentLibraryId
+        .flatMapLatest { id -> repository.getLockersByLibrary(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val visitorPasses: StateFlow<List<VisitorPassEntity>> = _currentLibraryId
+        .flatMapLatest { id -> repository.getVisitorPassesByLibrary(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val seatShiftRequests: StateFlow<List<SeatShiftRequestEntity>> = _currentLibraryId
+        .flatMapLatest { id -> repository.getSeatShiftRequestsByLibrary(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentStudentSeatShiftRequests: StateFlow<List<SeatShiftRequestEntity>> = _activeStudentId
+        .flatMapLatest { id -> repository.getSeatShiftRequestsByStudent(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val floorElements: StateFlow<List<FloorElementEntity>> = _currentLibraryId
+        .flatMapLatest { id -> repository.getFloorElementsByLibrary(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val currentStudentStreak: StateFlow<StudyStreakEntity?> = _activeStudentId
+        .flatMapLatest { id -> repository.getStudyStreakByStudent(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+
     
     private val _isAwaiting2Fa = MutableStateFlow(false)
     val isAwaiting2Fa: StateFlow<Boolean> = _isAwaiting2Fa.asStateFlow()
 
     private val _twoFaTargetEmail = MutableStateFlow("")
     val twoFaTargetEmail: StateFlow<String> = _twoFaTargetEmail.asStateFlow()
-
-    private val _activeOtpCode = MutableStateFlow<String?>(null)
-    val activeOtpCode: StateFlow<String?> = _activeOtpCode.asStateFlow()
 
     private val _otpTimerSeconds = MutableStateFlow(60)
     val otpTimerSeconds: StateFlow<Int> = _otpTimerSeconds.asStateFlow()
@@ -309,65 +380,11 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
-        // 1. Initial live pull from Supabase for all libraries, subscriptions, and superadmin
-        viewModelScope.launch {
-            repository.pullAllLibrariesFromCloud()
-            repository.pullAllSubscriptionPlansFromCloud()
-            repository.pullSuperAdminFromCloud()
-            val initialLibId = _currentLibraryId.value
-            if (initialLibId.isNotBlank()) {
-                repository.pullFromCloud(initialLibId)
-            }
-        }
-
-        // 2. Real-time dynamic listener: Whenever active library changes, fetch live cloud data
-        viewModelScope.launch {
-            _currentLibraryId.collectLatest { libId ->
-                if (libId.isNotBlank()) {
-                    repository.pullFromCloud(libId)
-                }
-            }
-        }
-
-        // 3. Network & periodic live cloud polling
-        viewModelScope.launch {
-            var isFirst = true
-            networkMonitor.isOnline.collect { online ->
-                if (!isFirst) {
-                    com.example.ui.components.SnackbarController.showNetworkStatus(online)
-                }
-                isFirst = false
-                if (online) {
-                    _supabaseStatusMessage.value = "● Cloud Realtime Active (Supabase Synced)"
-
-                    ensureSupabaseSessionFreshness()
-                    val libId = _currentLibraryId.value
-                    if (libId.isNotBlank()) {
-                        repository.pullFromCloud(libId)
-                    }
-                    repository.pullAllLibrariesFromCloud()
-                    repository.pullSuperAdminFromCloud()
-                    repository.pullAllSubscriptionPlansFromCloud()
-                } else {
-                    _supabaseStatusMessage.value = "● Cloud Disconnected (Active Internet Required)"
-                }
-            }
-        }
-
-        // 4. Live Background Polling Sync (every 10s when online)
-        viewModelScope.launch {
-            while (true) {
-                kotlinx.coroutines.delay(10000L)
-                if (networkMonitor.isOnline.value) {
-                    val libId = _currentLibraryId.value
-                    if (libId.isNotBlank()) {
-                        repository.pullFromCloud(libId)
-                    }
-                    repository.pullAllLibrariesFromCloud()
-                    repository.pullSuperAdminFromCloud()
-                    repository.pullAllSubscriptionPlansFromCloud()
-                }
-            }
+        // Standalone Local Mode Initialization
+        _supabaseStatusMessage.value = if (com.example.data.remote.SupabaseClient.isConfigured()) {
+            "● Cloud Sync Active"
+        } else {
+            "● Local Offline Mode (Standalone Active)"
         }
 
         viewModelScope.launch {
@@ -524,7 +541,10 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             }
 
             val current = repository.getSuperAdmin().firstOrNull()
-            val isSeedAccount = current?.email.isNullOrBlank()
+            val isSeedAccount = current == null ||
+                    current.email.isBlank() ||
+                    current.email.contains("CHANGE-THIS-EMAIL", ignoreCase = true) ||
+                    !current.isClaimed
 
             if (current != null && current.isClaimed && !isSeedAccount &&
                 !current.email.equals(cleanEmail, ignoreCase = true) && !forceReclaim
@@ -533,7 +553,36 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 return@launch
             }
 
-            // Register in Supabase Auth
+            if (!com.example.data.remote.SupabaseClient.isConfigured()) {
+                val localAdmin = SuperAdminUserEntity(
+                    id = "SUPER-ADMIN-MASTER",
+                    email = cleanEmail,
+                    name = name.trim().ifBlank { "SaaS Master Administrator" },
+                    mobile = mobile.trim(),
+                    role = "SUPER_ADMIN",
+                    accessCode = cleanPassword,
+                    is2FaEnabled = false,
+                    isClaimed = true,
+                    createdAt = System.currentTimeMillis()
+                )
+                repository.saveSuperAdmin(localAdmin)
+                _isAuthenticated.value = true
+                _currentRole.value = "SUPER_ADMIN"
+                _currentUserEmail.value = localAdmin.email
+                _currentUserName.value = localAdmin.name
+                _userMessage.value = "🎉 Super Admin Account successfully claimed and activated!"
+                persistAuthSession(
+                    authenticated = true,
+                    role = "SUPER_ADMIN",
+                    email = localAdmin.email,
+                    name = localAdmin.name,
+                    libraryId = ""
+                )
+                onSuccess("Super Admin successfully activated!")
+                return@launch
+            }
+
+            // Register or verify in Supabase Auth
             val signUpResult = SupabaseAuthService.signUp(
                 context = getApplication(),
                 email = cleanEmail,
@@ -544,31 +593,36 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 phone = mobile.trim()
             )
 
+            var authUserId = "SUPER-ADMIN-MASTER"
+            var isUserAlreadyRegistered = false
+
             if (signUpResult.isFailure) {
                 val errMsg = signUpResult.exceptionOrNull()?.message ?: ""
-                val isAlreadyRegistered = errMsg.contains("already registered", ignoreCase = true) ||
+                isUserAlreadyRegistered = errMsg.contains("already registered", ignoreCase = true) ||
                         errMsg.contains("already exists", ignoreCase = true) ||
                         errMsg.contains("user_already_exists", ignoreCase = true)
 
-                if (isAlreadyRegistered) {
-                    val signInCheck = SupabaseAuthService.signInWithPassword(
+                if (isUserAlreadyRegistered) {
+                    val checkPass = SupabaseAuthService.signInWithPassword(
                         context = getApplication(),
                         email = cleanEmail,
                         password = cleanPassword,
                         tenantCode = null,
-                        expectedRole = "SUPER_ADMIN"
+                        expectedRole = null,
+                        persistSession = false
                     )
-                    if (signInCheck.isFailure) {
-                        onError("This email is already registered in Supabase Auth. Please enter the correct password, or use Direct Sign In.")
+                    if (checkPass.isFailure) {
+                        onError("This email is already registered in Supabase. Please enter the correct password to claim the Super Admin role.")
                         return@launch
                     }
-                } else if (errMsg.isNotBlank() && !errMsg.contains("rate limit", ignoreCase = true)) {
+                    authUserId = checkPass.getOrNull()?.userId?.takeIf { it.isNotBlank() } ?: "SUPER-ADMIN-MASTER"
+                } else if (errMsg.isNotBlank()) {
                     onError("Supabase Registration Error: $errMsg")
                     return@launch
                 }
+            } else {
+                authUserId = signUpResult.getOrNull()?.userId?.takeIf { it.isNotBlank() } ?: "SUPER-ADMIN-MASTER"
             }
-
-            val authUserId = signUpResult.getOrNull()?.userId?.takeIf { it.isNotBlank() } ?: "SUPER-ADMIN-MASTER"
 
             val pendingAdmin = SuperAdminUserEntity(
                 id = authUserId,
@@ -577,7 +631,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 mobile = mobile.trim(),
                 role = "SUPER_ADMIN",
                 accessCode = cleanPassword,
-                is2FaEnabled = false,
+                is2FaEnabled = is2Fa,
                 isClaimed = true,
                 createdAt = System.currentTimeMillis()
             )
@@ -585,49 +639,22 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             if (is2Fa) {
                 pendingSuperAdminClaim = pendingAdmin
                 _twoFaTargetEmail.value = cleanEmail
+
+                if (isUserAlreadyRegistered) {
+                    val otpResult = SupabaseAuthService.signInWithOtp(cleanEmail, shouldCreateUser = false)
+                    if (otpResult.isFailure) {
+                        val otpErr = otpResult.exceptionOrNull()?.message ?: "Failed to dispatch verification OTP."
+                        onError(otpErr)
+                        return@launch
+                    }
+                    _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)} via Supabase."
+                } else {
+                    _userMessage.value = "Verification code dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)} by Supabase. Please enter the 6-digit code to complete registration."
+                }
+
                 _isAwaiting2Fa.value = true
                 _otpTimerSeconds.value = 60
-                _activeOtpCode.value = null
-
-                val otpResult = SupabaseAuthService.signInWithOtp(cleanEmail, shouldCreateUser = true)
-                if (otpResult.isSuccess) {
-                    _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)} via Supabase."
-                    onSuccess("")
-                } else {
-                    // Fallback to EmailOtpService.dispatchEmailOtp
-                    com.example.util.EmailOtpService.dispatchEmailOtp(
-                        email = cleanEmail,
-                        recipientName = name,
-                        purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
-                        scope = viewModelScope
-                    ) { dispatchRes ->
-                        if (dispatchRes.isSuccess) {
-                            _userMessage.value = "Verification OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)}."
-                            onSuccess("")
-                        } else {
-                            // If Email SMTP OTP is unconfigured or rate-limited on Supabase, activate directly via password
-                            viewModelScope.launch {
-                                repository.saveSuperAdmin(pendingAdmin.copy(is2FaEnabled = false))
-                                _isAwaiting2Fa.value = false
-                                pendingSuperAdminClaim = null
-                                _isAuthenticated.value = true
-                                _currentRole.value = "SUPER_ADMIN"
-                                _currentUserEmail.value = pendingAdmin.email
-                                _currentUserName.value = pendingAdmin.name
-                                _userMessage.value = "🎉 Super Admin Account successfully registered and activated!"
-                                persistAuthSession(
-                                    authenticated = true,
-                                    email = pendingAdmin.email,
-                                    name = pendingAdmin.name,
-                                    role = "SUPER_ADMIN",
-                                    libraryId = "",
-                                    studentId = ""
-                                )
-                                onSuccess("")
-                            }
-                        }
-                    }
-                }
+                onSuccess("")
 
                 viewModelScope.launch {
                     for (sec in 60 downTo 0) {
@@ -685,30 +712,34 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         onOtpDispatched: (String) -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        val trimmedEmail = email.trim()
+        val trimmedEmail = email.trim().lowercase()
         val trimmedPassword = accessCode.trim()
 
-        if (trimmedEmail.isBlank()) {
+        if (trimmedEmail.isBlank() || !trimmedEmail.contains("@")) {
             onError("Please enter Super Admin Email / User ID")
             return
         }
 
         viewModelScope.launch {
             val adminProfile = repository.getSuperAdmin().firstOrNull()
-            if (adminProfile == null || !adminProfile.isClaimed) {
-                onError("SaaS Admin account has not been claimed or created yet. Please register the SaaS Admin account first.")
+            val isUnclaimed = adminProfile == null || !adminProfile.isClaimed ||
+                    adminProfile.email.isBlank() ||
+                    adminProfile.email.contains("CHANGE-THIS-EMAIL", ignoreCase = true)
+
+            if (isUnclaimed) {
+                onError("SaaS Admin account has not been claimed or created yet. Please tap 'Claim Slot' above to create the account first.")
                 return@launch
             }
 
-            val isMatchingAdmin = trimmedEmail.equals(adminProfile.email, ignoreCase = true) ||
-                    (adminProfile.mobile.isNotBlank() && trimmedEmail == adminProfile.mobile)
+            val isMatchingAdmin = trimmedEmail.equals(adminProfile?.email, ignoreCase = true) ||
+                    (adminProfile?.mobile?.isNotBlank() == true && trimmedEmail == adminProfile.mobile)
 
             if (!isMatchingAdmin) {
                 onError("The entered credentials do not match the registered SaaS Super Admin.")
                 return@launch
             }
 
-            val targetEmail = adminProfile.email
+            val targetEmail = adminProfile?.email ?: trimmedEmail
 
             // If password was supplied, verify with Supabase Auth
             if (trimmedPassword.isNotBlank()) {
@@ -724,25 +755,24 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
-            _activeOtpCode.value = null
-            _twoFaTargetEmail.value = targetEmail
-            _isAwaiting2Fa.value = true
-            _otpTimerSeconds.value = 60
-
             val otpResult = SupabaseAuthService.signInWithOtp(targetEmail, shouldCreateUser = false)
             if (otpResult.isSuccess) {
+                _twoFaTargetEmail.value = targetEmail
+                _isAwaiting2Fa.value = true
+                _otpTimerSeconds.value = 60
                 _userMessage.value = "Security 2FA OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)} via Supabase."
                 onOtpDispatched("")
-            } else {
-                onError(otpResult.exceptionOrNull()?.message ?: "Failed to dispatch 2FA OTP.")
-            }
 
-            viewModelScope.launch {
-                for (sec in 60 downTo 0) {
-                    _otpTimerSeconds.value = sec
-                    kotlinx.coroutines.delay(1000L)
-                    if (!_isAwaiting2Fa.value) break
+                viewModelScope.launch {
+                    for (sec in 60 downTo 0) {
+                        _otpTimerSeconds.value = sec
+                        kotlinx.coroutines.delay(1000L)
+                        if (!_isAwaiting2Fa.value) break
+                    }
                 }
+            } else {
+                val err = otpResult.exceptionOrNull()?.message ?: "Failed to dispatch 2FA OTP."
+                onError(err)
             }
         }
     }
@@ -770,9 +800,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 _twoFaTargetEmail.value = cleanEmail
                 _isAwaiting2Fa.value = true
                 _otpTimerSeconds.value = 60
-                _activeOtpCode.value = null
                 _userMessage.value = "Magic Link / OTP dispatched to ${com.example.util.EmailOtpService.maskEmail(cleanEmail)}. Enter the code to authenticate."
-                
+
                 viewModelScope.launch {
                     for (sec in 60 downTo 0) {
                         _otpTimerSeconds.value = sec
@@ -806,33 +835,90 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
         viewModelScope.launch {
             val adminProfile = repository.getSuperAdmin().firstOrNull()
+            val isClaimFlow = pendingSuperAdminClaim != null
+
+            val purpose = if (isClaimFlow) {
+                com.example.util.OtpPurpose.SUPER_ADMIN_CLAIM
+            } else {
+                com.example.util.OtpPurpose.SUPER_ADMIN_2FA
+            }
 
             com.example.util.EmailOtpService.verifyOtp(
                 context = getApplication(),
                 email = targetEmail,
                 enteredOtp = cleanOtp,
-                purpose = com.example.util.OtpPurpose.SUPER_ADMIN_2FA,
+                purpose = purpose,
                 scope = viewModelScope
             ) { isValid, errorMsg ->
                 if (isValid) {
                     viewModelScope.launch {
                         _isAwaiting2Fa.value = false
-                        _activeOtpCode.value = null
 
-                        // If this was a pending platform owner claim, persist the entity with isClaimed = true
                         val pending = pendingSuperAdminClaim
-                        if (pending != null) {
-                            repository.saveSuperAdmin(pending.copy(isClaimed = true, is2FaEnabled = true))
-                            pendingSuperAdminClaim = null
-                            _userMessage.value = "🎉 Email verified! Platform Owner Account successfully claimed and activated."
-                        } else {
-                            _userMessage.value = "2FA Verification Successful! Welcome to SaaS Super Admin Portal."
-                        }
+                        val finalAdmin = (pending ?: adminProfile ?: SuperAdminUserEntity()).copy(
+                            email = targetEmail,
+                            role = "SUPER_ADMIN",
+                            isClaimed = true,
+                            is2FaEnabled = true
+                        )
 
+                        // 1. Update Room DB
+                        repository.saveSuperAdmin(finalAdmin)
+                        pendingSuperAdminClaim = null
+
+                        // 2. Update Supabase Cloud super_admin_users table
+                        val arr = org.json.JSONArray().apply {
+                            put(org.json.JSONObject().apply {
+                                put("id", finalAdmin.id.ifBlank { "SUPER-ADMIN-MASTER" })
+                                put("name", finalAdmin.name)
+                                put("email", finalAdmin.email)
+                                put("mobile", finalAdmin.mobile)
+                                put("phone", finalAdmin.mobile)
+                                put("role", "SUPER_ADMIN")
+                                put("accessCode", finalAdmin.accessCode)
+                                put("is2FaEnabled", true)
+                                put("isClaimed", true)
+                                put("upiId", finalAdmin.upiId)
+                                put("upiPayeeName", finalAdmin.upiPayeeName)
+                                put("supportWhatsApp", finalAdmin.mobile)
+                                put("updatedAt", System.currentTimeMillis())
+                            })
+                        }
+                        com.example.data.remote.SupabaseClient.upsertRecords("super_admin_users", arr)
+
+                        // 3. Update public.users table in Supabase Cloud
+                        val userArr = org.json.JSONArray().apply {
+                            put(org.json.JSONObject().apply {
+                                put("id", finalAdmin.id.ifBlank { "SUPER-ADMIN-MASTER" })
+                                put("email", targetEmail)
+                                put("name", finalAdmin.name.ifBlank { "Super Administrator" })
+                                put("role", "SUPER_ADMIN")
+                                put("libraryId", "")
+                                put("phone", finalAdmin.mobile)
+                                put("isActive", true)
+                            })
+                        }
+                        com.example.data.remote.SupabaseClient.upsertRecords("users", userArr)
+
+                        val adminUserAccount = UserAccountEntity(
+                            id = finalAdmin.id.ifBlank { "SUPER-ADMIN-MASTER" },
+                            email = targetEmail,
+                            password = finalAdmin.accessCode,
+                            name = finalAdmin.name.ifBlank { "Super Administrator" },
+                            role = "SUPER_ADMIN",
+                            libraryId = "",
+                            phone = finalAdmin.mobile,
+                            isActive = true,
+                            createdAt = System.currentTimeMillis()
+                        )
+                        repository.saveUser(adminUserAccount)
+
+                        _userMessage.value = "🎉 2FA Verified! Welcome to SaaS Super Admin Portal."
                         _isAuthenticated.value = true
                         _currentRole.value = "SUPER_ADMIN"
                         _currentUserEmail.value = targetEmail
-                        _currentUserName.value = pending?.name ?: adminProfile?.name?.ifBlank { "Super Administrator" } ?: "Super Administrator"
+                        _currentUserName.value = finalAdmin.name.ifBlank { "Super Administrator" }
+
                         persistAuthSession(
                             authenticated = true,
                             email = _currentUserEmail.value,
@@ -853,25 +939,19 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
     fun resendSuperAdminOtp(onOtpDispatched: (String) -> Unit) {
         val targetEmail = _twoFaTargetEmail.value ?: return
         _otpTimerSeconds.value = 60
-        _activeOtpCode.value = null
         viewModelScope.launch {
-            val result = SupabaseAuthService.signInWithOtp(targetEmail, shouldCreateUser = true)
+            val result = SupabaseAuthService.signInWithOtp(targetEmail, shouldCreateUser = false)
             if (result.isSuccess) {
                 _userMessage.value = "A new 2FA security OTP was dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)} via Supabase."
                 onOtpDispatched("")
             } else {
-                com.example.util.EmailOtpService.dispatchEmailOtp(
-                    email = targetEmail,
-                    recipientName = pendingSuperAdminClaim?.name ?: "Platform Owner",
-                    purpose = com.example.util.OtpPurpose.SUPER_ADMIN_2FA,
-                    scope = viewModelScope
-                ) { dispatchRes ->
-                    if (dispatchRes.isSuccess) {
-                        _userMessage.value = "A new 2FA security OTP was dispatched to ${com.example.util.EmailOtpService.maskEmail(targetEmail)}."
-                    } else {
-                        _userMessage.value = "Failed to resend 2FA OTP: ${dispatchRes.message}"
-                    }
-                    onOtpDispatched("")
+                _userMessage.value = result.exceptionOrNull()?.message ?: "Failed to resend OTP."
+            }
+            viewModelScope.launch {
+                for (sec in 60 downTo 0) {
+                    _otpTimerSeconds.value = sec
+                    kotlinx.coroutines.delay(1000L)
+                    if (!_isAwaiting2Fa.value) break
                 }
             }
         }
@@ -879,7 +959,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
 
     fun cancel2Fa() {
         _isAwaiting2Fa.value = false
-        _activeOtpCode.value = null
         pendingSuperAdminClaim = null
     }
 
@@ -945,7 +1024,11 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         val trimmedTenantCode = tenantCode.trim()
 
         if (trimmedIdentifier.isBlank()) {
-            onError("Please enter your registered Email, Mobile, or ID.")
+            onError("Please enter your registered Email address.")
+            return
+        }
+        if (!trimmedIdentifier.contains("@") || !trimmedIdentifier.contains(".")) {
+            onError("Login is strictly restricted to Email address. Please enter your valid registered email (e.g. user@example.com).")
             return
         }
         if (trimmedPassword.isBlank()) {
@@ -965,6 +1048,59 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     adminProfile.email
                 } else {
                     trimmedIdentifier
+                }
+
+                if (!com.example.data.remote.SupabaseClient.isConfigured()) {
+                    val admin = adminProfile
+                    if (admin != null && admin.isClaimed && admin.email.isNotBlank()) {
+                        if (admin.email.equals(targetEmail, ignoreCase = true) &&
+                            (admin.accessCode.isBlank() || admin.accessCode == trimmedPassword)
+                        ) {
+                            _isAuthenticated.value = true
+                            _currentRole.value = "SUPER_ADMIN"
+                            _currentUserEmail.value = admin.email
+                            _currentUserName.value = admin.name
+                            _userMessage.value = "Welcome back, ${admin.name}!"
+                            persistAuthSession(
+                                authenticated = true,
+                                email = admin.email,
+                                name = admin.name,
+                                role = "SUPER_ADMIN",
+                                libraryId = "",
+                                studentId = ""
+                            )
+                            onSuccess()
+                            return@launch
+                        } else {
+                            onError("Invalid Super Admin email or password.")
+                            return@launch
+                        }
+                    } else {
+                        // Unclaimed slot in offline mode - allow claim or auto-claim
+                        val localAdmin = SuperAdminUserEntity(
+                            id = "SUPER-ADMIN-MASTER",
+                            email = targetEmail,
+                            name = "Super Administrator",
+                            role = "SUPER_ADMIN",
+                            accessCode = trimmedPassword,
+                            isClaimed = true
+                        )
+                        repository.saveSuperAdmin(localAdmin)
+                        _isAuthenticated.value = true
+                        _currentRole.value = "SUPER_ADMIN"
+                        _currentUserEmail.value = localAdmin.email
+                        _currentUserName.value = localAdmin.name
+                        persistAuthSession(
+                            authenticated = true,
+                            email = localAdmin.email,
+                            name = localAdmin.name,
+                            role = "SUPER_ADMIN",
+                            libraryId = "",
+                            studentId = ""
+                        )
+                        onSuccess()
+                        return@launch
+                    }
                 }
 
                 // Strictly authenticate credentials against Supabase Auth
@@ -1001,7 +1137,6 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                     _twoFaTargetEmail.value = finalEmail
                     _isAwaiting2Fa.value = true
                     _otpTimerSeconds.value = 60
-                    _activeOtpCode.value = null
 
                     val otpResult = SupabaseAuthService.signInWithOtp(finalEmail, shouldCreateUser = false)
                     if (otpResult.isSuccess) {
@@ -1163,6 +1298,51 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             val res = repository.checkLibraryTrialEligibility(email, phone)
             onResult(res.first, res.second)
         }
+    }
+
+    fun requestOwnerSignupOtp(
+        email: String,
+        name: String,
+        phone: String,
+        onOtpSent: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val (isEligible, trialErrMsg) = repository.checkLibraryTrialEligibility(email, phone)
+            if (!isEligible) {
+                val err = trialErrMsg ?: "इस Email या Mobile Number पर पहले से एक Library रजिस्टर्ड है। 15 दिनों का Free Trial केवल एक बार ही मिलता है।"
+                onError(err)
+                return@launch
+            }
+
+            com.example.util.EmailOtpService.dispatchEmailOtp(
+                email = email.trim().lowercase(),
+                recipientName = name.trim(),
+                purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
+                scope = viewModelScope
+            ) { result ->
+                if (result.isSuccess) {
+                    onOtpSent(result.message)
+                } else {
+                    onError(result.message)
+                }
+            }
+        }
+    }
+
+    fun verifyOwnerSignupOtp(
+        email: String,
+        enteredOtp: String,
+        onVerified: (Boolean, String?) -> Unit
+    ) {
+        com.example.util.EmailOtpService.verifyOtp(
+            context = getApplication(),
+            email = email.trim().lowercase(),
+            enteredOtp = enteredOtp.trim(),
+            purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
+            scope = viewModelScope,
+            onVerified = onVerified
+        )
     }
 
     fun registerAndLogin(
@@ -1395,6 +1575,7 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 code = libraryCode,
                 ownerName = ownerName,
                 ownerPhone = ownerPhone,
+                ownerWhatsApp = ownerPhone,
                 ownerEmail = ownerEmail,
                 address = address,
                 city = city,
@@ -1618,7 +1799,20 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
                 _activeStudentId.value = student.id
             }
 
-            
+            // Ensure student user account exists in users table and syncs to Supabase
+            val studentEmail = email.trim().ifBlank { "${mobile.filter { it.isDigit() }}@student.libdesk" }
+            val studentUserAccount = UserAccountEntity(
+                id = student.userId.ifBlank { student.id },
+                email = studentEmail,
+                password = mobile.takeLast(6),
+                name = fullName.trim().ifBlank { "Student" },
+                role = "STUDENT",
+                libraryId = _currentLibraryId.value,
+                phone = mobile.trim(),
+                studentIdRef = student.id,
+                isActive = true
+            )
+            repository.saveUser(studentUserAccount)
 
             val currentToken = SessionManager.sessionState.value?.accessToken ?: ""
             if (email.isNotBlank() && email.contains("@")) {
@@ -2798,6 +2992,277 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    // ==========================================
+    // POMODORO FOCUS TIMER
+    // ==========================================
+    fun startPomodoro() {
+        if (_isPomodoroRunning.value) return
+        _isPomodoroRunning.value = true
+        pomodoroJob?.cancel()
+        pomodoroJob = viewModelScope.launch {
+            while (_isPomodoroRunning.value && _pomodoroSecondsLeft.value > 0) {
+                kotlinx.coroutines.delay(1000L)
+                _pomodoroSecondsLeft.value = (_pomodoroSecondsLeft.value - 1).coerceAtLeast(0)
+            }
+            if (_pomodoroSecondsLeft.value <= 0) {
+                _isPomodoroRunning.value = false
+                val minutesSpent = _pomodoroSessionMinutes.value
+                if (!_isPomodoroBreak.value) {
+                    // Log study session for current student
+                    val stId = _activeStudentId.value
+                    val libId = _currentLibraryId.value
+                    val stName = _currentUserName.value
+                    if (stId.isNotBlank()) {
+                        repository.logStudyMinutes(stId, libId, stName, minutesSpent)
+                    }
+                    _userMessage.value = "🎉 Great focus session! Time for a short 5-minute break."
+                    switchPomodoroMode(isBreak = true)
+                } else {
+                    _userMessage.value = "⚡ Break finished! Ready for another focused study block?"
+                    switchPomodoroMode(isBreak = false)
+                }
+            }
+        }
+    }
+
+    fun pausePomodoro() {
+        _isPomodoroRunning.value = false
+        pomodoroJob?.cancel()
+    }
+
+    fun resetPomodoro() {
+        pausePomodoro()
+        _pomodoroSecondsLeft.value = if (_isPomodoroBreak.value) 5 * 60 else _pomodoroSessionMinutes.value * 60
+    }
+
+    fun switchPomodoroMode(isBreak: Boolean) {
+        pausePomodoro()
+        _isPomodoroBreak.value = isBreak
+        _pomodoroSecondsLeft.value = if (isBreak) 5 * 60 else _pomodoroSessionMinutes.value * 60
+    }
+
+    fun setPomodoroDuration(minutes: Int) {
+        pausePomodoro()
+        _pomodoroSessionMinutes.value = minutes
+        if (!_isPomodoroBreak.value) {
+            _pomodoroSecondsLeft.value = minutes * 60
+        }
+    }
+
+    // ==========================================
+    // LOCKER ACTIONS
+    // ==========================================
+    fun saveLocker(locker: LockerEntity) {
+        viewModelScope.launch {
+            repository.saveLocker(locker)
+            _userMessage.value = "Locker ${locker.lockerNumber} saved successfully"
+        }
+    }
+
+    fun deleteLocker(lockerId: String) {
+        viewModelScope.launch {
+            repository.deleteLocker(lockerId)
+            _userMessage.value = "Locker removed"
+        }
+    }
+
+    fun allocateLocker(
+        lockerId: String,
+        studentId: String,
+        studentName: String,
+        studentPhone: String,
+        expiryDate: String,
+        keyNumber: String = ""
+    ) {
+        viewModelScope.launch {
+            repository.allocateLocker(lockerId, studentId, studentName, studentPhone, expiryDate, keyNumber)
+            _userMessage.value = "Locker assigned to $studentName"
+        }
+    }
+
+    fun releaseLocker(lockerId: String) {
+        viewModelScope.launch {
+            repository.releaseLocker(lockerId)
+            _userMessage.value = "Locker released & marked Available"
+        }
+    }
+
+    // ==========================================
+    // VISITOR / 1-DAY TRIAL PASS ACTIONS
+    // ==========================================
+    fun saveVisitorPass(pass: VisitorPassEntity) {
+        viewModelScope.launch {
+            repository.saveVisitorPass(pass)
+            _userMessage.value = "1-Day Pass issued to ${pass.visitorName}"
+        }
+    }
+
+    fun checkoutVisitorPass(passId: String) {
+        viewModelScope.launch {
+            repository.checkoutVisitorPass(passId)
+            _userMessage.value = "Visitor checkout logged"
+        }
+    }
+
+    // ==========================================
+    // SEAT & SHIFT CHANGE REQUEST ACTIONS
+    // ==========================================
+    fun submitSeatShiftRequest(
+        requestedSeatNumber: String = "",
+        requestedShiftId: String = "",
+        requestedShiftName: String = "",
+        requestType: String = "SEAT_AND_SHIFT",
+        reason: String
+    ) {
+        viewModelScope.launch {
+            val student = currentStudent.value
+            val req = SeatShiftRequestEntity(
+                id = "REQ-${UUID.randomUUID().toString().take(8).uppercase()}",
+                libraryId = _currentLibraryId.value,
+                studentId = _activeStudentId.value,
+                studentName = student?.fullName ?: _currentUserName.value,
+                studentPhone = student?.mobile ?: "",
+                currentSeatNumber = student?.seatNumber ?: "Unassigned",
+                currentShiftName = student?.shiftName ?: "Standard Shift",
+                requestedSeatNumber = requestedSeatNumber,
+                requestedShiftId = requestedShiftId,
+                requestedShiftName = requestedShiftName,
+                requestType = requestType,
+                reason = reason.trim(),
+                status = "PENDING"
+            )
+            repository.submitSeatShiftRequest(req)
+            _userMessage.value = "Seat/Shift change request submitted to library manager"
+        }
+    }
+
+    fun approveSeatShiftRequest(requestId: String, remarks: String = "") {
+        viewModelScope.launch {
+            repository.resolveSeatShiftRequest(requestId, isApproved = true, adminRemarks = remarks)
+            _userMessage.value = "Seat/Shift change request Approved & updated!"
+        }
+    }
+
+    fun rejectSeatShiftRequest(requestId: String, remarks: String = "") {
+        viewModelScope.launch {
+            repository.resolveSeatShiftRequest(requestId, isApproved = false, adminRemarks = remarks)
+            _userMessage.value = "Request Rejected"
+        }
+    }
+
+    // ==========================================
+    // INTERACTIVE FLOOR PLAN ACTIONS
+    // ==========================================
+    fun saveFloorElements(elements: List<FloorElementEntity>) {
+        viewModelScope.launch {
+            repository.saveFloorElements(elements)
+            _userMessage.value = "Floor plan layout saved!"
+        }
+    }
+
+    fun addFloorElement(element: FloorElementEntity) {
+        viewModelScope.launch {
+            repository.addFloorElement(element)
+            _userMessage.value = "Added ${element.label} to floor layout"
+        }
+    }
+
+    fun removeFloorElement(elementId: String) {
+        viewModelScope.launch {
+            repository.removeFloorElement(elementId)
+            _userMessage.value = "Element removed from floor plan"
+        }
+    }
+
+    // ==========================================
+    // WI-FI & STUDENT TARGET EXAM ACTIONS
+    // ==========================================
+    fun rotateWifiPassword(newSsid: String, newPassword: String) {
+        viewModelScope.launch {
+            val lib = currentLibrary.value ?: return@launch
+            val updated = lib.copy(
+                wifiSsid = newSsid.trim(),
+                wifiPassword = newPassword.trim(),
+                wifiLastRotated = System.currentTimeMillis()
+            )
+            repository.saveLibrary(updated)
+            _userMessage.value = "Library Wi-Fi credentials updated!"
+        }
+    }
+
+    fun updateStudentTargetExam(studentId: String, targetExam: String, targetExamDate: String) {
+        viewModelScope.launch {
+            val currentSt = students.value.find { it.id == studentId } ?: activeStudent.value ?: return@launch
+            val updated = currentSt.copy(
+                targetExam = targetExam.trim(),
+                targetExamDate = targetExamDate.trim()
+            )
+            repository.saveStudent(updated)
+            _userMessage.value = "Target exam updated to $targetExam"
+        }
+    }
+
+    // ==========================================
+    // SUPABASE REALTIME & SIGNAL MESSAGING
+    // ==========================================
+
+    fun sendChatMessage(
+        studentId: String,
+        studentName: String,
+        senderRole: String,
+        senderName: String,
+        messageText: String
+    ) {
+        if (messageText.isBlank()) return
+        val libId = _currentLibraryId.value.ifBlank { "LIB-DEFAULT" }
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val timeFmt = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(now))
+            val dateFmt = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(now))
+            val msg = ChatMessageEntity(
+                id = UUID.randomUUID().toString(),
+                libraryId = libId,
+                studentId = studentId,
+                studentName = studentName,
+                senderRole = senderRole,
+                senderName = senderName,
+                message = messageText.trim(),
+                timestamp = now,
+                timeFormatted = timeFmt,
+                dateFormatted = dateFmt,
+                status = "SENT",
+                isRead = false
+            )
+            repository.sendChatMessage(msg)
+        }
+    }
+
+    fun markChatAsRead(studentId: String, readerRole: String) {
+        viewModelScope.launch {
+            repository.markChatMessagesAsRead(studentId, readerRole)
+        }
+    }
+
+    fun startRealtimeChat() {
+        val libId = _currentLibraryId.value
+        if (libId.isNotBlank()) {
+            com.example.data.remote.SupabaseRealtimeChatManager.startRealtimeSession(libId, repository)
+        }
+    }
+
+    fun stopRealtimeChat() {
+        com.example.data.remote.SupabaseRealtimeChatManager.stopRealtimeSession()
+    }
+
+    fun refreshChatMessages() {
+        val libId = _currentLibraryId.value
+        if (libId.isNotBlank()) {
+            viewModelScope.launch {
+                com.example.data.remote.SupabaseRealtimeChatManager.syncMessagesFromSupabase(libId, repository)
+            }
+        }
+    }
+
     companion object {
         private const val KEY_IS_AUTHENTICATED = "key_is_authenticated"
         private const val KEY_USER_EMAIL = "key_user_email"
@@ -2806,6 +3271,8 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         private const val KEY_ROLE = "key_role"
         private const val KEY_ACTIVE_STUDENT_ID = "key_active_student_id"
         private const val KEY_DARK_MODE = "key_dark_mode"
+        private const val KEY_AMOLED_MODE = "key_amoled_mode"
+        private const val KEY_BIOMETRIC = "key_biometric"
     }
 }
 

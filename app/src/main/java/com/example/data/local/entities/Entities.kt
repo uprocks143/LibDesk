@@ -36,6 +36,9 @@ data class LibraryEntity(
     val borrowLimit: Int = 2,
     val loanDays: Int = 14,
     val qrAttendanceStrictShift: Boolean = false,
+    val wifiSsid: String = "LibDesk_HighSpeed_5G",
+    val wifiPassword: String = "StudyQuiet@2026",
+    val wifiLastRotated: Long = System.currentTimeMillis(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -163,6 +166,7 @@ data class StudentEntity(
     val courseClass: String = "",
     val college: String = "",
     val targetExam: String = "UPSC CSE", 
+    val targetExamDate: String = "2026-05-24", 
     val category: String = "General",
     val batch: String = "Morning Regular",
     val planId: String = "",
@@ -362,6 +366,21 @@ data class FeedbackComplaintEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+data class ChatMessageEntity(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val libraryId: String,
+    val studentId: String,
+    val studentName: String = "",
+    val senderRole: String = "STUDENT", // "STUDENT" or "LIBRARIAN"
+    val senderName: String = "",
+    val message: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val timeFormatted: String = "",
+    val dateFormatted: String = "",
+    val status: String = "SENT", // "SENT", "DELIVERED", "READ"
+    val isRead: Boolean = false
+)
+
 data class AuditLogEntity(
     val id: String,
     val libraryId: String,
@@ -420,4 +439,92 @@ data class SuperAdminUserEntity(
     val upiPayeeName: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
+
+data class LockerEntity(
+    val id: String,
+    val libraryId: String,
+    val lockerNumber: String,
+    val size: String = "Standard", // "Small", "Standard", "Large"
+    val floor: String = "Ground Floor",
+    val monthlyRent: Double = 200.0,
+    val depositAmount: Double = 300.0,
+    val status: String = "AVAILABLE", // "AVAILABLE", "OCCUPIED", "MAINTENANCE"
+    val assignedStudentId: String = "",
+    val assignedStudentName: String = "",
+    val assignedStudentPhone: String = "",
+    val startDate: String = "",
+    val expiryDate: String = "",
+    val keyNumber: String = "",
+    val notes: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class VisitorPassEntity(
+    val id: String,
+    val libraryId: String,
+    val passNumber: String,
+    val visitorName: String,
+    val mobile: String,
+    val purpose: String = "1-Day Demo / Trial", // "Trial", "Self Study", "Exam Day"
+    val idProofType: String = "Aadhar Card",
+    val idProofNumber: String = "",
+    val visitDate: String,
+    val timeSlot: String = "Full Day (8 AM - 8 PM)",
+    val assignedSeatNumber: String = "Temp-01",
+    val feeAmount: Double = 100.0,
+    val paymentMode: String = "CASH", // "CASH", "UPI", "FREE_TRIAL"
+    val status: String = "ACTIVE", // "ACTIVE", "COMPLETED", "EXPIRED"
+    val checkInTime: String = "",
+    val checkOutTime: String = "",
+    val notes: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class SeatShiftRequestEntity(
+    val id: String,
+    val libraryId: String,
+    val studentId: String,
+    val studentName: String,
+    val studentPhone: String,
+    val currentSeatNumber: String,
+    val currentShiftName: String,
+    val requestedSeatNumber: String = "",
+    val requestedShiftId: String = "",
+    val requestedShiftName: String = "",
+    val requestType: String = "SEAT_AND_SHIFT", // "SEAT_CHANGE", "SHIFT_CHANGE", "SEAT_AND_SHIFT"
+    val reason: String = "",
+    val status: String = "PENDING", // "PENDING", "APPROVED", "REJECTED"
+    val adminRemarks: String = "",
+    val requestedAt: Long = System.currentTimeMillis(),
+    val reviewedAt: Long = 0L
+)
+
+data class StudyStreakEntity(
+    val studentId: String,
+    val libraryId: String,
+    val studentName: String = "",
+    val streakDays: Int = 1,
+    val totalMinutesToday: Int = 0,
+    val totalStudyMinutesAllTime: Int = 0,
+    val lastStudyDate: String = "",
+    val dailyTargetMinutes: Int = 360, // Default 6 Hours Target
+    val longestStreakDays: Int = 1,
+    val totalSessions: Int = 0,
+    val unlockedBadges: String = "ROOKIE_SCHOLAR" // Comma-separated badge IDs
+)
+
+data class FloorElementEntity(
+    val id: String,
+    val libraryId: String,
+    val hallId: String = "MAIN_HALL",
+    val type: String, // "SEAT", "DOOR", "AC", "WATER_COOLER", "CABIN_WALL", "RESTROOM", "RECEPTION"
+    val label: String,
+    val gridX: Int,
+    val gridY: Int,
+    val width: Int = 1,
+    val height: Int = 1,
+    val seatNumberRef: String = "",
+    val isOccupied: Boolean = false
+)
+
 

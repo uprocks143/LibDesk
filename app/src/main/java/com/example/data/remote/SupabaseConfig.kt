@@ -21,13 +21,14 @@ import io.github.jan.supabase.storage.storage
 object SupabaseConfig {
     private const val TAG = "SupabaseConfig"
 
-    const val DEFAULT_PROJECT_URL = "https://rfhqbdwctqulvwwjcsgt.supabase.co"
-    const val DEFAULT_PUBLISHABLE_KEY = "sb_publishable_ZOtDEvWWBgdFJfaqe8fKfQ_-YMshS6S"
+    const val DEFAULT_PROJECT_URL = "https://unconfigured.supabase.co"
+    const val DEFAULT_PUBLISHABLE_KEY = "unconfigured_key_waiting_for_user"
 
     fun isValidUrl(url: String?): Boolean {
         if (url.isNullOrBlank()) return false
         val trimmed = url.trim().lowercase()
         return !trimmed.contains("your-project") &&
+                !trimmed.contains("unconfigured") &&
                 !trimmed.contains("example.com") &&
                 !trimmed.contains("placeholder") &&
                 (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
@@ -37,27 +38,30 @@ object SupabaseConfig {
         if (key.isNullOrBlank()) return false
         val trimmed = key.trim().lowercase()
         return !trimmed.contains("your-anon-key") &&
+                !trimmed.contains("unconfigured") &&
                 !trimmed.contains("placeholder") &&
                 trimmed.length > 10
     }
 
-    val supabaseUrl: String by lazy {
-        val url = try {
-            BuildConfig.SUPABASE_URL
-        } catch (_: Throwable) {
-            ""
+    val supabaseUrl: String
+        get() {
+            val url = try {
+                BuildConfig.SUPABASE_URL
+            } catch (_: Throwable) {
+                ""
+            }
+            return if (isValidUrl(url)) url.trim().removeSuffix("/") else DEFAULT_PROJECT_URL
         }
-        if (isValidUrl(url)) url.trim().removeSuffix("/") else DEFAULT_PROJECT_URL
-    }
 
-    val supabaseKey: String by lazy {
-        val key = try {
-            BuildConfig.SUPABASE_ANON_KEY
-        } catch (_: Throwable) {
-            ""
+    val supabaseKey: String
+        get() {
+            val key = try {
+                BuildConfig.SUPABASE_ANON_KEY
+            } catch (_: Throwable) {
+                ""
+            }
+            return if (isValidKey(key)) key.trim() else DEFAULT_PUBLISHABLE_KEY
         }
-        if (isValidKey(key)) key.trim() else DEFAULT_PUBLISHABLE_KEY
-    }
 
     @Volatile
     private var _client: SupabaseClient? = null

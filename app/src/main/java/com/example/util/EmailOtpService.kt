@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
 enum class OtpPurpose {
     SIGNUP_VERIFICATION,
     PASSWORD_RESET,
-    SUPER_ADMIN_2FA
+    SUPER_ADMIN_2FA,
+    SUPER_ADMIN_CLAIM
 }
 
 data class EmailDispatchResult(
@@ -153,6 +154,7 @@ object EmailOtpService {
                 val typesToTest = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> listOf("recovery", "email")
                     OtpPurpose.SIGNUP_VERIFICATION -> listOf("signup", "email")
+                    OtpPurpose.SUPER_ADMIN_CLAIM -> listOf("signup", "email", "magiclink")
                     OtpPurpose.SUPER_ADMIN_2FA -> listOf("email", "magiclink", "signup")
                 }
 
@@ -185,15 +187,19 @@ object EmailOtpService {
                             val appMetadata = userObj.optJSONObject("app_metadata")
                             val userMetadata = userObj.optJSONObject("user_metadata")
 
-                            val roleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
-                                ?: userMetadata?.optString("role")
-                                ?: when (purpose) {
-                                    OtpPurpose.SUPER_ADMIN_2FA -> "SUPER_ADMIN"
-                                    else -> "STUDENT"
-                                }
+                            val roleStr = when (purpose) {
+                                OtpPurpose.SUPER_ADMIN_2FA, OtpPurpose.SUPER_ADMIN_CLAIM -> "SUPER_ADMIN"
+                                else -> appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
+                                    ?: userMetadata?.optString("role")
+                                    ?: "STUDENT"
+                            }
 
                             val role = UserRole.fromString(roleStr)
                             val name = userMetadata?.optString("full_name") ?: cleanEmail.substringBefore("@")
+
+                            if (accessToken.isNotBlank()) {
+                                SupabaseClient.currentAuthToken = accessToken
+                            }
 
                             val session = UserSession(
                                 userId = userId,
@@ -244,6 +250,7 @@ object EmailOtpService {
                 val typesToTest = when (purpose) {
                     OtpPurpose.PASSWORD_RESET -> listOf("recovery", "email")
                     OtpPurpose.SIGNUP_VERIFICATION -> listOf("signup", "email")
+                    OtpPurpose.SUPER_ADMIN_CLAIM -> listOf("signup", "email", "magiclink")
                     OtpPurpose.SUPER_ADMIN_2FA -> listOf("email", "magiclink", "signup")
                 }
 

@@ -99,7 +99,7 @@ fun ManagerBooksScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search catalog by title, author, subject, rack...") },
+                    placeholder = { Text("Search catalog...") },
                     leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),

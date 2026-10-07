@@ -560,6 +560,36 @@ fun DigitalReceiptView(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                // 58mm / 80mm Bluetooth Thermal Print Slip
+                Button(
+                    onClick = {
+                        val slipText = com.example.util.ThermalPrinterReceiptUtils.generateThermalSlipText(
+                            library = library,
+                            student = null,
+                            payment = payment,
+                            is80mm = false
+                        )
+                        com.example.util.ThermalPrinterReceiptUtils.shareThermalSlip(
+                            context = context,
+                            slipText = slipText,
+                            studentName = payment.studentName,
+                            receiptNo = payment.receiptNumber
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1E293B),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Print via Bluetooth Thermal Printer (58mm/80mm)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 OutlinedButton(
                     onClick = onClose,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),

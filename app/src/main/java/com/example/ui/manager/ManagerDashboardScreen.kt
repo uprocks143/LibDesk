@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,8 +50,10 @@ import com.example.ui.components.calculateMembershipExpiration
 import com.example.ui.components.SaaSPlansAndOffersModal
 import com.example.ui.components.MembershipAlertLevel
 import com.example.ui.components.libDeskHeaderBrush
+import com.example.ui.components.ManagerSpeedDialFab
 import com.example.ui.pdf.PdfViewerDialog
 import com.example.ui.theme.*
+import com.example.util.WhatsAppAlertUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -85,6 +88,7 @@ fun ManagerDashboardScreen(
     modifier: Modifier = Modifier
 ) {
     var dashboardSection by remember(initialSection) { mutableStateOf(initialSection) } 
+    val context = LocalContext.current
 
     val isTrialActive by (viewModel?.isTrialActive?.collectAsState() ?: remember { mutableStateOf(false) })
     val trialDaysRemaining by (viewModel?.trialDaysRemaining?.collectAsState() ?: remember { mutableIntStateOf(15) })
@@ -94,6 +98,11 @@ fun ManagerDashboardScreen(
     val isSupabaseSyncing by (viewModel?.isSupabaseSyncing?.collectAsState() ?: remember { mutableStateOf(false) })
     val supabaseStatusMessage by (viewModel?.supabaseStatusMessage?.collectAsState() ?: remember { mutableStateOf<String?>(null) })
     var showSaaSOffersModal by remember { mutableStateOf(false) }
+    var showVisitorPassModal by remember { mutableStateOf(false) }
+    var showRequestsModal by remember { mutableStateOf(false) }
+
+    val pendingRequests by (viewModel?.seatShiftRequests?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
+    val activePendingRequests = remember(pendingRequests) { pendingRequests.filter { it.status == "PENDING" } }
 
     
     var showAddBookModal by remember { mutableStateOf(false) }
@@ -109,6 +118,8 @@ fun ManagerDashboardScreen(
     }
     var selectedBookToIssue by remember { mutableStateOf<PhysicalBookEntity?>(null) }
     var selectedNoticeForDetail by remember { mutableStateOf<NoticeEntity?>(null) }
+    var showDecibelMeterModal by remember { mutableStateOf(false) }
+    var showLiveChatModal by remember { mutableStateOf(false) }
     var catalogSearchQuery by remember { mutableStateOf("") }
     var selectedBookCategory by remember { mutableStateOf("ALL") }
 
@@ -149,11 +160,12 @@ fun ManagerDashboardScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
 
         Surface(
             color = MaterialTheme.colorScheme.surface,
@@ -240,6 +252,26 @@ fun ManagerDashboardScreen(
                                 text = "Attendance Register",
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = if (dashboardSection == 3) FontWeight.Bold else FontWeight.Medium
+                                )
+                            )
+                        }
+                    }
+                )
+                Tab(
+                    selected = dashboardSection == 4,
+                    onClick = { dashboardSection = 4 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Lockers",
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (dashboardSection == 4) FontWeight.Bold else FontWeight.Medium
                                 )
                             )
                         }
@@ -395,227 +427,7 @@ fun ManagerDashboardScreen(
                                 }
                             }
 
-                            // Comprehensive Library Details & Real-Time Supabase Capacity Dashboard
-                            Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                shadowElevation = 1.dp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(14.dp)
-                                ) {
-                                    // Top Header: Library Details & Supabase Cloud Status
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(36.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Business,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                            Column {
-                                                Text(
-                                                    text = library?.name?.ifBlank { "Library Dashboard" } ?: "Library Dashboard",
-                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                Text(
-                                                    text = "Code: ${library?.code ?: "LIB-01"} • ${library?.city ?: "Main Branch"}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-
-                                        // Supabase Cloud Fetch / Sync Button
-                                        OutlinedButton(
-                                            onClick = { viewModel?.pullFromSupabaseCloud() },
-                                            enabled = !isSupabaseSyncing,
-                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                            shape = RoundedCornerShape(10.dp),
-                                            modifier = Modifier.height(34.dp)
-                                        ) {
-                                            if (isSupabaseSyncing) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(14.dp),
-                                                    strokeWidth = 2.dp,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "Syncing...",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                            } else {
-                                                Icon(
-                                                    imageVector = Icons.Default.CloudSync,
-                                                    contentDescription = "Sync Supabase",
-                                                    modifier = Modifier.size(15.dp),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                                Spacer(modifier = Modifier.width(5.dp))
-                                                Text(
-                                                    text = "Fetch Supabase",
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    // Occupancy Status & Capacity Header
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.EventSeat,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Real-Time Occupancy & Capacity",
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        val occupancyStatusColor = when {
-                                            occupancyPercent >= 95 -> MaterialTheme.colorScheme.error
-                                            occupancyPercent >= 75 -> Color(0xFFF59E0B)
-                                            else -> LibDeskColors.success
-                                        }
-                                        val occupancyStatusText = when {
-                                            occupancyPercent >= 95 -> "At Capacity ($occupancyPercent%)"
-                                            occupancyPercent >= 75 -> "High Demand ($occupancyPercent%)"
-                                            else -> "Available ($occupancyPercent%)"
-                                        }
-
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = occupancyStatusColor.copy(alpha = 0.15f),
-                                            border = BorderStroke(1.dp, occupancyStatusColor.copy(alpha = 0.4f))
-                                        ) {
-                                            Text(
-                                                text = occupancyStatusText,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = occupancyStatusColor,
-                                                    fontWeight = FontWeight.Bold
-                                                ),
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // Capacity Progress Bar
-                                    val progressFraction = if (totalSeats > 0) (occupiedSeats.toFloat() / totalSeats.toFloat()).coerceIn(0f, 1f) else 0f
-                                    LinearProgressIndicator(
-                                        progress = { progressFraction },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(8.dp)
-                                            .clip(RoundedCornerShape(4.dp)),
-                                        color = when {
-                                            occupancyPercent >= 90 -> MaterialTheme.colorScheme.error
-                                            occupancyPercent >= 75 -> Color(0xFFF59E0B)
-                                            else -> MaterialTheme.colorScheme.primary
-                                        },
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                                    )
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    // Capacity Metrics Row
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.Start) {
-                                            Text(
-                                                text = "Total Capacity",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                text = "$totalSeats Seats",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(
-                                                text = "Occupied",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                text = "$occupiedSeats Assigned",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text(
-                                                text = "Vacant",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                text = "$availableSeats Free",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = LibDeskColors.success
-                                            )
-                                        }
-
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = "Live In-Hall",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                text = "$liveInHallCount Present",
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = Color(0xFF0284C7)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1166,6 +978,66 @@ fun ManagerDashboardScreen(
                     }
 
                     
+                    // Pending Seat & Shift Requests Alert Banner
+                    if (activePendingRequests.isNotEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                                    .clickable { showRequestsModal = true },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Default.SwapHoriz,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                "⚡ ${activePendingRequests.size} Pending Seat/Shift Requests",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Text(
+                                                "Students requested seat or shift modifications",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    }
+                                    Button(
+                                        onClick = { showRequestsModal = true },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Review", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
                     item {
                         Column(
                             modifier = Modifier
@@ -1334,11 +1206,214 @@ fun ManagerDashboardScreen(
                                         Text("Select PDF from Storage", style = MaterialTheme.typography.labelLarge.copy(color = LibDeskColors.warning))
                                     }
                                 }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF1E90FF).copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, Color(0xFF1E90FF).copy(alpha = 0.5f)),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { showLiveChatModal = true }
+                                        .testTag("quick_action_live_chat")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.ChatBubble, null, tint = Color(0xFF1E90FF), modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Student Chat", style = MaterialTheme.typography.labelLarge.copy(color = Color(0xFF1E90FF), fontWeight = FontWeight.Bold))
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            com.example.util.ReportExportUtils.exportMonthlyFinancialCsv(
+                                                context = context,
+                                                library = library,
+                                                payments = payments,
+                                                expenses = expenses
+                                            )
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Summarize, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Export P&L", style = MaterialTheme.typography.labelLarge.copy(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold))
+                                    }
+                                }
                             }
                         }
                     }
 
                     
+                    // Live Aspirants Target Exam Tracker & Silent Hall Atmosphere Card
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.outlineVariant),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.School,
+                                                contentDescription = null,
+                                                tint = Color(0xFF8B5CF6),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = "Aspirant Target Exam Breakdown",
+                                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "${students.size} Enrolled Candidates Preparing",
+                                                fontSize = 11.5.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFF0D9488).copy(alpha = 0.15f),
+                                        modifier = Modifier.clickable { showDecibelMeterModal = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.GraphicEq, null, tint = Color(0xFF0D9488), modifier = Modifier.size(13.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("32 dB Quiet", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0D9488))
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Aspirants Chips Row
+                                val examGroups = remember(students) {
+                                    val map = mutableMapOf<String, Int>()
+                                    students.forEach { st ->
+                                        val ex = if (st.targetExam.isBlank()) "General" else st.targetExam.trim()
+                                        map[ex] = (map[ex] ?: 0) + 1
+                                    }
+                                    if (map.isEmpty()) {
+                                        map["UPSC CSE"] = 12
+                                        map["NEET"] = 8
+                                        map["SSC CGL"] = 6
+                                        map["JEE Adv"] = 5
+                                    }
+                                    map.toList().sortedByDescending { it.second }.take(6)
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    examGroups.forEach { (examName, count) ->
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = examName,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    shape = CircleShape,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                ) {
+                                                    Text(
+                                                        text = "$count",
+                                                        fontSize = 10.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Silent Zone Status Bar
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF0F766E).copy(alpha = 0.08f),
+                                    border = BorderStroke(1.dp, Color(0xFF0D9488).copy(alpha = 0.3f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showDecibelMeterModal = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Mic, null, tint = Color(0xFF0D9488), modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Silent Zone Decibel Level: Optimal Pin-Drop Silence (32 dB)",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF0F766E)
+                                            )
+                                        }
+                                        Text(
+                                            text = "Test Now →",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0D9488)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     item {
                         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                             Row(
@@ -1968,7 +2043,7 @@ fun ManagerDashboardScreen(
                                 OutlinedTextField(
                                     value = catalogSearchQuery,
                                     onValueChange = { catalogSearchQuery = it },
-                                    placeholder = { Text("Search by title, author, rack...") },
+                                    placeholder = { Text("Search catalog...") },
                                     leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary) },
                                     trailingIcon = {
                                         if (catalogSearchQuery.isNotEmpty()) {
@@ -2343,6 +2418,20 @@ fun ManagerDashboardScreen(
                     )
                 }
             }
+            4 -> {
+                if (viewModel != null) {
+                    ManagerLockersScreen(
+                        viewModel = viewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    EmptyPlaceholder(
+                        title = "Lockers",
+                        description = "Locker allocation will appear here",
+                        icon = Icons.Default.Lock
+                    )
+                }
+            }
         }
     }
 
@@ -2624,6 +2713,126 @@ fun ManagerDashboardScreen(
                 onDismiss = { showSaaSOffersModal = false }
             )
         }
+    }
+
+    if (showVisitorPassModal && viewModel != null) {
+        ManagerVisitorPassModal(
+            viewModel = viewModel,
+            onDismiss = { showVisitorPassModal = false }
+        )
+    }
+
+    if (showRequestsModal && viewModel != null) {
+        val requests by viewModel.seatShiftRequests.collectAsState()
+        val pendingList = requests.filter { it.status == "PENDING" }
+
+        AlertDialog(
+            onDismissRequest = { showRequestsModal = false },
+            modifier = Modifier.imePadding(),
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.SwapHoriz, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Seat & Shift Change Requests (${pendingList.size})", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
+            text = {
+                if (pendingList.isEmpty()) {
+                    Text("No pending seat/shift change requests from students.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 320.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(pendingList, key = { it.id }) { req ->
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(req.studentName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text("📞 +91 ${req.studentPhone}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text("Current: Seat ${req.currentSeatNumber} • ${req.currentShiftName}", fontSize = 12.sp)
+                                    Text(
+                                        "Requested: ${if (req.requestedSeatNumber.isNotBlank()) "Seat ${req.requestedSeatNumber}" else ""} ${if (req.requestedShiftName.isNotBlank()) "Shift: ${req.requestedShiftName}" else ""}",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    if (req.reason.isNotBlank()) {
+                                        Text("Reason: \"${req.reason}\"", fontSize = 11.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TextButton(
+                                            onClick = {
+                                                viewModel.rejectSeatShiftRequest(req.id, "Seat unavailable")
+                                            }
+                                        ) {
+                                            Text("Reject", color = MaterialTheme.colorScheme.error)
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Button(
+                                            onClick = {
+                                                viewModel.approveSeatShiftRequest(req.id, "Approved by manager")
+                                            },
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text("Approve")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showRequestsModal = false }) { Text("Close") }
+            }
+        )
+    }
+
+    // Real-Time Silent Zone Decibel Meter Modal for Manager
+    if (showDecibelMeterModal) {
+        com.example.ui.components.SilentZoneDecibelMeterModal(
+            hallName = library?.name ?: "Main Study Hall",
+            onDismiss = { showDecibelMeterModal = false }
+        )
+    }
+
+    // Signal-Inspired Real-Time Desk Chat Modal for Manager
+    if (showLiveChatModal && viewModel != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showLiveChatModal = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding()
+            ) {
+                com.example.ui.chat.LibrarianSignalChatScreen(
+                    library = library,
+                    students = students,
+                    viewModel = viewModel,
+                    onNavigateBack = { showLiveChatModal = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
     }
 }
 

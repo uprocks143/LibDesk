@@ -886,7 +886,7 @@ fun StudentProfileSection(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         ProfileInfoTile(
-                            label = "MOBILE NUMBER",
+                            label = "MOBILE & WHATSAPP",
                             value = student.mobile.ifBlank { "Not Provided" },
                             icon = Icons.Default.Phone,
                             modifier = Modifier.weight(1f)

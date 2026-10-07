@@ -194,7 +194,7 @@ fun ManagerStudentsScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search by name, ID, phone, seat, exam...", fontSize = 14.sp) },
+                    placeholder = { Text("Search students...", fontSize = 14.sp) },
                     leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -1650,7 +1650,7 @@ fun RegisterStudentDialog(
                         onMobileChange = { mobile = FormFormatters.filterDigits(it, 10) },
                         countryCode = countryCode,
                         onCountryCodeChange = { countryCode = it },
-                        label = "Mobile Number *",
+                        label = "Mobile & WhatsApp Number *",
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1660,7 +1660,8 @@ fun RegisterStudentDialog(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = FormFormatters.toLowerCaseClean(it) },
-                        label = { Text("Email Address") },
+                        label = { Text("Student Email Address (Required for App Login)") },
+                        placeholder = { Text("student@gmail.com") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1833,8 +1834,8 @@ fun RegisterStudentDialog(
                                         isPaymentVerified = false
                                     }
                                 },
-                                label = { Text("Amount Paid Now (₹)") },
-                                placeholder = { Text("0 for Pending") },
+                                label = { Text("Amount Paid (₹)") },
+                                placeholder = { Text("0") },
                                 modifier = Modifier.weight(1f)
                             )
                         }

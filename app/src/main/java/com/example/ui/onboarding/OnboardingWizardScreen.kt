@@ -90,12 +90,13 @@ fun OnboardingWizardScreen(
                 }
             }
         },
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize().imePadding()
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -134,7 +135,7 @@ fun OnboardingWizardScreen(
                         OutlinedTextField(
                             value = ownerName,
                             onValueChange = { ownerName = it },
-                            label = { Text("Owner / Manager Full Name *") },
+                            label = { Text("Full Name *") },
                             leadingIcon = { Icon(Icons.Default.Person, null) },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -146,7 +147,7 @@ fun OnboardingWizardScreen(
                             onMobileChange = { ownerPhone = it },
                             countryCode = ownerCountryCode,
                             onCountryCodeChange = { ownerCountryCode = it },
-                            label = "Mobile Phone Number *",
+                            label = "Mobile & WhatsApp Number *",
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -156,7 +157,7 @@ fun OnboardingWizardScreen(
                         OutlinedTextField(
                             value = ownerEmail,
                             onValueChange = { ownerEmail = it },
-                            label = { Text("Official Email Address") },
+                            label = { Text("Email") },
                             leadingIcon = { Icon(Icons.Default.Email, null) },
                             modifier = Modifier.fillMaxWidth()
                         )

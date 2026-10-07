@@ -69,6 +69,7 @@ fun EditAttendanceModal(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .imePadding()
                 .padding(vertical = 24.dp)
                 .testTag("edit_attendance_modal")
         ) {
@@ -109,7 +110,7 @@ fun EditAttendanceModal(
                 OutlinedTextField(
                     value = date,
                     onValueChange = { date = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
+                    label = { Text("Date") },
                     leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -123,7 +124,7 @@ fun EditAttendanceModal(
                     OutlinedTextField(
                         value = checkInTime,
                         onValueChange = { checkInTime = it },
-                        label = { Text("Check-In Time") },
+                        label = { Text("Check-In") },
                         placeholder = { Text("08:30 AM") },
                         leadingIcon = { Icon(Icons.Default.Login, contentDescription = null) },
                         singleLine = true,
@@ -133,7 +134,7 @@ fun EditAttendanceModal(
                     OutlinedTextField(
                         value = checkOutTime,
                         onValueChange = { checkOutTime = it },
-                        label = { Text("Check-Out Time") },
+                        label = { Text("Check-Out") },
                         placeholder = { Text("02:00 PM") },
                         leadingIcon = { Icon(Icons.Default.Logout, contentDescription = null) },
                         singleLine = true,
@@ -177,8 +178,8 @@ fun EditAttendanceModal(
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Reason for Correction / Notes") },
-                    placeholder = { Text("e.g. Corrected manual punch error") },
+                    label = { Text("Reason / Note") },
+                    placeholder = { Text("Correction note") },
                     leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -276,6 +277,7 @@ fun EditPaymentModal(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .imePadding()
                 .padding(vertical = 24.dp)
                 .testTag("edit_payment_modal")
         ) {
@@ -316,7 +318,7 @@ fun EditPaymentModal(
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("Correct Amount (₹)") },
+                    label = { Text("Amount (₹)") },
                     leadingIcon = { Icon(Icons.Default.CurrencyRupee, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -326,7 +328,7 @@ fun EditPaymentModal(
                 OutlinedTextField(
                     value = date,
                     onValueChange = { date = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
+                    label = { Text("Date") },
                     leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -359,7 +361,7 @@ fun EditPaymentModal(
                 OutlinedTextField(
                     value = refNum,
                     onValueChange = { refNum = it },
-                    label = { Text("UPI / Transaction Ref ID") },
+                    label = { Text("Transaction ID") },
                     leadingIcon = { Icon(Icons.Default.Receipt, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -369,7 +371,7 @@ fun EditPaymentModal(
                 OutlinedTextField(
                     value = remarks,
                     onValueChange = { remarks = it },
-                    label = { Text("Remarks / Correction Note") },
+                    label = { Text("Remarks") },
                     leadingIcon = { Icon(Icons.Default.Notes, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -467,6 +469,7 @@ fun EditExpenseModal(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
                 .fillMaxWidth(0.92f)
+                .imePadding()
                 .padding(vertical = 24.dp)
                 .testTag("edit_expense_modal")
         ) {
@@ -500,7 +503,7 @@ fun EditExpenseModal(
                     value = category,
                     onValueChange = { category = it },
                     label = { Text("Category") },
-                    placeholder = { Text("Electricity, Rent, Internet...") },
+                    placeholder = { Text("e.g. Rent, Bills") },
                     leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -520,7 +523,7 @@ fun EditExpenseModal(
                 OutlinedTextField(
                     value = date,
                     onValueChange = { date = it },
-                    label = { Text("Date (YYYY-MM-DD)") },
+                    label = { Text("Date") },
                     leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()

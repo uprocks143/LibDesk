@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -374,7 +376,7 @@ fun ManagerAttendanceHistoryScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search by student name, seat, shift, or mode...") },
+                    placeholder = { Text("Search attendance...") },
                     leadingIcon = {
                         Icon(imageVector = Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
@@ -437,8 +439,8 @@ fun ManagerAttendanceHistoryScreen(
                         OutlinedTextField(
                             value = customDateQuery,
                             onValueChange = { customDateQuery = it },
-                            placeholder = { Text("Enter date (e.g. 2026-09-10 or 2026-09)") },
-                            label = { Text("Filter by Specific Date (YYYY-MM-DD)") },
+                            placeholder = { Text("YYYY-MM-DD") },
+                            label = { Text("Date") },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
                             singleLine = true
@@ -1128,6 +1130,7 @@ fun ManualAttendanceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = Icons.Default.AddCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
@@ -1139,6 +1142,7 @@ fun ManualAttendanceDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -1181,7 +1185,7 @@ fun ManualAttendanceDialog(
                         OutlinedTextField(
                             value = studentSearchText,
                             onValueChange = { studentSearchText = it },
-                            placeholder = { Text("Search by name/mobile...") },
+                            placeholder = { Text("Search...") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(8.dp),

@@ -260,9 +260,14 @@ fun UserProfileModal(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(scrollState)
+                    .verticalScroll(scrollState),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 760.dp)
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -378,7 +383,7 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = adminName,
                                 onValueChange = { adminName = FormFormatters.toTitleCase(it) },
-                                label = { Text("Super Admin Full Name") },
+                                label = { Text("Full Name") },
                                 leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
@@ -389,7 +394,7 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = adminEmail,
                                 onValueChange = { adminEmail = FormFormatters.toLowerCaseClean(it) },
-                                label = { Text("Super Admin Master Email") },
+                                label = { Text("Master Email") },
                                 leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -402,7 +407,7 @@ fun UserProfileModal(
                                 onMobileChange = { adminPhone = FormFormatters.filterDigits(it, 10) },
                                 countryCode = adminCountryCode,
                                 onCountryCodeChange = { adminCountryCode = it },
-                                label = "Admin Contact / WhatsApp Phone",
+                                label = "Contact Phone",
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -430,7 +435,7 @@ fun UserProfileModal(
                                     Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(
-                                        text = "All registered libraries send their SaaS subscription fees directly to this UPI ID. Saving here synchronizes across all subscription plans automatically.",
+                                        text = "All registered libraries send their SaaS subscription fees directly to this UPI ID.",
                                         fontSize = 12.5.sp,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
@@ -440,8 +445,8 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = adminUpiId,
                                 onValueChange = { adminUpiId = FormFormatters.toLowerCaseClean(it) },
-                                label = { Text("Master UPI ID (VPA)") },
-                                placeholder = { Text("e.g. libdesk.billing@upi") },
+                                label = { Text("UPI ID") },
+                                placeholder = { Text("name@upi") },
                                 leadingIcon = { Icon(Icons.Default.Payment, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -451,8 +456,8 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = adminUpiPayeeName,
                                 onValueChange = { adminUpiPayeeName = FormFormatters.toTitleCase(it) },
-                                label = { Text("Payee Business / Platform Name") },
-                                placeholder = { Text("e.g. LibDesk Subscriptions") },
+                                label = { Text("Payee Name") },
+                                placeholder = { Text("LibDesk Platform") },
                                 leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -534,7 +539,7 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = libName,
                                 onValueChange = { libName = FormFormatters.toTitleCase(it) },
-                                label = { Text("Institute / Library Name") },
+                                label = { Text("Library Name") },
                                 leadingIcon = { Icon(Icons.Default.AccountBalance, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
@@ -559,7 +564,7 @@ fun UserProfileModal(
                                 OutlinedTextField(
                                     value = regNumber,
                                     onValueChange = { regNumber = FormFormatters.toUpperCaseClean(it) },
-                                    label = { Text("Reg / License No.") },
+                                    label = { Text("Reg No.") },
                                     leadingIcon = { Icon(Icons.Default.Badge, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
@@ -580,7 +585,7 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = ownerName,
                                 onValueChange = { ownerName = FormFormatters.toTitleCase(it) },
-                                label = { Text("Owner / Manager Full Name") },
+                                label = { Text("Owner Name") },
                                 leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
@@ -593,7 +598,7 @@ fun UserProfileModal(
                                 onMobileChange = { ownerPhone = FormFormatters.filterDigits(it, 10) },
                                 countryCode = ownerCountryCode,
                                 onCountryCodeChange = { ownerCountryCode = it },
-                                label = "Contact Phone / WhatsApp",
+                                label = "Mobile & WhatsApp Number",
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -601,7 +606,7 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = ownerEmail,
                                 onValueChange = { ownerEmail = FormFormatters.toLowerCaseClean(it) },
-                                label = { Text("Official Email Address") },
+                                label = { Text("Email") },
                                 leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -612,10 +617,10 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = upiId,
                                 onValueChange = { upiId = it.trim().lowercase() },
-                                label = { Text("UPI ID / UPI Number for Payments") },
+                                label = { Text("UPI ID") },
                                 leadingIcon = { Icon(Icons.Default.QrCode, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
-                                placeholder = { Text("e.g. library@upi or 10-digit mobile") },
-                                supportingText = { Text("Accepts UPI ID (e.g. name@paytm) or 10-digit UPI number") },
+                                placeholder = { Text("library@upi") },
+                                supportingText = { Text("UPI ID or 10-digit number") },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -626,9 +631,9 @@ fun UserProfileModal(
                             OutlinedTextField(
                                 value = upiPayeeName,
                                 onValueChange = { upiPayeeName = it },
-                                label = { Text("UPI Payee Name (Account Holder Name)") },
+                                label = { Text("Payee Name") },
                                 leadingIcon = { Icon(Icons.Default.Badge, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
-                                placeholder = { Text("e.g. ${ownerName.ifBlank { libName.ifBlank { "Library Account" } }}") },
+                                placeholder = { Text("Holder name") },
                                 singleLine = true,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -735,7 +740,7 @@ fun UserProfileModal(
                                     onValueChange = { state = FormFormatters.toTitleCase(it) },
                                     readOnly = false,
                                     label = { Text("State / UT") },
-                                    placeholder = { Text("Select or type State") },
+                                    placeholder = { Text("State") },
                                     leadingIcon = { Icon(Icons.Default.Map, null, tint = MaterialTheme.colorScheme.onPrimaryContainer) },
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = stateDropdownExpanded) },
                                     singleLine = true,
@@ -1275,6 +1280,7 @@ fun UserProfileModal(
                                             regNumber = regNumber.trim(),
                                             ownerName = ownerName.trim(),
                                             ownerPhone = fullOwnerPhone.ifBlank { curLib.ownerPhone },
+                                            ownerWhatsApp = fullOwnerPhone.ifBlank { curLib.ownerPhone },
                                             ownerEmail = ownerEmail.trim().ifBlank { curLib.ownerEmail },
                                             upiId = upiId.trim(),
                                             upiPayeeName = effectivePayee,
@@ -1338,6 +1344,7 @@ fun UserProfileModal(
                         }
                     }
                 }
+            }
             }
         }
     }

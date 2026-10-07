@@ -330,8 +330,8 @@ fun StudyMaterialUploadScreen(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("Material Title *") },
-                placeholder = { Text("e.g. Modern Indian History Notes Part 1") },
+                label = { Text("Title") },
+                placeholder = { Text("Material title") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("material_title_input"),
@@ -342,8 +342,8 @@ fun StudyMaterialUploadScreen(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Description / Topics Covered") },
-                placeholder = { Text("e.g. Comprehensive notes for UPSC Prelims 2026") },
+                label = { Text("Description") },
+                placeholder = { Text("Short description") },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("material_description_input"),

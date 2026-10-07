@@ -75,6 +75,11 @@ class NcertRepository(
     }
 
     /**
+     * Gets content Uri for sharing or viewing.
+     */
+    fun getFileUri(file: File): android.net.Uri = downloadManager.getFileUri(file)
+
+    /**
      * Starts downloading book directly from official government server.
      */
     fun downloadBook(book: NcertBook): Flow<DownloadState> {

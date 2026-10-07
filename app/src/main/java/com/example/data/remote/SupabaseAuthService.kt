@@ -363,7 +363,7 @@ object SupabaseAuthService {
 
             // 2. If role is OWNER (or fallback check for library owner)
             if (role == UserRole.OWNER) {
-                val (lOk, lArr) = SupabaseClient.queryTable("libraries?ownerEmail=eq.$cleanEmail&select=id,name,code")
+                val (lOk, lArr) = SupabaseClient.queryTable("libraries?or=(ownerEmail.eq.$cleanEmail,email.eq.$cleanEmail)&select=id,name,code")
                 if (lOk && lArr != null && lArr.length() > 0) {
                     val libObj = lArr.getJSONObject(0)
                     val adminLibId = libObj.optString("id", "")
@@ -400,6 +400,13 @@ object SupabaseAuthService {
                         )
                     }
                 }
+
+                // If newly registered owner with no library yet, allow them to proceed to library setup
+                return@withContext TenantResolutionResult(
+                    libraryId = "",
+                    libraryName = "",
+                    verified = true
+                )
             }
 
             // If explicit tenant code was valid and found
@@ -431,7 +438,8 @@ object SupabaseAuthService {
         email: String,
         password: String,
         tenantCode: String? = null,
-        expectedRole: String? = null
+        expectedRole: String? = null,
+        persistSession: Boolean = true
     ): Result<UserSession> = withContext(Dispatchers.IO) {
         try {
             val cleanEmail = email.trim().lowercase()
@@ -467,28 +475,44 @@ object SupabaseAuthService {
                     val rawRoleStr = appMetadata?.optString("role")?.takeIf { it.isNotBlank() }
                         ?: userMetadata?.optString("role")
 
-                    var role = if (!rawRoleStr.isNullOrBlank()) {
-                        UserRole.fromString(rawRoleStr)
-                    } else if (expectedRole == "SUPER_ADMIN") {
-                        UserRole.SUPER_ADMIN
-                    } else if (expectedRole == "OWNER") {
-                        UserRole.OWNER
-                    } else {
-                        UserRole.STUDENT
+                    var role: UserRole = when (expectedRole?.uppercase()) {
+                        "SUPER_ADMIN" -> UserRole.SUPER_ADMIN
+                        "OWNER" -> UserRole.OWNER
+                        "STUDENT" -> UserRole.STUDENT
+                        else -> {
+                            if (!rawRoleStr.isNullOrBlank()) {
+                                UserRole.fromString(rawRoleStr)
+                            } else {
+                                UserRole.STUDENT
+                            }
+                        }
+                    }
+
+                    // Database-backed verification of role
+                    if (role == UserRole.OWNER || expectedRole == "OWNER") {
+                        try {
+                            val (lOk, lArr) = SupabaseClient.queryTable("libraries?or=(ownerEmail.eq.$cleanEmail,email.eq.$cleanEmail)&select=id")
+                            if (lOk && lArr != null && lArr.length() > 0) {
+                                role = UserRole.OWNER
+                            } else {
+                                val (uOk, uArr) = SupabaseClient.queryTable("users?email=eq.$cleanEmail&select=role")
+                                if (uOk && uArr != null && uArr.length() > 0) {
+                                    val dbRole = uArr.getJSONObject(0).optString("role", "")
+                                    if (dbRole.isNotBlank()) role = UserRole.fromString(dbRole)
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    } else if (role == UserRole.SUPER_ADMIN || expectedRole == "SUPER_ADMIN") {
+                        try {
+                            val (saOk, saArr) = SupabaseClient.queryTable("super_admin_users?email=ilike.$cleanEmail&select=id")
+                            if (saOk && saArr != null && saArr.length() > 0) {
+                                role = UserRole.SUPER_ADMIN
+                            }
+                        } catch (_: Exception) {}
                     }
 
                     // Role validation if expectedRole was specified
-                    if (expectedRole == "STUDENT" && (role == UserRole.OWNER || role == UserRole.SUPER_ADMIN)) {
-                        // User is an administrator trying to log in under Student tab
-                        return@withContext Result.failure(
-                            Exception("This account is registered as a Library Owner. Please select the 'Owner' tab.")
-                        )
-                    } else if (expectedRole == "OWNER" && role == UserRole.STUDENT) {
-                        // User is a student trying to log in under Owner tab
-                        return@withContext Result.failure(
-                            Exception("This account is registered as a Student Member. Please select the 'Student' tab to access your student pass.")
-                        )
-                    } else if (expectedRole == "SUPER_ADMIN" && role != UserRole.SUPER_ADMIN) {
+                    if (expectedRole == "SUPER_ADMIN" && role != UserRole.SUPER_ADMIN) {
                         return@withContext Result.failure(
                             Exception("This account does not have Super Admin privileges.")
                         )
@@ -539,8 +563,10 @@ object SupabaseAuthService {
                         expiresAt = System.currentTimeMillis() + (expiresIn * 1000)
                     )
 
-                    withContext(Dispatchers.Main) {
-                        SessionManager.saveSession(context, session)
+                    if (persistSession && accessToken.isNotBlank()) {
+                        withContext(Dispatchers.Main) {
+                            SessionManager.saveSession(context, session)
+                        }
                     }
 
                     Result.success(session)
@@ -621,12 +647,29 @@ object SupabaseAuthService {
                 val respStr = response.body?.string() ?: ""
                 if (response.isSuccessful) {
                     val json = JSONObject(respStr)
-                    val accessToken = json.optString("access_token", "")
-                    val refreshToken = json.optString("refresh_token", "")
+                    var accessToken = json.optString("access_token", "")
+                    var refreshToken = json.optString("refresh_token", "")
                     val expiresIn = json.optLong("expires_in", 3600L)
                     val userObj = json.optJSONObject("user") ?: json
 
                     val userId = userObj.optString("id", "")
+
+                    // If access_token was not directly included in signup response, attempt immediate signIn to acquire JWT
+                    if (accessToken.isBlank() && cleanPassword.isNotBlank()) {
+                        try {
+                            val loginAttempt = signInWithPassword(context, cleanEmail, cleanPassword, persistSession = true)
+                            if (loginAttempt.isSuccess) {
+                                val s = loginAttempt.getOrNull()
+                                if (s != null && s.accessToken.isNotBlank()) {
+                                    accessToken = s.accessToken
+                                    refreshToken = s.refreshToken
+                                    SupabaseClient.setLoggedInUser(cleanEmail, name, accessToken)
+                                    return@withContext Result.success(s)
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+
                     val session = UserSession(
                         userId = userId,
                         email = cleanEmail,
@@ -639,7 +682,46 @@ object SupabaseAuthService {
                         expiresAt = System.currentTimeMillis() + (expiresIn * 1000)
                     )
 
+                    // Guarantee direct insertion into public.users table in Supabase
+                    try {
+                        val usersPayload = org.json.JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("id", userId.ifBlank { "USER-${System.currentTimeMillis()}" })
+                                put("email", cleanEmail)
+                                put("name", name)
+                                put("role", role.roleKey)
+                                put("libraryId", libraryId)
+                                put("phone", phone.trim())
+                                put("isActive", true)
+                                put("createdAt", System.currentTimeMillis())
+                            })
+                        }
+                        SupabaseClient.upsertRecords("users", usersPayload)
+
+                        if (role == UserRole.OWNER && libraryId.isNotBlank()) {
+                            val libPayload = org.json.JSONArray().apply {
+                                put(JSONObject().apply {
+                                    put("id", libraryId)
+                                    put("name", name.ifBlank { "My Library" })
+                                    put("code", "LIB-${(1000..9999).random()}")
+                                    put("ownerName", name)
+                                    put("ownerPhone", phone.trim())
+                                    put("ownerEmail", cleanEmail)
+                                    put("phone", phone.trim())
+                                    put("email", cleanEmail)
+                                    put("subscription_active", true)
+                                    put("createdAt", System.currentTimeMillis())
+                                    put("updatedAt", System.currentTimeMillis())
+                                })
+                            }
+                            SupabaseClient.upsertRecords("libraries", libPayload)
+                        }
+                    } catch (syncEx: Exception) {
+                        Log.w(TAG, "Direct user table sync on signup warning: ${syncEx.message}")
+                    }
+
                     if (accessToken.isNotBlank()) {
+                        SupabaseClient.setLoggedInUser(cleanEmail, name, accessToken)
                         withContext(Dispatchers.Main) {
                             SessionManager.saveSession(context, session)
                         }

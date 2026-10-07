@@ -186,7 +186,7 @@ fun StudyMaterialReaderScreen(
                 OutlinedTextField(
                     value = pageInput,
                     onValueChange = { pageInput = it },
-                    label = { Text("Page number (1 to $totalPages)") },
+                    label = { Text("Page (1-$totalPages)") },
                     singleLine = true
                 )
             },

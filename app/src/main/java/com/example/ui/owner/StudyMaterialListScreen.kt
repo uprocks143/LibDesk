@@ -238,7 +238,7 @@ fun StudyMaterialListScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search by title, subject or exam...") },
+                    placeholder = { Text("Search materials...") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                     modifier = Modifier
                         .fillMaxWidth()

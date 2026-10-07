@@ -257,7 +257,7 @@ private fun LibrariesTab(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 0.dp),
-            placeholder = { Text("Search by name, owner email, or city") },
+            placeholder = { Text("Search libraries...") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
             shape = RoundedCornerShapeDefault()
@@ -788,6 +788,7 @@ private fun PlanEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.imePadding(),
         title = { Text(if (plan == null) "New SaaS Subscription Plan" else "Edit Subscription Plan") },
         text = {
             Column(
@@ -800,7 +801,7 @@ private fun PlanEditDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Plan name *") },
-                    placeholder = { Text("e.g. Standard Growth Pack") },
+                    placeholder = { Text("Plan name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -851,8 +852,8 @@ private fun PlanEditDialog(
                 OutlinedTextField(
                     value = maxSeats,
                     onValueChange = { maxSeats = it.filter { c -> c.isDigit() } },
-                    label = { Text("Max seats allowed *") },
-                    placeholder = { Text("e.g. 100 or 9999 for unlimited") },
+                    label = { Text("Max seats *") },
+                    placeholder = { Text("e.g. 100") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -861,8 +862,8 @@ private fun PlanEditDialog(
                 OutlinedTextField(
                     value = badge,
                     onValueChange = { badge = it },
-                    label = { Text("Badge Label (Optional)") },
-                    placeholder = { Text("e.g. Most Popular, 15% OFF") },
+                    label = { Text("Badge Label") },
+                    placeholder = { Text("e.g. Popular") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -946,8 +947,8 @@ private fun PlanEditDialog(
                 OutlinedTextField(
                     value = customExtraFeatures,
                     onValueChange = { customExtraFeatures = it },
-                    label = { Text("Custom / Additional Features (optional)") },
-                    placeholder = { Text("e.g. Free Cloud Backup\nInstant Setup Assistance") },
+                    label = { Text("Extra Features (Optional)") },
+                    placeholder = { Text("Additional features...") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2
                 )
@@ -1297,8 +1298,8 @@ private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewMo
                 OutlinedTextField(
                     value = mobile,
                     onValueChange = { mobile = it.filter { c -> c.isDigit() || c == '+' } },
-                    label = { Text("Official Contact & WhatsApp Support Phone") },
-                    placeholder = { Text("e.g. +91 9876543210") },
+                    label = { Text("Support Phone") },
+                    placeholder = { Text("+91 9876543210") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) }

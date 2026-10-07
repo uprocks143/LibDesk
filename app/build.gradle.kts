@@ -108,7 +108,6 @@ dependencies {
   implementation(libs.play.services.auth)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
-  implementation(libs.play.services.auth)
   implementation(libs.googleid)
   implementation(platform(libs.supabase.bom))
   implementation(libs.supabase.postgrest)

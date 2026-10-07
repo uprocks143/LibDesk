@@ -41,12 +41,16 @@ fun ManagerNoticesAndFeedbackScreen(
     notices: List<NoticeEntity>,
     feedbackList: List<FeedbackComplaintEntity>,
     superAdminProfile: SuperAdminUserEntity? = null,
+    library: com.example.data.local.entities.LibraryEntity? = null,
+    students: List<com.example.data.local.entities.StudentEntity> = emptyList(),
+    viewModel: com.example.viewmodel.LibDeskViewModel? = null,
+    initialTab: Int = 0,
     onPostNotice: (String, String, String, String) -> Unit,
     onReplyFeedback: (FeedbackComplaintEntity, String, String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableStateOf(0) } 
+    var selectedTab by remember { mutableStateOf(initialTab) } 
     var showPostNoticeModal by remember { mutableStateOf(false) }
     var activeComplaintToReply by remember { mutableStateOf<FeedbackComplaintEntity?>(null) }
 
@@ -78,6 +82,7 @@ fun ManagerNoticesAndFeedbackScreen(
                 Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Notices (${notices.size})") })
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Grievances (${feedbackList.size})") })
                 Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Support Helpline") })
+                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("💬 Live Chat") })
             }
 
             if (selectedTab == 0) {
@@ -363,6 +368,21 @@ fun ManagerNoticesAndFeedbackScreen(
                                 lineHeight = 17.sp
                             )
                         }
+                    }
+                }
+            }
+
+            if (selectedTab == 3) {
+                if (viewModel != null) {
+                    com.example.ui.chat.LibrarianSignalChatScreen(
+                        library = library,
+                        students = students,
+                        viewModel = viewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Live Chat Interface")
                     }
                 }
             }

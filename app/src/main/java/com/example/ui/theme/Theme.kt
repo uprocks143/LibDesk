@@ -89,16 +89,52 @@ private val DarkColorScheme = darkColorScheme(
     onErrorContainer = Color(0xFFFECACA)
 )
 
+private val AmoledColorScheme = darkColorScheme(
+    primary = Color(0xFF38BDF8),
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF0284C7),
+    onPrimaryContainer = Color.White,
+    
+    secondary = Color(0xFFFBBF24),
+    onSecondary = Color.Black,
+    secondaryContainer = Color(0xFF78350F),
+    onSecondaryContainer = Color(0xFFFEF3C7),
+    
+    tertiary = Color(0xFFA78BFA),
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFF4C1D95),
+    onTertiaryContainer = Color(0xFFEDE9FE),
+    
+    background = Color(0xFF000000), // Pure AMOLED Pitch Black
+    onBackground = Color(0xFFFFFFFF),
+    
+    surface = Color(0xFF080808),    // True Black Surface
+    onSurface = Color(0xFFFFFFFF),
+    
+    surfaceVariant = Color(0xFF141414), // Elevated Black Surface
+    onSurfaceVariant = Color(0xFFA3A3A3),
+    
+    outline = Color(0xFF262626),
+    outlineVariant = Color(0xFF1F1F1F),
+    
+    error = Color(0xFFF87171),
+    onError = Color.Black,
+    errorContainer = Color(0xFF450A0A),
+    onErrorContainer = Color(0xFFFECACA)
+)
+
 /**
- * LibDeskTheme with Material Design 3 and dynamic color support for Android 12+.
+ * LibDeskTheme with Material Design 3, AMOLED pure dark mode, and dynamic color support.
  */
 @Composable
 fun LibDeskTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    isAmoled: Boolean = false,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        isAmoled && darkTheme -> AmoledColorScheme
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

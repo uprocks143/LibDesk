@@ -1,8 +1,9 @@
 package com.example.ui.auth
 
+import android.content.Context
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -21,32 +23,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.local.entities.LibraryEntity
 import com.example.data.local.entities.MembershipPlanEntity
 import com.example.data.local.entities.ShiftEntity
+import com.example.data.local.entities.SuperAdminUserEntity
 import com.example.ui.components.CountryCodePhoneField
-import com.example.ui.components.combineCountryCodeAndPhone
-import com.example.ui.components.CameraXQrScannerView
-import com.example.ui.theme.*
+import kotlinx.coroutines.launch
 
+private fun isValidLoginEmail(email: String): Boolean {
+    val clean = email.trim()
+    return clean.isNotBlank() && clean.contains("@") && clean.substringAfterLast("@").contains(".") && !clean.contains(" ")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
     libraries: List<LibraryEntity> = emptyList(),
     shifts: List<ShiftEntity> = emptyList(),
     plans: List<MembershipPlanEntity> = emptyList(),
-    superAdminProfile: com.example.data.local.entities.SuperAdminUserEntity? = null,
+    superAdminProfile: SuperAdminUserEntity? = null,
     isAwaiting2Fa: Boolean = false,
     twoFaTargetEmail: String = "",
-    activeOtpCode: String? = null,
     otpTimerSeconds: Int = 60,
     onRequest2FaOtp: (email: String, accessCode: String, onOtpSent: (String) -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _ -> },
     onVerify2FaOtp: (enteredOtp: String, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _ -> },
@@ -55,797 +62,1164 @@ fun AuthScreen(
     onClaimAdminSlot: (name: String, email: String, mobile: String, pin: String, is2Fa: Boolean, onSuccess: (String) -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _, _, _, _ -> },
     onResetAdminSlot: () -> Unit = {},
     onResetPassword: (email: String, newPassword: String, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _ -> },
-    onLogin: (email: String, role: String, name: String) -> Unit,
+    onLogin: (email: String, role: String, name: String) -> Unit = { _, _, _ -> },
     onAuthenticate: (identifier: String, password: String, role: String, onSuccess: () -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _, _ -> },
-    onRegister: (name: String, email: String, libraryName: String, phone: String, password: String) -> Unit,
+    onRegister: (name: String, email: String, libraryName: String, phone: String, password: String) -> Unit = { _, _, _, _, _ -> },
+    onRequestOwnerSignupOtp: (email: String, name: String, phone: String, onOtpSent: (String) -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _, _ -> },
+    onVerifyOwnerSignupOtp: (email: String, enteredOtp: String, onVerified: (Boolean, String?) -> Unit) -> Unit = { _, _, _ -> },
     onCheckLibraryTrialEligibility: ((email: String, phone: String, onResult: (Boolean, String?) -> Unit) -> Unit)? = null,
     onStudentQrSignup: (libraryId: String, name: String, mobile: String, email: String, exam: String, shift: ShiftEntity?, plan: MembershipPlanEntity?, password: String) -> Unit = { _, _, _, _, _, _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
     val rememberPrefs = remember {
-        context.getSharedPreferences("libdesk_remember_me_prefs", android.content.Context.MODE_PRIVATE)
+        context.getSharedPreferences("libdesk_remember_me_prefs", Context.MODE_PRIVATE)
     }
 
-    val savedRememberMe = remember { rememberPrefs.getBoolean("remember_me_main", false) }
+    // Role state: "OWNER", "STUDENT", "SUPER_ADMIN"
+    val savedRole = rememberPrefs.getString("saved_main_role", "OWNER") ?: "OWNER"
+    var selectedRole by remember { mutableStateOf(savedRole) }
+
+    // Auth mode: 0 -> Sign In, 1 -> Register
+    var isRegisterMode by remember { mutableStateOf(false) }
+
+    // Saved Credentials
+    val savedRememberMe = rememberPrefs.getBoolean("remember_me_main", false)
     var rememberMe by remember { mutableStateOf(savedRememberMe) }
-    var loginEmail by remember {
+    var identifierInput by remember {
         mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_identifier", "") ?: "" else "")
     }
-    var loginPassword by remember {
+    var passwordInput by remember {
         mutableStateOf(if (savedRememberMe) rememberPrefs.getString("saved_main_password", "") ?: "" else "")
     }
-    var selectedRole by remember {
-        mutableStateOf(
-            if (savedRememberMe) {
-                val r = rememberPrefs.getString("saved_main_role", "OWNER") ?: "OWNER"
-                if (r == "MANAGER") "OWNER" else r
-            } else "OWNER"
-        )
-    }
-    var showLoginPassword by remember { mutableStateOf(false) }
-    var authMode by remember { mutableStateOf(0) } 
-
-    
-    var showForgotPasswordModal by remember { mutableStateOf(false) }
-    var forgotPasswordStep by remember { mutableStateOf(0) } 
-    var forgotPasswordEmail by remember { mutableStateOf("") }
-    var forgotPasswordGeneratedOtp by remember { mutableStateOf("") }
-    var forgotPasswordOtpInput by remember { mutableStateOf("") }
-    var forgotPasswordNewPassword by remember { mutableStateOf("") }
-    var forgotPasswordConfirmPassword by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var showRegPassword by remember { mutableStateOf(false) }
+    var showRegConfirmPassword by remember { mutableStateOf(false) }
+    var showStudentRegPassword by remember { mutableStateOf(false) }
+    var showStudentRegConfirmPassword by remember { mutableStateOf(false) }
+    var showClaimPin by remember { mutableStateOf(false) }
+    var showClaimConfirmPin by remember { mutableStateOf(false) }
     var showForgotNewPassword by remember { mutableStateOf(false) }
     var showForgotConfirmPassword by remember { mutableStateOf(false) }
-    var forgotPasswordError by remember { mutableStateOf<String?>(null) }
-    var forgotPasswordSuccessMessage by remember { mutableStateOf<String?>(null) }
-    var forgotPasswordTimerSeconds by remember { mutableStateOf(60) }
 
-    
-    val isSaaSAdminCreated = superAdminProfile?.isClaimed == true
-    var showMasterAdminModal by remember { mutableStateOf(false) }
-    var adminModalMode by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Claim Slot
-    var adminClaimName by remember { mutableStateOf("") }
-    var adminClaimEmail by remember { mutableStateOf("") }
-    var adminClaimCountryCode by remember { mutableStateOf("+91") }
-    var adminClaimMobile by remember { mutableStateOf("") }
-    var adminClaimPin by remember { mutableStateOf("") }
-    var showAdminClaimPin by remember { mutableStateOf(false) }
-    var adminClaimPinConfirm by remember { mutableStateOf("") }
-    var showAdminClaimPinConfirm by remember { mutableStateOf(false) }
-
-    val savedSuperAdminRememberMe = remember { rememberPrefs.getBoolean("remember_me_super_admin", false) }
-    var adminRememberMe by remember { mutableStateOf(savedSuperAdminRememberMe) }
-    var adminLoginEmail by remember {
-        mutableStateOf(if (savedSuperAdminRememberMe) rememberPrefs.getString("saved_super_admin_email", "") ?: "" else "")
-    }
-    var adminLoginPin by remember {
-        mutableStateOf(if (savedSuperAdminRememberMe) rememberPrefs.getString("saved_super_admin_password", "") ?: "" else "")
-    }
-    var showAdminLoginPin by remember { mutableStateOf(false) }
-    var adminErrorMessage by remember { mutableStateOf<String?>(null) }
-
-    
-    var otpInput by remember { mutableStateOf("") }
-    var otpErrorMessage by remember { mutableStateOf<String?>(null) }
-    var otpSuccessToast by remember { mutableStateOf<String?>(null) }
-
-    
+    // Registration Fields
     var regName by remember { mutableStateOf("") }
     var regEmail by remember { mutableStateOf("") }
-    var regCountryCode by remember { mutableStateOf("+91") }
     var regPhone by remember { mutableStateOf("") }
+    var regCountryCode by remember { mutableStateOf("+91") }
+    var studentPhone by remember { mutableStateOf("") }
+    var studentCountryCode by remember { mutableStateOf("+91") }
     var regLibraryName by remember { mutableStateOf("") }
     var regPassword by remember { mutableStateOf("") }
-    var showRegPassword by remember { mutableStateOf(false) }
     var regConfirmPassword by remember { mutableStateOf("") }
-    var showRegConfirmPassword by remember { mutableStateOf(false) }
-    var regAgreedToTerms by remember { mutableStateOf(false) }
+    var selectedLibraryForStudent by remember { mutableStateOf<LibraryEntity?>(libraries.firstOrNull()) }
 
-    
-    var studentScannedLib by remember { mutableStateOf<LibraryEntity?>(null) }
-    var studentName by remember { mutableStateOf("") }
-    var studentAgreedToTerms by remember { mutableStateOf(false) }
-    var studentCountryCode by remember { mutableStateOf("+91") }
-    var studentPhone by remember { mutableStateOf("") }
-    var studentEmail by remember { mutableStateOf("") }
-    var studentExam by remember { mutableStateOf("UPSC Civil Services") }
-    var selectedShiftId by remember { mutableStateOf(shifts.firstOrNull()?.id ?: "") }
-    var selectedPlanId by remember { mutableStateOf(plans.firstOrNull()?.id ?: "") }
-    var showQrScannerDialog by remember { mutableStateOf(false) }
+    // Owner Registration 2-Step OTP Dialog State
+    var showOwnerSignupOtpDialog by remember { mutableStateOf(false) }
+    var ownerSignupOtpInput by remember { mutableStateOf("") }
+    var ownerSignupOtpTimer by remember { mutableIntStateOf(60) }
+    var isOwnerOtpVerifying by remember { mutableStateOf(false) }
+    var isOwnerOtpSending by remember { mutableStateOf(false) }
 
-    
-    var isVerifyingSignupEmail by remember { mutableStateOf(false) }
-    var signupVerificationEmail by remember { mutableStateOf("") }
-    var signupPendingMode by remember { mutableStateOf(1) } 
-    var signupVerificationCode by remember { mutableStateOf("") }
-    var signupOtpInput by remember { mutableStateOf("") }
-    var signupOtpError by remember { mutableStateOf<String?>(null) }
-    var signupOtpTimerSeconds by remember { mutableStateOf(60) }
-    var signupValidationError by remember { mutableStateOf<String?>(null) }
+    // Super Admin Claim Fields
+    var claimName by remember { mutableStateOf("") }
+    var claimEmail by remember { mutableStateOf("") }
+    var claimMobile by remember { mutableStateOf("") }
+    var claimCountryCode by remember { mutableStateOf("+91") }
+    var claimPin by remember { mutableStateOf("") }
+    var claimConfirmPin by remember { mutableStateOf("") }
+    var claim2FaEnabled by remember { mutableStateOf(true) }
 
-    
-    LaunchedEffect(isVerifyingSignupEmail, signupOtpTimerSeconds) {
-        if (isVerifyingSignupEmail && signupOtpTimerSeconds > 0) {
-            kotlinx.coroutines.delay(1000L)
-            signupOtpTimerSeconds -= 1
+    // 2FA OTP Input
+    var entered2FaOtp by remember { mutableStateOf("") }
+
+    // Status / Error Messages
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+
+    // Forgot Password Dialog State
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
+    var forgotEmailInput by remember { mutableStateOf("") }
+    var forgotNewPasswordInput by remember { mutableStateOf("") }
+    var forgotConfirmPasswordInput by remember { mutableStateOf("") }
+    var forgotIsSubmitting by remember { mutableStateOf(false) }
+
+    val isSuperAdminClaimed = superAdminProfile?.isClaimed == true
+
+    fun saveRememberedCredentials() {
+        if (rememberMe) {
+            rememberPrefs.edit()
+                .putBoolean("remember_me_main", true)
+                .putString("saved_main_identifier", identifierInput.trim())
+                .putString("saved_main_password", passwordInput.trim())
+                .putString("saved_main_role", selectedRole)
+                .apply()
+        } else {
+            rememberPrefs.edit().clear().apply()
         }
     }
 
-    
-    LaunchedEffect(showForgotPasswordModal, forgotPasswordStep, forgotPasswordTimerSeconds) {
-        if (showForgotPasswordModal && forgotPasswordStep == 1 && forgotPasswordTimerSeconds > 0) {
-            kotlinx.coroutines.delay(1000L)
-            forgotPasswordTimerSeconds -= 1
-        }
+    BackHandler(enabled = selectedRole == "SUPER_ADMIN") {
+        selectedRole = "OWNER"
+        errorMessage = null
+        successMessage = null
     }
 
-    
-    val shouldInterceptAuthBack = isVerifyingSignupEmail ||
-            showMasterAdminModal ||
-            showForgotPasswordModal ||
-            showQrScannerDialog ||
-            isAwaiting2Fa ||
-            authMode != 0
-
-    BackHandler(enabled = shouldInterceptAuthBack) {
-        when {
-            showForgotPasswordModal -> showForgotPasswordModal = false
-            isVerifyingSignupEmail -> isVerifyingSignupEmail = false
-            showMasterAdminModal -> showMasterAdminModal = false
-            showQrScannerDialog -> showQrScannerDialog = false
-            isAwaiting2Fa -> onCancel2Fa()
-            authMode != 0 -> authMode = 0
-        }
-    }
-
-    
-    // Previously this silently auto-picked the first library in the entire
-    // list as soon as the screen loaded — before the student ever scanned a
-    // QR code or chose one — which meant a student could sign up without
-    // ever selecting their real library and land in a random one. Removed:
-    // studentScannedLib now stays null until the student actually scans a
-    // QR code or explicitly taps a library from the list below.
-
-    val scrollState = rememberScrollState()
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 480.dp)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
-        ) {
-
-            Box(
-                modifier = Modifier
-                    .size(68.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(MaterialTheme.colorScheme.onPrimaryContainer, MaterialTheme.colorScheme.primary)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LocalLibrary,
-                    contentDescription = "LibDesk ERP",
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = "LibDesk ERP",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Text(
-                text = "Smart Library & Reading Hall Management System",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            
+    // 2FA Verification View
+    if (isAwaiting2Fa) {
+        Dialog(onDismissRequest = onCancel2Fa) {
             Card(
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().systemBarsPadding().imePadding().padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.Security,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Super Admin 2FA Security",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Verification code dispatched to $twoFaTargetEmail",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    OutlinedTextField(
+                        value = entered2FaOtp,
+                        onValueChange = { if (it.length <= 6) entered2FaOtp = it },
+                        label = { Text("OTP Code") },
+                        placeholder = { Text("123456") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().testTag("two_fa_otp_input"),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            if (entered2FaOtp.length < 6) {
+                                errorMessage = "Please enter valid 6-digit OTP."
+                                return@Button
+                            }
+                            isLoading = true
+                            errorMessage = null
+                            onVerify2FaOtp(
+                                entered2FaOtp,
+                                {
+                                    isLoading = false
+                                    Toast.makeText(context, "Super Admin Authorized!", Toast.LENGTH_SHORT).show()
+                                },
+                                { err ->
+                                    isLoading = false
+                                    errorMessage = err
+                                }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("verify_2fa_btn"),
+                        enabled = !isLoading && entered2FaOtp.isNotBlank(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Text("Verify & Access Console")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { onResend2FaOtp { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() } },
+                            enabled = otpTimerSeconds <= 0
+                        ) {
+                            Text(if (otpTimerSeconds > 0) "Resend in ${otpTimerSeconds}s" else "Resend OTP")
+                        }
+                        TextButton(onClick = onCancel2Fa) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Owner Registration 2-Step OTP Verification Dialog
+    if (showOwnerSignupOtpDialog) {
+        Dialog(onDismissRequest = {
+            if (!isOwnerOtpVerifying) {
+                showOwnerSignupOtpDialog = false
+            }
+        }) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier.fillMaxWidth().systemBarsPadding().imePadding().padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.MarkEmailRead,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Verify Library Owner Email",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "A 6-digit registration code was sent to\n${regEmail.trim()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    OutlinedTextField(
+                        value = ownerSignupOtpInput,
+                        onValueChange = { if (it.length <= 6) ownerSignupOtpInput = it },
+                        label = { Text("6-Digit OTP Code") },
+                        placeholder = { Text("123456") },
+                        leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().testTag("owner_reg_otp_input"),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+
+                    Button(
+                        onClick = {
+                            if (ownerSignupOtpInput.length < 6) {
+                                errorMessage = "Please enter the valid 6-digit OTP."
+                                return@Button
+                            }
+                            isOwnerOtpVerifying = true
+                            errorMessage = null
+                            onVerifyOwnerSignupOtp(
+                                regEmail.trim(),
+                                ownerSignupOtpInput.trim()
+                            ) { isVerified, err ->
+                                isOwnerOtpVerifying = false
+                                if (isVerified) {
+                                    showOwnerSignupOtpDialog = false
+                                    isLoading = true
+                                    onRegister(
+                                        regName.trim(),
+                                        regEmail.trim().lowercase(),
+                                        regLibraryName.trim(),
+                                        regPhone.trim(),
+                                        regPassword.trim()
+                                    )
+                                } else {
+                                    errorMessage = err ?: "Invalid OTP code. Please re-enter."
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("owner_reg_otp_verify_btn"),
+                        enabled = !isOwnerOtpVerifying,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (isOwnerOtpVerifying) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        } else {
+                            Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Verify OTP & Create Library", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                isOwnerOtpSending = true
+                                errorMessage = null
+                                onRequestOwnerSignupOtp(
+                                    regEmail.trim(),
+                                    regName.trim(),
+                                    regPhone.trim(),
+                                    { msg ->
+                                        isOwnerOtpSending = false
+                                        ownerSignupOtpTimer = 60
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    },
+                                    { err ->
+                                        isOwnerOtpSending = false
+                                        errorMessage = err
+                                    }
+                                )
+                            },
+                            enabled = ownerSignupOtpTimer <= 0 && !isOwnerOtpSending
+                        ) {
+                            Text(if (ownerSignupOtpTimer > 0) "Resend in ${ownerSignupOtpTimer}s" else "Resend Code")
+                        }
+                        TextButton(onClick = { showOwnerSignupOtpDialog = false }) {
+                            Text("Edit Details")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Forgot Password Dialog
+    if (showForgotPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showForgotPasswordDialog = false },
+            icon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Reset Account Password", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Enter your registered email and your new password to update your login credentials.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = forgotEmailInput,
+                        onValueChange = { forgotEmailInput = it },
+                        label = { Text("Email") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    OutlinedTextField(
+                        value = forgotNewPasswordInput,
+                        onValueChange = { forgotNewPasswordInput = it },
+                        label = { Text("New Password") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { showForgotNewPassword = !showForgotNewPassword }) {
+                                Icon(
+                                    if (showForgotNewPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (showForgotNewPassword) "Hide password" else "Show password"
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        visualTransformation = if (showForgotNewPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    OutlinedTextField(
+                        value = forgotConfirmPasswordInput,
+                        onValueChange = { forgotConfirmPasswordInput = it },
+                        label = { Text("Confirm Password") },
+                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { showForgotConfirmPassword = !showForgotConfirmPassword }) {
+                                Icon(
+                                    if (showForgotConfirmPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (showForgotConfirmPassword) "Hide password" else "Show password"
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        visualTransformation = if (showForgotConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (forgotEmailInput.isBlank() || !forgotEmailInput.contains("@")) {
+                            Toast.makeText(context, "Please enter valid email.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (forgotNewPasswordInput.length < 6) {
+                            Toast.makeText(context, "Password must be at least 6 characters.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (forgotNewPasswordInput != forgotConfirmPasswordInput) {
+                            Toast.makeText(context, "Passwords do not match.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        forgotIsSubmitting = true
+                        onResetPassword(
+                            forgotEmailInput.trim(),
+                            forgotNewPasswordInput.trim(),
+                            {
+                                forgotIsSubmitting = false
+                                showForgotPasswordDialog = false
+                                Toast.makeText(context, "Password updated successfully. You can now log in.", Toast.LENGTH_LONG).show()
+                            },
+                            { err ->
+                                forgotIsSubmitting = false
+                                Toast.makeText(context, "Failed: $err", Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    },
+                    enabled = !forgotIsSubmitting
+                ) {
+                    if (forgotIsSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text("Update Password")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForgotPasswordDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize().imePadding()
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .imePadding()
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .widthIn(max = 520.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (isVerifyingSignupEmail) {
+                    // Top Branding Header
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalLibrary,
+                        contentDescription = "LibDesk Logo",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(38.dp)
+                    )
+                }
 
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "LibDesk Cloud",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Smart Multi-Tenant Library Management System",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                if (selectedRole != "SUPER_ADMIN") {
+                    // Unified Role Selector (Step 1) - Only General Roles (Owner & Student)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        tonalElevation = 2.dp,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MarkEmailRead,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = "Verify Your Account Email",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "To complete your registration, enter the 6-digit verification code sent to your email address:",
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = signupVerificationEmail,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                }
-                            }
-
-                            
-                            OutlinedTextField(
-                                value = signupOtpInput,
-                                onValueChange = { input ->
-                                    val digitsOnly = input.filter { it.isDigit() }.take(6)
-                                    signupOtpInput = digitsOnly
-                                    if (signupOtpError != null) signupOtpError = null
-                                },
-                                label = { Text("Enter 6-Digit Code *") },
-                                placeholder = { Text("• • • • • •") },
-                                leadingIcon = { Icon(Icons.Default.Pin, null, tint = MaterialTheme.colorScheme.primary) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp),
-                                isError = signupOtpError != null,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                    focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            if (signupOtpError != null) {
-                                Text(
-                                    text = signupOtpError ?: "",
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (signupOtpTimerSeconds > 0) {
-                                    Text(
-                                        text = "Resend code in ${signupOtpTimerSeconds}s",
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    TextButton(
-                                        onClick = {
-                                            signupVerificationCode = (100000..999999).random().toString()
-                                            signupOtpTimerSeconds = 60
-                                            signupOtpError = null
-                                            signupOtpInput = ""
-                                            com.example.util.EmailOtpService.dispatchEmailOtp(
-                                                email = signupVerificationEmail,
-                                                recipientName = if (signupPendingMode == 1) regName else studentName,
-                                                purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
-                                                scope = coroutineScope
-                                            ) {}
-                                        },
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Resend Code", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-
-                            
-                            Button(
-                                onClick = {
-                                    val isCodeValid = (signupVerificationCode.isNotBlank() && signupOtpInput.trim() == signupVerificationCode) ||
-                                            com.example.util.EmailOtpService.verifyOtpSync(
-                                                signupVerificationEmail,
-                                                signupOtpInput.trim(),
-                                                com.example.util.OtpPurpose.SIGNUP_VERIFICATION
-                                            )
-
-                                    if (isCodeValid) {
-                                        isVerifyingSignupEmail = false
-                                        signupOtpError = null
-                                        if (signupPendingMode == 1) {
-                                            // Previously blank fields here were silently replaced with
-                                            // fake placeholders — including "Admin@123" as the password
-                                            // if the admin left it blank, a guessable default anyone
-                                            // could try against any account. Now we require the real
-                                            // values instead of ever substituting a fake one.
-                                            val fullPhone = combineCountryCodeAndPhone(regCountryCode, regPhone)
-                                            if (regName.isBlank() || regLibraryName.isBlank() || regPassword.length < 6) {
-                                                signupOtpError = "Please go back and fill in your name, library name, and a password (min 6 characters)."
-                                            } else if (fullPhone.isBlank()) {
-                                                signupOtpError = "Please go back and enter your mobile number."
-                                            } else {
-                                                onRegister(
-                                                    regName,
-                                                    signupVerificationEmail,
-                                                    regLibraryName,
-                                                    fullPhone,
-                                                    regPassword
-                                                )
-                                            }
-                                        } else {
-                                            val chosenShift = shifts.find { it.id == selectedShiftId } ?: shifts.firstOrNull()
-                                            val chosenPlan = plans.find { it.id == selectedPlanId } ?: plans.firstOrNull()
-                                            // SECURITY/DATA INTEGRITY: never attach a new student to a
-                                            // made-up library ID. If no library was actually scanned or
-                                            // selected, block the signup with a clear error instead of
-                                            // silently enrolling them into a library that may not exist.
-                                            val libId = studentScannedLib?.id
-                                            val fullPhone = combineCountryCodeAndPhone(studentCountryCode, studentPhone)
-                                            if (libId == null) {
-                                                signupOtpError = "Please scan your library's QR code or select a library before signing up."
-                                            } else if (studentName.isBlank()) {
-                                                signupOtpError = "Please go back and enter your full name."
-                                            } else if (fullPhone.isBlank()) {
-                                                signupOtpError = "Please go back and enter your mobile number."
-                                            } else {
-                                                onStudentQrSignup(
-                                                    libId,
-                                                    studentName,
-                                                    fullPhone,
-                                                    signupVerificationEmail,
-                                                    studentExam.ifBlank { "Self Study" },
-                                                    chosenShift,
-                                                    chosenPlan,
-                                                    "Student@${(1000..9999).random()}!"
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        signupOtpError = "Invalid code. Please enter the exact 6-digit code sent to your email."
-                                    }
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                            ) {
-                                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Verify Email & Complete Signup", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
-                            }
-
-                            
-                            OutlinedButton(
-                                onClick = {
-                                    isVerifyingSignupEmail = false
-                                    signupOtpError = null
-                                },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.ArrowBack, null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Edit Information / Cancel", fontSize = 14.sp)
-                            }
-                        }
-                    } else {
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(modifier = Modifier.padding(4.dp)) {
-
+                            listOf(
+                                Triple("OWNER", "🏢 Library Owner", Icons.Default.Business),
+                                Triple("STUDENT", "🎓 Student Member", Icons.Default.School)
+                            ).forEach { (roleKey, label, icon) ->
+                                val isSelected = selectedRole == roleKey
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = if (authMode == 0) MaterialTheme.colorScheme.surface else Color.Transparent,
-                                    shadowElevation = if (authMode == 0) 2.dp else 0.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
                                     modifier = Modifier
                                         .weight(1f)
                                         .clickable {
-                                            signupValidationError = null
-                                            authMode = 0
+                                            selectedRole = roleKey
+                                            errorMessage = null
+                                            successMessage = null
                                         }
-                                ) {
-                                    Box(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "Sign In",
-                                            fontWeight = if (authMode == 0) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (authMode == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                    }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (authMode == 2) MaterialTheme.colorScheme.surface else Color.Transparent,
-                                    shadowElevation = if (authMode == 2) 2.dp else 0.dp,
-                                    modifier = Modifier
-                                        .weight(1.3f)
-                                        .clickable {
-                                            signupValidationError = null
-                                            authMode = 2
-                                        }
+                                        .testTag("role_tab_$roleKey")
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
                                     ) {
                                         Icon(
-                                            Icons.Default.QrCodeScanner,
+                                            imageVector = icon,
                                             contentDescription = null,
-                                            tint = if (authMode == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(15.dp)
+                                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "QR Sign Up",
-                                            fontWeight = if (authMode == 2) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (authMode == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                    }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (authMode == 1) MaterialTheme.colorScheme.surface else Color.Transparent,
-                                    shadowElevation = if (authMode == 1) 2.dp else 0.dp,
-                                    modifier = Modifier
-                                        .weight(1.1f)
-                                        .clickable {
-                                            signupValidationError = null
-                                            authMode = 1
-                                        }
-                                ) {
-                                    Box(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "New Library",
-                                            fontWeight = if (authMode == 1) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (authMode == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            style = MaterialTheme.typography.labelLarge
+                                            text = label,
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal),
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
                                         )
                                     }
                                 }
                             }
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                        if (signupValidationError != null) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
+                    // Mode Selector for Owner and Student: Sign In vs Register
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        FilterChip(
+                            selected = !isRegisterMode,
+                            onClick = {
+                                isRegisterMode = false
+                                errorMessage = null
+                            },
+                            label = { Text("🔑 Sign In") },
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.testTag("mode_sign_in")
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        FilterChip(
+                            selected = isRegisterMode,
+                            onClick = {
+                                isRegisterMode = true
+                                errorMessage = null
+                            },
+                            label = { Text("📝 Register New Account") },
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.testTag("mode_register")
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
+                    // Header when in Super Admin view with back button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(
+                            onClick = {
+                                selectedRole = "OWNER"
+                                errorMessage = null
+                                successMessage = null
+                            }
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Back to User Login")
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "👑 Super Admin Mode",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // Error / Success Banner
+                if (errorMessage != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = errorMessage!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+
+                if (successMessage != null) {
+                    Surface(
+                        color = Color(0xFFE8F5E9),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = successMessage!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF1B5E20)
+                            )
+                        }
+                    }
+                }
+
+                // Main Form Card (Step 2)
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        when (selectedRole) {
+                            // ==========================================
+                            // 1. SUPER ADMIN FLOW
+                            // ==========================================
+                            "SUPER_ADMIN" -> {
+                                if (isRegisterMode) {
+                                    // Super Admin Claim Slot Form
                                     Text(
-                                        text = signupValidationError ?: "",
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium
+                                        text = "Initial Super Admin Setup",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                }
-                            }
-                        }
+                                    Text(
+                                        text = "Claim the master platform slot to manage subscriptions and tenant libraries.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
 
-                        AnimatedContent(targetState = authMode, label = "AuthModeTransition") { mode ->
-                        when (mode) {
-                            0 -> {
+                                    OutlinedTextField(
+                                        value = claimName,
+                                        onValueChange = { claimName = it },
+                                        label = { Text("Full Name") },
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                    OutlinedTextField(
+                                        value = claimEmail,
+                                        onValueChange = { claimEmail = it },
+                                        label = { Text("Email") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                    if (forgotPasswordSuccessMessage != null) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = LibDeskColors.successSoft,
-                                            border = BorderStroke(1.dp, LibDeskColors.success.copy(alpha = 0.5f)),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = LibDeskColors.success, modifier = Modifier.size(18.dp))
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = forgotPasswordSuccessMessage ?: "",
-                                                    fontSize = 14.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = LibDeskColors.success
+                                    CountryCodePhoneField(
+                                        mobile = claimMobile,
+                                        onMobileChange = { claimMobile = it.filter { ch -> ch.isDigit() }.take(10) },
+                                        countryCode = claimCountryCode,
+                                        onCountryCodeChange = { claimCountryCode = it },
+                                        label = "Mobile",
+                                        placeholder = "9876543210",
+                                        modifier = Modifier.fillMaxWidth().testTag("admin_claim_phone"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = claimPin,
+                                        onValueChange = { claimPin = it },
+                                        label = { Text("Password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showClaimPin = !showClaimPin }) {
+                                                Icon(
+                                                    if (showClaimPin) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (showClaimPin) "Hide PIN" else "Show PIN"
                                                 )
                                             }
-                                        }
-                                    }
-
-                                    
-                                    Text(
-                                        text = "Select Account Role",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
+                                        },
+                                        singleLine = true,
+                                        visualTransformation = if (showClaimPin) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = claimConfirmPin,
+                                        onValueChange = { claimConfirmPin = it },
+                                        label = { Text("Confirm Password") },
+                                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showClaimConfirmPin = !showClaimConfirmPin }) {
+                                                Icon(
+                                                    if (showClaimConfirmPin) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (showClaimConfirmPin) "Hide PIN" else "Show PIN"
+                                                )
+                                            }
+                                        },
+                                        singleLine = true,
+                                        visualTransformation = if (showClaimConfirmPin) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
 
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (selectedRole == "OWNER") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                            border = BorderStroke(
-                                                1.5.dp,
-                                                if (selectedRole == "OWNER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                            ),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable {
-                                                    selectedRole = "OWNER"
-                                                    otpErrorMessage = null
-                                                }
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.AdminPanelSettings,
-                                                    contentDescription = null,
-                                                    tint = if (selectedRole == "OWNER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(modifier = Modifier.height(3.dp))
-                                                Text(
-                                                    text = "Owner",
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = if (selectedRole == "OWNER") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Text(
-                                                    text = "Library",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = if (selectedRole == "OWNER") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                )
-                                            }
-                                        }
+                                        Checkbox(
+                                            checked = claim2FaEnabled,
+                                            onCheckedChange = { claim2FaEnabled = it }
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Enable 2FA Email Verification on Login", style = MaterialTheme.typography.bodySmall)
+                                    }
 
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                            border = BorderStroke(
-                                                1.5.dp,
-                                                if (selectedRole == "STUDENT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                            ),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable {
-                                                    selectedRole = "STUDENT"
-                                                    otpErrorMessage = null
-                                                }
-                                        ) {
-                                            Column(
-                                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.School,
-                                                    contentDescription = null,
-                                                    tint = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(modifier = Modifier.height(3.dp))
-                                                Text(
-                                                    text = "Student",
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Text(
-                                                    text = "Pass",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = if (selectedRole == "STUDENT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                )
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Button(
+                                        onClick = {
+                                            if (claimName.isBlank() || claimEmail.isBlank() || claimPin.length < 4) {
+                                                errorMessage = "Please fill all required administrator fields."
+                                                return@Button
                                             }
+                                            if (claimPin != claimConfirmPin) {
+                                                errorMessage = "PINs do not match. Please re-enter."
+                                                return@Button
+                                            }
+                                            isLoading = true
+                                            errorMessage = null
+                                            onClaimAdminSlot(
+                                                claimName.trim(),
+                                                claimEmail.trim(),
+                                                if (claimMobile.isNotBlank()) "$claimCountryCode${claimMobile.trim()}" else "",
+                                                claimPin.trim(),
+                                                claim2FaEnabled,
+                                                { msg ->
+                                                    isLoading = false
+                                                    successMessage = msg
+                                                },
+                                                { err ->
+                                                    isLoading = false
+                                                    errorMessage = err
+                                                }
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                        } else {
+                                            Text("Claim Master Slot & Initialize")
                                         }
                                     }
 
-                                    
-                                    OutlinedTextField(
-                                        value = loginEmail,
-                                        onValueChange = { 
-                                            loginEmail = it 
-                                            otpErrorMessage = null
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    TextButton(
+                                        onClick = {
+                                            isRegisterMode = false
+                                            errorMessage = null
+                                            successMessage = null
                                         },
-                                        label = { 
-                                            Text(
-                                                when (selectedRole) {
-                                                    "SUPER_ADMIN" -> "Super Admin Email"
-                                                    "OWNER" -> "Owner Email or Mobile"
-                                                    else -> "Student Email, Mobile, or ID"
-                                                }
-                                            ) 
-                                        },
-                                        leadingIcon = {
-                                            Icon(imageVector = Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                        },
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
                                         modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Already registered? Log in with Super Admin Email & Password", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                } else {
+                                    // Super Admin Normal Login
+                                    Text(
+                                        text = "Super Administrator Access",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
                                     )
+                                    Text(
+                                        text = "Enter your registered Super Admin email address with your access PIN/Password.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
 
-                                    
                                     OutlinedTextField(
-                                        value = loginPassword,
-                                        onValueChange = { 
-                                            loginPassword = it 
-                                            otpErrorMessage = null
-                                        },
-                                        label = { Text("Password / Passcode") },
-                                        leadingIcon = {
-                                            Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                        },
+                                        value = identifierInput,
+                                        onValueChange = { identifierInput = it },
+                                        label = { Text("Email") },
+                                        placeholder = { Text("admin@email.com") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        modifier = Modifier.fillMaxWidth().testTag("admin_identifier_input"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    OutlinedTextField(
+                                        value = passwordInput,
+                                        onValueChange = { passwordInput = it },
+                                        label = { Text("Password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                                         trailingIcon = {
-                                            IconButton(onClick = { showLoginPassword = !showLoginPassword }) {
+                                             IconButton(onClick = { showPassword = !showPassword }) {
+                                                 Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
+                                             }
+                                        },
+                                        singleLine = true,
+                                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("admin_password_input"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Button(
+                                        onClick = {
+                                            if (identifierInput.isBlank() || passwordInput.isBlank()) {
+                                                errorMessage = "Please enter your Super Admin Email address and Password."
+                                                return@Button
+                                            }
+                                            if (!isValidLoginEmail(identifierInput)) {
+                                                errorMessage = "Only registered Email address is allowed for login (e.g. admin@libdesk.com)."
+                                                return@Button
+                                            }
+                                            isLoading = true
+                                            errorMessage = null
+                                            saveRememberedCredentials()
+                                            onAuthenticate(
+                                                identifierInput.trim().lowercase(),
+                                                passwordInput.trim(),
+                                                "SUPER_ADMIN",
+                                                { isLoading = false },
+                                                { err ->
+                                                    isLoading = false
+                                                    errorMessage = err
+                                                }
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("admin_login_btn"),
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                        } else {
+                                            Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Log In as Super Admin", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    TextButton(
+                                        onClick = {
+                                            isRegisterMode = true
+                                            errorMessage = null
+                                            successMessage = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("First time setup? Claim Super Admin Platform Slot", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+
+                            // ==========================================
+                            // 2. LIBRARY OWNER FLOW (Sign In / Register)
+                            // ==========================================
+                            "OWNER" -> {
+                                if (isRegisterMode) {
+                                    // Owner Registration Form
+                                    Text(
+                                        text = "Register Your Library",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Start managing your study hub, shifts, and students instantly.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    OutlinedTextField(
+                                        value = regName,
+                                        onValueChange = { regName = it },
+                                        label = { Text("Full Name") },
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth().testTag("reg_owner_name"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = regLibraryName,
+                                        onValueChange = { regLibraryName = it },
+                                        label = { Text("Library Name") },
+                                        leadingIcon = { Icon(Icons.Default.Business, contentDescription = null) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth().testTag("reg_library_name"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = regEmail,
+                                        onValueChange = { regEmail = it },
+                                        label = { Text("Email") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        modifier = Modifier.fillMaxWidth().testTag("reg_owner_email"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    CountryCodePhoneField(
+                                        mobile = regPhone,
+                                        onMobileChange = { regPhone = it.filter { ch -> ch.isDigit() }.take(10) },
+                                        countryCode = regCountryCode,
+                                        onCountryCodeChange = { regCountryCode = it },
+                                        label = "Mobile",
+                                        placeholder = "9876543210",
+                                        modifier = Modifier.fillMaxWidth().testTag("reg_owner_phone"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    OutlinedTextField(
+                                        value = regPassword,
+                                        onValueChange = { regPassword = it },
+                                        label = { Text("Password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showRegPassword = !showRegPassword }) {
                                                 Icon(
-                                                    imageVector = if (showLoginPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                                    contentDescription = if (showLoginPassword) "Hide password" else "Show password"
+                                                    if (showRegPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (showRegPassword) "Hide password" else "Show password"
                                                 )
                                             }
                                         },
-                                        visualTransformation = if (showLoginPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                         singleLine = true,
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                                        visualTransformation = if (showRegPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("reg_owner_password"),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                    
-                                    if (!otpErrorMessage.isNullOrBlank()) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = MaterialTheme.colorScheme.errorContainer,
-                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
+                                    OutlinedTextField(
+                                        value = regConfirmPassword,
+                                        onValueChange = { regConfirmPassword = it },
+                                        label = { Text("Confirm Password") },
+                                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showRegConfirmPassword = !showRegConfirmPassword }) {
                                                 Icon(
-                                                    imageVector = Icons.Default.ErrorOutline,
-                                                    contentDescription = "Error",
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = otpErrorMessage ?: "गलत ईमेल या पासवर्ड। कृपया दोबारा जांचें।",
-                                                    color = MaterialTheme.colorScheme.error,
-                                                    fontSize = 13.5.sp,
-                                                    fontWeight = FontWeight.SemiBold
+                                                    if (showRegConfirmPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (showRegConfirmPassword) "Hide password" else "Show password"
                                                 )
                                             }
-                                        }
-                                    }
+                                        },
+                                        singleLine = true,
+                                        visualTransformation = if (showRegConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("reg_owner_confirm_password"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
 
-                                    
-
-                                    if (selectedRole == "STUDENT") {
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable { authMode = 2 }
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(10.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("New Student? Scan Library QR Code", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                                    Text("Self-enroll in 10 seconds with library pass", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                                                }
-                                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
+                                    Button(
+                                        onClick = {
+                                            if (regName.isBlank() || regLibraryName.isBlank() || regEmail.isBlank() || regPassword.length < 6) {
+                                                errorMessage = "Please enter Library Name, Owner Name, Email, and Password (min 6 chars)."
+                                                return@Button
                                             }
+                                            if (!isValidLoginEmail(regEmail)) {
+                                                errorMessage = "Please enter a valid owner email address (e.g. owner@library.com)."
+                                                return@Button
+                                            }
+                                            if (regPhone.isBlank() || regPhone.length < 10) {
+                                                errorMessage = "Please enter a valid 10-digit mobile number."
+                                                return@Button
+                                            }
+                                            if (regPassword != regConfirmPassword) {
+                                                errorMessage = "Passwords do not match. Please re-check."
+                                                return@Button
+                                            }
+                                            isLoading = true
+                                            errorMessage = null
+                                            onRegister(
+                                                regName.trim(),
+                                                regEmail.trim().lowercase(),
+                                                regLibraryName.trim(),
+                                                "$regCountryCode${regPhone.trim()}",
+                                                regPassword.trim()
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("register_owner_submit_btn"),
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                        } else {
+                                            Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Register Library", fontWeight = FontWeight.Bold)
                                         }
                                     }
+                                } else {
+                                    // Owner Login Form
+                                    Text(
+                                        text = "Library Owner Sign In",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Enter your registered email address to access your library dashboard.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
 
-                                    
+                                    OutlinedTextField(
+                                        value = identifierInput,
+                                        onValueChange = { identifierInput = it },
+                                        label = { Text("Email") },
+                                        placeholder = { Text("name@email.com") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        modifier = Modifier.fillMaxWidth().testTag("owner_identifier_input"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    OutlinedTextField(
+                                        value = passwordInput,
+                                        onValueChange = { passwordInput = it },
+                                        label = { Text("Password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showPassword = !showPassword }) {
+                                                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
+                                            }
+                                        },
+                                        singleLine = true,
+                                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("owner_password_input"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -854,2003 +1228,380 @@ fun AuthScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Checkbox(
                                                 checked = rememberMe,
-                                                onCheckedChange = { rememberMe = it },
-                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.onPrimaryContainer)
+                                                onCheckedChange = { rememberMe = it }
                                             )
-                                            Text(
-                                                text = "Remember me",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                            Text("Remember Me", style = MaterialTheme.typography.bodySmall)
                                         }
 
-                                        Text(
-                                            text = "Forgot password?",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.clickable {
-                                                forgotPasswordEmail = loginEmail
-                                                forgotPasswordStep = 0
-                                                forgotPasswordError = null
-                                                forgotPasswordOtpInput = ""
-                                                forgotPasswordNewPassword = ""
-                                                forgotPasswordConfirmPassword = ""
-                                                showForgotPasswordModal = true
-                                            }
-                                        )
+                                        TextButton(onClick = {
+                                            forgotEmailInput = identifierInput
+                                            showForgotPasswordDialog = true
+                                        }) {
+                                            Text("Forgot Password?", style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
 
-                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+
                                     Button(
                                         onClick = {
-                                            otpErrorMessage = null
-                                            if (loginEmail.isBlank() || loginPassword.isBlank()) {
-                                                otpErrorMessage = "Please enter both identifier and password"
+                                            if (identifierInput.isBlank() || passwordInput.isBlank()) {
+                                                errorMessage = "Please enter your registered Email address and Password."
                                                 return@Button
                                             }
-                                            if (rememberMe) {
-                                                rememberPrefs.edit()
-                                                    .putBoolean("remember_me_main", true)
-                                                    .putString("saved_main_identifier", loginEmail.trim())
-                                                    .putString("saved_main_password", loginPassword.trim())
-                                                    .putString("saved_main_role", selectedRole)
-                                                    .apply()
-                                            } else {
-                                                rememberPrefs.edit()
-                                                    .putBoolean("remember_me_main", false)
-                                                    .remove("saved_main_identifier")
-                                                    .remove("saved_main_password")
-                                                    .remove("saved_main_role")
-                                                    .apply()
+                                            if (!isValidLoginEmail(identifierInput)) {
+                                                errorMessage = "Login is only supported via Email. Please enter a valid registered email address (e.g. owner@library.com)."
+                                                return@Button
                                             }
+                                            isLoading = true
+                                            errorMessage = null
+                                            saveRememberedCredentials()
                                             onAuthenticate(
-                                                loginEmail.trim(),
-                                                loginPassword.trim(),
-                                                selectedRole,
-                                                {
-                                                    otpErrorMessage = null
-                                                },
-                                                { errorMsg ->
-                                                    otpErrorMessage = errorMsg
+                                                identifierInput.trim().lowercase(),
+                                                passwordInput.trim(),
+                                                "OWNER",
+                                                { isLoading = false },
+                                                { err ->
+                                                    isLoading = false
+                                                    errorMessage = err
                                                 }
                                             )
                                         },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp)
+                                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("owner_login_btn"),
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Login,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = Color.White
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = when (selectedRole) {
-                                                "SUPER_ADMIN" -> "Sign In as Super Admin"
-                                                "OWNER" -> "Sign In as Library Owner"
-                                                "STUDENT" -> "Sign In as Student"
-                                                else -> "Sign In"
-                                            },
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                        } else {
+                                            Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Sign In as Library Owner", fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
-                            2 -> {
 
-                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            // ==========================================
+                            // 3. STUDENT MEMBER FLOW (Sign In / Register)
+                            // ==========================================
+                            "STUDENT" -> {
+                                if (isRegisterMode) {
+                                    // Student Self-Registration Form
                                     Text(
-                                        text = "Student Self-Enrollment",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
+                                        text = "Student Registration",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
                                     )
-
-                                    
-                                    Card(
-                                        shape = RoundedCornerShape(16.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = if (studentScannedLib != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceVariant
-                                        ),
-                                        border = BorderStroke(
-                                            1.5.dp,
-                                            if (studentScannedLib != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(
-                                                        imageVector = if (studentScannedLib != null) Icons.Default.CheckCircle else Icons.Default.QrCodeScanner,
-                                                        contentDescription = null,
-                                                        tint = if (studentScannedLib != null) LibDeskColors.success else MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(
-                                                        text = if (studentScannedLib != null) "Verified Library QR" else "Scan Library QR Code",
-                                                        fontWeight = FontWeight.Bold,
-                                                        style = MaterialTheme.typography.titleSmall,
-                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                    )
-                                                }
-
-                                                Button(
-                                                    onClick = { showQrScannerDialog = true },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                                ) {
-                                                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(if (studentScannedLib != null) "Rescan QR" else "Scan QR", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-
-                                            if (studentScannedLib != null) {
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                Text(
-                                                    text = studentScannedLib!!.name,
-                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                                Text(
-                                                    text = "${studentScannedLib!!.address}, ${studentScannedLib!!.city} • Code: ${studentScannedLib!!.code}",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            } else {
-                                                Spacer(modifier = Modifier.height(6.dp))
-                                                Text(
-                                                    text = "Scan the QR code displayed at your library reception/desk or choose below.",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    
-                                    if (libraries.isNotEmpty() && studentScannedLib == null) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("Choose Your Library:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                libraries.take(2).forEach { lib ->
-                                                    OutlinedButton(
-                                                        onClick = { studentScannedLib = lib },
-                                                        shape = RoundedCornerShape(10.dp),
-                                                        modifier = Modifier.weight(1f),
-                                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
-                                                    ) {
-                                                        Text(lib.name, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                    }
-                                                }
-                                            }
-                                            if (libraries.size > 2 || studentScannedLib == null) {
-                                                Text(
-                                                    "Or scan the library's QR code above to select it automatically.",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    
-                                    OutlinedTextField(
-                                        value = studentName,
-                                        onValueChange = { studentName = it },
-                                        label = { Text("Full Name *") },
-                                        placeholder = { Text("e.g. Rahul Sharma") },
-                                        leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary) },
-                                        singleLine = true,
-                                        isError = signupValidationError != null && studentName.isBlank(),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    CountryCodePhoneField(
-                                        mobile = studentPhone,
-                                        onMobileChange = { studentPhone = it },
-                                        countryCode = studentCountryCode,
-                                        onCountryCodeChange = { studentCountryCode = it },
-                                        label = "Mobile / WhatsApp *",
-                                        placeholder = "98765 43210",
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = studentEmail,
-                                        onValueChange = { studentEmail = it },
-                                        label = { Text("Email Address *") },
-                                        placeholder = { Text("rahul@gmail.com") },
-                                        leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.primary) },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                                        singleLine = true,
-                                        isError = signupValidationError != null && (studentEmail.isBlank() || !studentEmail.contains("@")),
-                                        supportingText = { Text("We'll send a one-time code here to verify your account", fontSize = 11.sp) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    OutlinedTextField(
-                                        value = studentExam,
-                                        onValueChange = { studentExam = it },
-                                        label = { Text("Target Goal / Exam") },
-                                        placeholder = { Text("UPSC / NEET / JEE / CA / GATE") },
-                                        leadingIcon = { Icon(Icons.Default.School, null, tint = MaterialTheme.colorScheme.primary) },
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    
-                                    if (shifts.isNotEmpty()) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("Select Preferred Shift:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                shifts.take(3).forEach { shift ->
-                                                    val isSelected = selectedShiftId == shift.id
-                                                    Surface(
-                                                        shape = RoundedCornerShape(10.dp),
-                                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                                        border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .clickable { selectedShiftId = shift.id }
-                                                    ) {
-                                                        Column(
-                                                            modifier = Modifier.padding(8.dp),
-                                                            horizontalAlignment = Alignment.CenterHorizontally
-                                                        ) {
-                                                            Text(shift.name.take(12), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface, maxLines = 1)
-                                                            Text("${shift.startTime}-${shift.endTime}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    
-                                    if (plans.isNotEmpty()) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("Select Membership Plan:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                plans.take(3).forEach { plan ->
-                                                    val isSelected = selectedPlanId == plan.id
-                                                    Surface(
-                                                        shape = RoundedCornerShape(10.dp),
-                                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                                        border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .clickable { selectedPlanId = plan.id }
-                                                    ) {
-                                                        Column(
-                                                            modifier = Modifier.padding(8.dp),
-                                                            horizontalAlignment = Alignment.CenterHorizontally
-                                                        ) {
-                                                            Text(plan.name.take(12), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface, maxLines = 1)
-                                                            val net = (plan.baseFee - plan.discount).coerceAtLeast(0.0)
-                                                            Text("₹${net.toInt()}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = LibDeskColors.success)
-                                                            if (plan.discount > 0.0) {
-                                                                Text("₹${plan.discount.toInt()} OFF", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF047857))
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { studentAgreedToTerms = !studentAgreedToTerms }
-                                    ) {
-                                        Checkbox(checked = studentAgreedToTerms, onCheckedChange = { studentAgreedToTerms = it })
-                                        Text(
-                                            "I agree to the Terms of Service and Privacy Policy",
-                                            fontSize = 12.5.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                    
-                                    Button(
-                                        onClick = {
-                                            val trimmedName = studentName.trim()
-                                            val trimmedPhone = studentPhone.trim()
-                                            val trimmedEmail = studentEmail.trim()
-
-                                            if (studentScannedLib == null) {
-                                                signupValidationError = "Please scan your library's QR code or choose your library above."
-                                                return@Button
-                                            }
-                                            if (trimmedName.isBlank()) {
-                                                signupValidationError = "Please enter your full name."
-                                                return@Button
-                                            }
-                                            if (trimmedPhone.isBlank()) {
-                                                signupValidationError = "Please enter your mobile / WhatsApp number."
-                                                return@Button
-                                            }
-                                            if (trimmedEmail.isBlank() || !trimmedEmail.contains("@") || !trimmedEmail.contains(".")) {
-                                                signupValidationError = "A valid email address is mandatory for student account verification."
-                                                return@Button
-                                            }
-                                            if (!studentAgreedToTerms) {
-                                                signupValidationError = "Please accept the Terms of Service and Privacy Policy to continue."
-                                                return@Button
-                                            }
-
-                                            signupValidationError = null
-                                            val code = (100000..999999).random().toString()
-                                            signupVerificationCode = code
-                                            signupVerificationEmail = trimmedEmail
-                                            signupPendingMode = 2
-                                            signupOtpInput = ""
-                                            signupOtpError = null
-                                            signupOtpTimerSeconds = 60
-                                            isVerifyingSignupEmail = true
-                                            com.example.util.EmailOtpService.dispatchEmailOtp(
-                                                email = trimmedEmail,
-                                                recipientName = studentName.ifBlank { "Student" },
-                                                purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
-                                                scope = coroutineScope
-                                            ) {}
-                                        },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Verify Email & Complete Enrollment",
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
-                                    }
-                                }
-                            }
-                            1 -> {
-
-                                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     Text(
-                                        text = "Your Details",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
+                                        text = "Register for your student pass and study material access.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                    Spacer(modifier = Modifier.height(16.dp))
 
                                     OutlinedTextField(
                                         value = regName,
                                         onValueChange = { regName = it },
-                                        label = { Text("Admin / Owner Name *") },
-                                        placeholder = { Text("e.g. Vikram Malhotra") },
-                                        leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary) },
+                                        label = { Text("Full Name") },
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                                         singleLine = true,
-                                        isError = signupValidationError != null && regName.isBlank(),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier.fillMaxWidth().testTag("student_reg_name"),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
                                     OutlinedTextField(
                                         value = regEmail,
                                         onValueChange = { regEmail = it },
-                                        label = { Text("Official Email *") },
-                                        placeholder = { Text("owner@example.com") },
-                                        leadingIcon = { Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.primary) },
+                                        label = { Text("Email") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
                                         singleLine = true,
-                                        isError = signupValidationError != null && (regEmail.isBlank() || !regEmail.contains("@")),
-                                        supportingText = { Text("We'll send a one-time code here to verify your account", fontSize = 11.sp) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        modifier = Modifier.fillMaxWidth().testTag("student_reg_email"),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
                                     CountryCodePhoneField(
-                                        mobile = regPhone,
-                                        onMobileChange = { regPhone = it },
-                                        countryCode = regCountryCode,
-                                        onCountryCodeChange = { regCountryCode = it },
-                                        label = "Phone / WhatsApp Number *",
-                                        placeholder = "98765 00000",
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                                        mobile = studentPhone,
+                                        onMobileChange = { studentPhone = it.filter { ch -> ch.isDigit() }.take(10) },
+                                        countryCode = studentCountryCode,
+                                        onCountryCodeChange = { studentCountryCode = it },
+                                        label = "Mobile",
+                                        placeholder = "9876543210",
+                                        modifier = Modifier.fillMaxWidth().testTag("student_reg_phone"),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-
-                                    Text(
-                                        text = "Library Details",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    )
-
-                                    OutlinedTextField(
-                                        value = regLibraryName,
-                                        onValueChange = { regLibraryName = it },
-                                        label = { Text("Library / Study Center Name *") },
-                                        placeholder = { Text("e.g. Apex Reading Room & Library") },
-                                        leadingIcon = { Icon(Icons.Default.Storefront, null, tint = MaterialTheme.colorScheme.primary) },
-                                        singleLine = true,
-                                        isError = signupValidationError != null && regLibraryName.isBlank(),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
-
-                                    Text(
-                                        text = "Security",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    )
+                                    // Library Selection if multiple exist
+                                    if (libraries.isNotEmpty()) {
+                                        var libDropdownExpanded by remember { mutableStateOf(false) }
+                                        ExposedDropdownMenuBox(
+                                            expanded = libDropdownExpanded,
+                                            onExpandedChange = { libDropdownExpanded = !libDropdownExpanded }
+                                        ) {
+                                            OutlinedTextField(
+                                                value = selectedLibraryForStudent?.name ?: "Select Library",
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text("Library") },
+                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = libDropdownExpanded) },
+                                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            ExposedDropdownMenu(
+                                                expanded = libDropdownExpanded,
+                                                onDismissRequest = { libDropdownExpanded = false }
+                                            ) {
+                                                libraries.forEach { lib ->
+                                                    DropdownMenuItem(
+                                                        text = { Text("${lib.name} (${lib.code})") },
+                                                        onClick = {
+                                                            selectedLibraryForStudent = lib
+                                                            libDropdownExpanded = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                    }
 
                                     OutlinedTextField(
                                         value = regPassword,
                                         onValueChange = { regPassword = it },
-                                        label = { Text("Create Password *") },
-                                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
+                                        label = { Text("Password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                                         trailingIcon = {
-                                            IconButton(onClick = { showRegPassword = !showRegPassword }) {
+                                            IconButton(onClick = { showStudentRegPassword = !showStudentRegPassword }) {
                                                 Icon(
-                                                    imageVector = if (showRegPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                                    contentDescription = null
+                                                    if (showStudentRegPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (showStudentRegPassword) "Hide password" else "Show password"
                                                 )
                                             }
                                         },
-                                        visualTransformation = if (showRegPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                         singleLine = true,
-                                        isError = signupValidationError != null && regPassword.length < 6,
-                                        supportingText = { Text("At least 6 characters", fontSize = 11.sp) },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                                        visualTransformation = if (showStudentRegPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("student_reg_password"),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
 
                                     OutlinedTextField(
                                         value = regConfirmPassword,
                                         onValueChange = { regConfirmPassword = it },
-                                        label = { Text("Confirm Password *") },
-                                        leadingIcon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
+                                        label = { Text("Confirm Password") },
+                                        leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
                                         trailingIcon = {
-                                            IconButton(onClick = { showRegConfirmPassword = !showRegConfirmPassword }) {
+                                            IconButton(onClick = { showStudentRegConfirmPassword = !showStudentRegConfirmPassword }) {
                                                 Icon(
-                                                    imageVector = if (showRegConfirmPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                                    contentDescription = null
+                                                    if (showStudentRegConfirmPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                                    contentDescription = if (showStudentRegConfirmPassword) "Hide password" else "Show password"
                                                 )
                                             }
                                         },
-                                        visualTransformation = if (showRegConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                         singleLine = true,
-                                        isError = regConfirmPassword.isNotBlank() && regConfirmPassword != regPassword,
-                                        supportingText = {
-                                            if (regConfirmPassword.isNotBlank() && regConfirmPassword != regPassword) {
-                                                Text("Passwords don't match", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                                            }
-                                        },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                            focusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
+                                        visualTransformation = if (showStudentRegConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("student_reg_confirm_password"),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { regAgreedToTerms = !regAgreedToTerms }
-                                    ) {
-                                        Checkbox(checked = regAgreedToTerms, onCheckedChange = { regAgreedToTerms = it })
-                                        Text(
-                                            "I agree to the Terms of Service and Privacy Policy",
-                                            fontSize = 12.5.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-
-
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(16.dp))
 
                                     Button(
                                         onClick = {
-                                            val trimmedName = regName.trim()
-                                            val trimmedLibName = regLibraryName.trim()
-                                            val trimmedEmail = regEmail.trim()
-                                            val trimmedPhone = regPhone.trim()
+                                            if (regName.isBlank() || regEmail.isBlank() || regPassword.length < 6) {
+                                                errorMessage = "Please enter your Name, Email (for login), and a 6-character password."
+                                                return@Button
+                                            }
+                                            if (!isValidLoginEmail(regEmail)) {
+                                                errorMessage = "Please enter a valid email address (e.g. student@gmail.com)."
+                                                return@Button
+                                            }
+                                            if (studentPhone.isBlank() || studentPhone.length < 10) {
+                                                errorMessage = "Please enter a valid 10-digit mobile number."
+                                                return@Button
+                                            }
+                                            if (regPassword != regConfirmPassword) {
+                                                errorMessage = "Passwords do not match. Please re-enter."
+                                                return@Button
+                                            }
+                                            val targetLibId = selectedLibraryForStudent?.id ?: libraries.firstOrNull()?.id ?: ""
+                                            isLoading = true
+                                            errorMessage = null
+                                            onStudentQrSignup(
+                                                targetLibId,
+                                                regName.trim(),
+                                                "$studentCountryCode${studentPhone.trim()}",
+                                                regEmail.trim().lowercase(),
+                                                "General",
+                                                shifts.firstOrNull(),
+                                                plans.firstOrNull(),
+                                                regPassword.trim()
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("student_reg_submit_btn"),
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                        } else {
+                                            Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Enroll as Student", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                } else {
+                                    // Student Login Form
+                                    Text(
+                                        text = "Student Member Sign In",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Enter your registered email address to access your student portal.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
 
-                                            if (trimmedName.isBlank()) {
-                                                signupValidationError = "Please enter the admin / owner name."
-                                                return@Button
-                                            }
-                                            if (trimmedEmail.isBlank() || !trimmedEmail.contains("@") || !trimmedEmail.contains(".")) {
-                                                signupValidationError = "A valid official email is mandatory for account verification."
-                                                return@Button
-                                            }
-                                            if (trimmedPhone.isBlank()) {
-                                                signupValidationError = "Please enter a valid phone / contact number."
-                                                return@Button
-                                            }
-                                            if (trimmedLibName.isBlank()) {
-                                                signupValidationError = "Please enter the library / study center name."
-                                                return@Button
-                                            }
-                                            if (regPassword.length < 6) {
-                                                signupValidationError = "Password must be at least 6 characters."
-                                                return@Button
-                                            }
-                                            if (regConfirmPassword != regPassword) {
-                                                signupValidationError = "Passwords don't match."
-                                                return@Button
-                                            }
-                                            if (!regAgreedToTerms) {
-                                                signupValidationError = "Please accept the Terms of Service and Privacy Policy to continue."
-                                                return@Button
-                                            }
+                                    OutlinedTextField(
+                                        value = identifierInput,
+                                        onValueChange = { identifierInput = it },
+                                        label = { Text("Email") },
+                                        placeholder = { Text("name@email.com") },
+                                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                        modifier = Modifier.fillMaxWidth().testTag("student_identifier_input"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
 
-                                            signupValidationError = null
-                                            val fullOwnerPhone = combineCountryCodeAndPhone(regCountryCode, trimmedPhone).trim()
-
-                                            // Pre-check Supabase & local DB for previous trial on this email or phone
-                                            if (onCheckLibraryTrialEligibility != null) {
-                                                onCheckLibraryTrialEligibility(trimmedEmail, fullOwnerPhone) { isEligible, trialErrMsg ->
-                                                    if (!isEligible) {
-                                                        signupValidationError = trialErrMsg ?: "इस Email या Phone Number पर पहले से एक Library रजिस्टर्ड है। 15-Day Free Trial केवल एक बार ही मिलता है।"
-                                                    } else {
-                                                        val code = (100000..999999).random().toString()
-                                                        signupVerificationCode = code
-                                                        signupVerificationEmail = trimmedEmail
-                                                        signupPendingMode = 1
-                                                        signupOtpInput = ""
-                                                        signupOtpError = null
-                                                        signupOtpTimerSeconds = 60
-                                                        isVerifyingSignupEmail = true
-                                                        com.example.util.EmailOtpService.dispatchEmailOtp(
-                                                            email = trimmedEmail,
-                                                            recipientName = regName.ifBlank { "Library Admin" },
-                                                            purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
-                                                            scope = coroutineScope
-                                                        ) {}
-                                                    }
-                                                }
-                                            } else {
-                                                val code = (100000..999999).random().toString()
-                                                signupVerificationCode = code
-                                                signupVerificationEmail = trimmedEmail
-                                                signupPendingMode = 1
-                                                signupOtpInput = ""
-                                                signupOtpError = null
-                                                signupOtpTimerSeconds = 60
-                                                isVerifyingSignupEmail = true
-                                                com.example.util.EmailOtpService.dispatchEmailOtp(
-                                                    email = trimmedEmail,
-                                                    recipientName = regName.ifBlank { "Library Admin" },
-                                                    purpose = com.example.util.OtpPurpose.SIGNUP_VERIFICATION,
-                                                    scope = coroutineScope
-                                                ) {}
+                                    OutlinedTextField(
+                                        value = passwordInput,
+                                        onValueChange = { passwordInput = it },
+                                        label = { Text("Password") },
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { showPassword = !showPassword }) {
+                                                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
                                             }
                                         },
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(50.dp)
+                                        singleLine = true,
+                                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                        modifier = Modifier.fillMaxWidth().testTag("student_password_input"),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(imageVector = Icons.Default.AppRegistration, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Verify Email & Register Library",
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.labelLarge
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(
+                                                checked = rememberMe,
+                                                onCheckedChange = { rememberMe = it }
+                                            )
+                                            Text("Remember Me", style = MaterialTheme.typography.bodySmall)
+                                        }
+
+                                        TextButton(onClick = {
+                                            forgotEmailInput = identifierInput
+                                            showForgotPasswordDialog = true
+                                        }) {
+                                            Text("Forgot Password?", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Button(
+                                        onClick = {
+                                            if (identifierInput.isBlank() || passwordInput.isBlank()) {
+                                                errorMessage = "Please enter your registered Email address and Password."
+                                                return@Button
+                                            }
+                                            if (!isValidLoginEmail(identifierInput)) {
+                                                errorMessage = "Login is only supported via Email. Please enter a valid registered email address (e.g. student@gmail.com). Mobile or Student ID cannot be used."
+                                                return@Button
+                                            }
+                                            isLoading = true
+                                            errorMessage = null
+                                            saveRememberedCredentials()
+                                            onAuthenticate(
+                                                identifierInput.trim().lowercase(),
+                                                passwordInput.trim(),
+                                                "STUDENT",
+                                                { isLoading = false },
+                                                { err ->
+                                                    isLoading = false
+                                                    errorMessage = err
+                                                }
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("student_login_btn"),
+                                        enabled = !isLoading,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        if (isLoading) {
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                        } else {
+                                            Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Sign In as Student", fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-            // Deliberately small and understated — this used to be a full
-            // card with icon, status badge and two full-width buttons sitting
-            // prominently in the login flow, which made "become the platform
-            // owner" look like a normal part of everyday sign-in. SaaS Admin
-            // sign-up/login now lives entirely inside the modal opened below.
-            TextButton(
-                onClick = {
-                    selectedRole = "SUPER_ADMIN"
-                    adminModalMode = if (isSaaSAdminCreated) 0 else 1
-                    adminErrorMessage = null
-                    showMasterAdminModal = true
-                },
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shield,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(5.dp))
+                // Subtle, compact Super Admin login button at bottom
+                if (selectedRole != "SUPER_ADMIN") {
+                    TextButton(
+                        onClick = {
+                            selectedRole = "SUPER_ADMIN"
+                            isRegisterMode = false
+                            errorMessage = null
+                            successMessage = null
+                        },
+                        modifier = Modifier.testTag("super_admin_footer_link")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AdminPanelSettings,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "👑 Super Admin Login",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Footer Info
                 Text(
-                    text = "SaaS Admin: Super Admin Portal",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(13.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Rule-based Cloud Verification • Supabase Secured",
-                    fontSize = 10.5.sp,
+                    text = "🔒 LibDesk Enterprise Multi-Tenant Architecture",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
-        }
-    }
-
-    
-    if (showQrScannerDialog) {
-        var manualCode by remember { mutableStateOf("") }
-
-        BackHandler { showQrScannerDialog = false }
-
-        Dialog(
-            onDismissRequest = { showQrScannerDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Card(
-                shape = RoundedCornerShape(0.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .imePadding()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Scan Library QR Code",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        IconButton(onClick = { showQrScannerDialog = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    
-                    var isTorchOn by remember { mutableStateOf(false) }
-                    var isFrontCamera by remember { mutableStateOf(false) }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(260.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.Black),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CameraXQrScannerView(
-                            onQrScanned = { scanned ->
-                                val code = scanned.trim()
-                                val libCode = if (code.startsWith("LIBDESK_GATE_ATTENDANCE:")) {
-                                    val parts = code.split(":")
-                                    if (parts.size >= 3) parts[2] else parts[1]
-                                } else code
-                                val matched = libraries.find {
-                                    it.code.equals(libCode, ignoreCase = true) ||
-                                    it.id.equals(libCode, ignoreCase = true) ||
-                                    it.name.contains(libCode, ignoreCase = true)
-                                }
-                                studentScannedLib = matched ?: LibraryEntity(
-                                    id = libCode,
-                                    name = "${libCode} Library",
-                                    code = libCode,
-                                    ownerName = "Admin",
-                                    ownerPhone = "",
-                                    ownerEmail = "",
-                                    address = "Main Street",
-                                    city = "Central",
-                                    state = "State",
-                                    pincode = "000000"
-                                )
-                                showQrScannerDialog = false
-                            },
-                            isTorchOn = isTorchOn,
-                            cameraLensFacing = if (isFrontCamera) androidx.camera.core.CameraSelector.LENS_FACING_FRONT else androidx.camera.core.CameraSelector.LENS_FACING_BACK,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        // Camera controls overlay: Flash / Torch and Lens flip
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Black.copy(alpha = 0.6f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                IconButton(onClick = { isTorchOn = !isTorchOn }) {
-                                    Icon(
-                                        imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                        contentDescription = "Torch",
-                                        tint = if (isTorchOn) Color(0xFFFBBF24) else Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Black.copy(alpha = 0.6f),
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                IconButton(onClick = { isFrontCamera = !isFrontCamera }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Cameraswitch,
-                                        contentDescription = "Switch Camera",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = "Detected Library QR Codes:",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val availableLibs = libraries
-
-                        availableLibs.take(2).forEach { lib ->
-                            SuggestionChip(
-                                onClick = {
-                                    studentScannedLib = lib
-                                    showQrScannerDialog = false
-                                },
-                                label = { Text(lib.name.take(16), fontSize = 14.sp) }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = manualCode,
-                        onValueChange = { manualCode = it },
-                        label = { Text("Or Enter Library Code") },
-                        placeholder = { Text("e.g. LIB-VANGUARD-01") },
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                if (manualCode.isNotBlank()) {
-                                    val matched = libraries.find { it.code.equals(manualCode.trim(), ignoreCase = true) || it.id.equals(manualCode.trim(), ignoreCase = true) }
-                                    studentScannedLib = matched ?: LibraryEntity(
-                                        id = manualCode.trim(),
-                                        name = "${manualCode.trim()} Library",
-                                        code = manualCode.trim(),
-                                        ownerName = "Admin",
-                                        ownerPhone = "",
-                                        ownerEmail = "",
-                                        address = "Main Street",
-                                        city = "Central",
-                                        state = "State",
-                                        pincode = "000000"
-                                    )
-                                    showQrScannerDialog = false
-                                }
-                            }) {
-                                Icon(Icons.Default.Check, contentDescription = "Select", tint = MaterialTheme.colorScheme.primary)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-    }
-
-    
-    if (isAwaiting2Fa) {
-        BackHandler { onCancel2Fa() }
-        Dialog(
-            onDismissRequest = onCancel2Fa,
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Surface(
-                shape = RoundedCornerShape(0.dp),
-                color = MaterialTheme.colorScheme.background,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .imePadding()
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(22.dp),
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(LibDeskColors.warningSoft),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = "2FA Shield",
-                                tint = LibDeskColors.warning,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "Super Admin 2FA Security",
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 18.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Start
-                            )
-                            Text(
-                                text = "6-digit OTP code dispatched to:",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Start
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = twoFaTargetEmail,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            textAlign = TextAlign.Start,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
-                    }
-
-                    
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = LibDeskColors.successSoft,
-                        border = BorderStroke(1.dp, LibDeskColors.success.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.MarkEmailRead, contentDescription = null, tint = LibDeskColors.success, modifier = Modifier.size(22.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("2FA Dispatched via Supabase", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer, textAlign = TextAlign.Start)
-                                Text("Please check your email inbox and spam folder. For account safety, the security code is not revealed on screen.", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, textAlign = TextAlign.Start)
-                            }
-                        }
-                    }
-
-                    
-                    OutlinedTextField(
-                        value = otpInput,
-                        onValueChange = {
-                            if (it.length <= 6 && it.all { char -> char.isDigit() }) {
-                                otpInput = it
-                                otpErrorMessage = null
-                            }
-                        },
-                        label = { Text("Enter 6-Digit OTP Code", textAlign = TextAlign.Start) },
-                        placeholder = { Text("• • • • • •", textAlign = TextAlign.Start) },
-                        textStyle = MaterialTheme.typography.headlineSmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Start,
-                            letterSpacing = 4.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        ),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (otpErrorMessage != null) {
-                        Text(
-                            text = otpErrorMessage ?: "",
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Start
-                        )
-                    }
-
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (otpTimerSeconds > 0) "Expires in ${otpTimerSeconds}s" else "OTP Expired",
-                            fontSize = 14.sp,
-                            color = if (otpTimerSeconds > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
-                        )
-
-                        TextButton(
-                            onClick = {
-                                onResend2FaOtp {
-                                    otpInput = ""
-                                    otpErrorMessage = null
-                                }
-                            },
-                            enabled = otpTimerSeconds <= 15
-                        ) {
-                            Text("Resend OTP", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    
-                    Button(
-                        onClick = {
-                            if (otpInput.length != 6) {
-                                otpErrorMessage = "Please enter complete 6-digit OTP"
-                            } else {
-                                onVerify2FaOtp(
-                                    otpInput,
-                                    {
-                                        otpErrorMessage = null
-                                    },
-                                    { err ->
-                                        otpErrorMessage = err
-                                    }
-                                )
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Verify 2FA & Access Super Admin", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
-                    }
-
-                    TextButton(onClick = onCancel2Fa) {
-                        Text("Cancel Verification", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                    }
-                }
-            }
-        }
-    }
-
-    
-    if (showMasterAdminModal) {
-        val isSlotClaimed = superAdminProfile?.isClaimed == true
-
-        BackHandler { showMasterAdminModal = false }
-
-        Dialog(
-            onDismissRequest = { showMasterAdminModal = false },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Surface(
-                shape = RoundedCornerShape(0.dp),
-                color = MaterialTheme.colorScheme.background,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .imePadding()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Header Bar
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = { showMasterAdminModal = false },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "Super Admin Access",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 17.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Platform Owner Console",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = { showMasterAdminModal = false },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Mode Selection Tabs (Direct Login vs Claim Slot)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                            .padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (adminModalMode == 0) MaterialTheme.colorScheme.surface else Color.Transparent,
-                            shadowElevation = if (adminModalMode == 0) 1.dp else 0.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    adminModalMode = 0
-                                    adminErrorMessage = null
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 9.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Sign In",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = if (adminModalMode == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = if (adminModalMode == 1) MaterialTheme.colorScheme.surface else Color.Transparent,
-                            shadowElevation = if (adminModalMode == 1) 1.dp else 0.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    adminModalMode = 1
-                                    adminErrorMessage = null
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier.padding(vertical = 9.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (isSlotClaimed) "Claim Slot (Claimed)" else "Claim Slot",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = if (adminModalMode == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    if (adminModalMode == 0) {
-                        if (!isSlotClaimed) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Info,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "No SaaS Admin account has been registered yet. Please tap 'Claim Slot' above to create your platform owner account.",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                }
-                            }
-                        }
-
-                        // Direct Sign In Form
-                        OutlinedTextField(
-                            value = adminLoginEmail,
-                            onValueChange = {
-                                adminLoginEmail = it
-                                adminErrorMessage = null
-                            },
-                            label = { Text("Super Admin Email / ID") },
-                            placeholder = { Text("Enter Super Admin Email / ID") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Email,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = adminLoginPin,
-                            onValueChange = {
-                                adminLoginPin = it
-                                adminErrorMessage = null
-                            },
-                            label = { Text("Password / PIN") },
-                            placeholder = { Text("Enter Super Admin Password") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            trailingIcon = {
-                                IconButton(onClick = { showAdminLoginPin = !showAdminLoginPin }) {
-                                    Icon(
-                                        imageVector = if (showAdminLoginPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = if (showAdminLoginPin) "Hide Password" else "Show Password"
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showAdminLoginPin) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        // Remember Me Checkbox for Super Admin
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = adminRememberMe,
-                                onCheckedChange = { adminRememberMe = it },
-                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Remember me",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        if (adminErrorMessage != null) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ErrorOutline,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = adminErrorMessage ?: "",
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-
-                        // Primary Sign In Button
-                        Button(
-                            onClick = {
-                                if (!isSlotClaimed) {
-                                    adminErrorMessage = "No SaaS Admin account registered yet. Please tap 'Claim Slot' above to create the account first."
-                                    return@Button
-                                }
-                                if (adminLoginEmail.isBlank()) {
-                                    adminErrorMessage = "Please enter Super Admin Email"
-                                    return@Button
-                                }
-                                if (adminLoginPin.isBlank()) {
-                                    adminErrorMessage = "Please enter Password / PIN"
-                                    return@Button
-                                }
-                                if (adminRememberMe) {
-                                    rememberPrefs.edit()
-                                        .putBoolean("remember_me_super_admin", true)
-                                        .putString("saved_super_admin_email", adminLoginEmail.trim())
-                                        .putString("saved_super_admin_password", adminLoginPin.trim())
-                                        .apply()
-                                } else {
-                                    rememberPrefs.edit()
-                                        .putBoolean("remember_me_super_admin", false)
-                                        .remove("saved_super_admin_email")
-                                        .remove("saved_super_admin_password")
-                                        .apply()
-                                }
-                                adminErrorMessage = null
-                                onAuthenticate(
-                                    adminLoginEmail.trim(),
-                                    adminLoginPin.trim(),
-                                    "SUPER_ADMIN",
-                                    {
-                                        showMasterAdminModal = false
-                                        adminErrorMessage = null
-                                    },
-                                    { err ->
-                                        adminErrorMessage = err
-                                    }
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Login,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Sign In as Super Admin",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp
-                            )
-                        }
-
-                        // Secondary 2FA Option
-                        OutlinedButton(
-                            onClick = {
-                                if (!isSlotClaimed) {
-                                    adminErrorMessage = "No SaaS Admin account registered yet. Please tap 'Claim Slot' above to create the account first."
-                                    return@OutlinedButton
-                                }
-                                if (adminLoginEmail.isBlank()) {
-                                    adminErrorMessage = "Please enter Super Admin Email"
-                                    return@OutlinedButton
-                                }
-                                if (adminLoginPin.isBlank()) {
-                                    adminErrorMessage = "Please enter Password / PIN"
-                                    return@OutlinedButton
-                                }
-                                if (adminRememberMe) {
-                                    rememberPrefs.edit()
-                                        .putBoolean("remember_me_super_admin", true)
-                                        .putString("saved_super_admin_email", adminLoginEmail.trim())
-                                        .putString("saved_super_admin_password", adminLoginPin.trim())
-                                        .apply()
-                                } else {
-                                    rememberPrefs.edit()
-                                        .putBoolean("remember_me_super_admin", false)
-                                        .remove("saved_super_admin_email")
-                                        .remove("saved_super_admin_password")
-                                        .apply()
-                                }
-                                adminErrorMessage = null
-                                onRequest2FaOtp(
-                                    adminLoginEmail.trim(),
-                                    adminLoginPin.trim(),
-                                    { _ ->
-                                        showMasterAdminModal = false
-                                        otpInput = ""
-                                        otpErrorMessage = null
-                                    },
-                                    { err ->
-                                        adminErrorMessage = err
-                                    }
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Login with 2FA Email OTP",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    } else {
-                        // Claim Platform Owner Slot Form
-                        if (isSlotClaimed) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Lock,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(26.dp)
-                                        )
-                                    }
-                                    Text(
-                                        text = "Platform Owner Slot Claimed & Secured",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Text(
-                                        text = "The master SaaS platform owner account is registered to ${superAdminProfile?.email?.let { com.example.util.EmailOtpService.maskEmail(it) } ?: "the platform administrator"}.\n\nFor platform security, public registration is locked. Please switch to Sign In to log in with your credentials and Email 2FA.",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        lineHeight = 17.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Button(
-                                        onClick = {
-                                            adminModalMode = 0
-                                            adminErrorMessage = null
-                                        },
-                                        shape = RoundedCornerShape(10.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(44.dp)
-                                    ) {
-                                        Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Switch to Sign In", fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        } else {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = LibDeskColors.warningSoft,
-                                border = BorderStroke(1.dp, LibDeskColors.warning.copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Info,
-                                        contentDescription = null,
-                                        tint = LibDeskColors.warning,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Register as the master platform owner. A 6-digit verification OTP will be sent to your email address to confirm ownership.",
-                                        fontSize = 12.sp,
-                                        color = LibDeskColors.warning
-                                    )
-                                }
-                            }
-
-                            OutlinedTextField(
-                                value = adminClaimName,
-                                onValueChange = { adminClaimName = it },
-                                label = { Text("Admin Full Name") },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = adminClaimEmail,
-                                onValueChange = { adminClaimEmail = it },
-                                label = { Text("Master Admin Email") },
-                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            CountryCodePhoneField(
-                                mobile = adminClaimMobile,
-                                onMobileChange = { adminClaimMobile = it },
-                                countryCode = adminClaimCountryCode,
-                                onCountryCodeChange = { adminClaimCountryCode = it },
-                                label = "Mobile Number",
-                                placeholder = "98765 43210",
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = adminClaimPin,
-                                onValueChange = { adminClaimPin = it },
-                                label = { Text("Create Password / PIN") },
-                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                trailingIcon = {
-                                    IconButton(onClick = { showAdminClaimPin = !showAdminClaimPin }) {
-                                        Icon(
-                                            imageVector = if (showAdminClaimPin) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = if (showAdminClaimPin) "Hide Password" else "Show Password"
-                                        )
-                                    }
-                                },
-                                visualTransformation = if (showAdminClaimPin) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            OutlinedTextField(
-                                value = adminClaimPinConfirm,
-                                onValueChange = { adminClaimPinConfirm = it },
-                                label = { Text("Confirm Password / PIN") },
-                                leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                trailingIcon = {
-                                    IconButton(onClick = { showAdminClaimPinConfirm = !showAdminClaimPinConfirm }) {
-                                        Icon(
-                                            imageVector = if (showAdminClaimPinConfirm) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                            contentDescription = if (showAdminClaimPinConfirm) "Hide Password" else "Show Password"
-                                        )
-                                    }
-                                },
-                                visualTransformation = if (showAdminClaimPinConfirm) VisualTransformation.None else PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            if (adminErrorMessage != null) {
-                                Text(
-                                    text = adminErrorMessage ?: "",
-                                    color = MaterialTheme.colorScheme.error,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-
-                            Button(
-                                onClick = {
-                                    val fullMobile = combineCountryCodeAndPhone(adminClaimCountryCode, adminClaimMobile)
-                                    if (adminClaimName.isBlank()) {
-                                        adminErrorMessage = "Please enter your full name"
-                                    } else if (adminClaimEmail.isBlank() || !adminClaimEmail.contains("@")) {
-                                        adminErrorMessage = "Please enter a valid Admin Email"
-                                    } else if (fullMobile.isBlank()) {
-                                        adminErrorMessage = "Please enter a valid mobile number"
-                                    } else if (adminClaimPin.length < 6) {
-                                        adminErrorMessage = "Password must be at least 6 characters"
-                                    } else if (adminClaimPin != adminClaimPinConfirm) {
-                                        adminErrorMessage = "Password and Confirmation do not match"
-                                    } else {
-                                        adminErrorMessage = null
-                                        onClaimAdminSlot(
-                                            adminClaimName.trim(),
-                                            adminClaimEmail.trim(),
-                                            fullMobile.trim(),
-                                            adminClaimPin.trim(),
-                                            false, // Direct secure registration with password
-                                            { _ ->
-                                                showMasterAdminModal = false
-                                                adminErrorMessage = null
-                                            },
-                                            { err ->
-                                                adminErrorMessage = err
-                                            }
-                                        )
-                                    }
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                            ) {
-                                Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Register & Claim Platform Owner Account", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    if (showForgotPasswordModal) {
-        BackHandler { showForgotPasswordModal = false }
-        Dialog(
-            onDismissRequest = { showForgotPasswordModal = false },
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            )
-        ) {
-            Surface(
-                shape = RoundedCornerShape(0.dp),
-                color = MaterialTheme.colorScheme.background,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .imePadding()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(22.dp)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LockReset,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "Password Recovery",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Text(
-                                    text = if (forgotPasswordStep == 0) "Step 1: Verify Account Email" else "Step 2: Set New Password",
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        IconButton(onClick = { showForgotPasswordModal = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    if (forgotPasswordStep == 0) {
-
-                        Text(
-                            text = "Enter your registered email address or mobile number to receive a secure 6-digit recovery code.",
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Start,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = forgotPasswordEmail,
-                            onValueChange = {
-                                forgotPasswordEmail = it
-                                forgotPasswordError = null
-                            },
-                            label = { Text("Registered Email or Mobile") },
-                            placeholder = { Text("e.g. user@example.com") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (forgotPasswordError != null) {
-                            Text(
-                                text = forgotPasswordError ?: "",
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                val trimmed = forgotPasswordEmail.trim()
-                                if (trimmed.isBlank() || (!trimmed.contains("@") && trimmed.length < 10)) {
-                                    forgotPasswordError = "Please enter a valid registered email or 10-digit mobile number."
-                                    return@Button
-                                }
-                                forgotPasswordError = null
-                                forgotPasswordStep = 1
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Send 6-Digit Recovery Code", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
-                        }
-                    } else {
-
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.MarkEmailRead, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Recovery Code Sent to:", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(forgotPasswordEmail, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                }
-                                TextButton(
-                                    onClick = { forgotPasswordStep = 0 },
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text("Change", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-
-                        
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primaryContainer),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Supabase Recovery Code Dispatched", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Text("Please check your email inbox and spam folder. Security codes are never shown on screen.", fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        }
-
-                        
-                        
-                        OutlinedTextField(
-                            value = forgotPasswordNewPassword,
-                            onValueChange = {
-                                forgotPasswordNewPassword = it
-                                forgotPasswordError = null
-                            },
-                            label = { Text("New Password (min 6 chars)") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            trailingIcon = {
-                                IconButton(onClick = { showForgotNewPassword = !showForgotNewPassword }) {
-                                    Icon(
-                                        imageVector = if (showForgotNewPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showForgotNewPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        
-                        OutlinedTextField(
-                            value = forgotPasswordConfirmPassword,
-                            onValueChange = {
-                                forgotPasswordConfirmPassword = it
-                                forgotPasswordError = null
-                            },
-                            label = { Text("Confirm New Password") },
-                            leadingIcon = { Icon(Icons.Default.LockReset, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                            trailingIcon = {
-                                IconButton(onClick = { showForgotConfirmPassword = !showForgotConfirmPassword }) {
-                                    Icon(
-                                        imageVector = if (showForgotConfirmPassword) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showForgotConfirmPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                        }
-                        if (forgotPasswordError != null) {
-                            Text(
-                                text = forgotPasswordError ?: "",
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                        
-                        Button(
-                            onClick = {
-                                val isRecoveryOtpValid = true
-
-                                if (!isRecoveryOtpValid) {
-                                    forgotPasswordError = "Invalid OTP code. Please enter the exact 6-digit recovery code sent to your email."
-                                    return@Button
-                                }
-                                if (forgotPasswordNewPassword.length < 6) {
-                                    forgotPasswordError = "New password must be at least 6 characters."
-                                    return@Button
-                                }
-                                if (forgotPasswordNewPassword != forgotPasswordConfirmPassword) {
-                                    forgotPasswordError = "Passwords do not match. Please re-enter."
-                                    return@Button
-                                }
-
-                                onResetPassword(
-                                    forgotPasswordEmail,
-                                    forgotPasswordNewPassword,
-                                    {
-                                        loginEmail = forgotPasswordEmail
-                                        loginPassword = forgotPasswordNewPassword
-                                        forgotPasswordSuccessMessage = "Password reset successfully! You can now log in."
-                                        showForgotPasswordModal = false
-                                    },
-                                    { err ->
-                                        forgotPasswordError = err
-                                    }
-                                )
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Reset Password & Return to Login", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
-                        }
-                    }
-                }
             }
         }
     }

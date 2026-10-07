@@ -55,10 +55,118 @@ class LibDeskRepository(val context: Context? = null) {
     private val _superAdmin = MutableStateFlow<SuperAdminUserEntity?>(null)
     private val _subscriptionPlans = MutableStateFlow<List<SubscriptionPlans>>(emptyList())
     private val _userSubscriptions = MutableStateFlow<List<UserSubscription>>(emptyList())
+    private val _lockers = MutableStateFlow<List<LockerEntity>>(emptyList())
+    private val _visitorPasses = MutableStateFlow<List<VisitorPassEntity>>(emptyList())
+    private val _seatShiftRequests = MutableStateFlow<List<SeatShiftRequestEntity>>(emptyList())
+    private val _studyStreaks = MutableStateFlow<List<StudyStreakEntity>>(emptyList())
+    private val _floorElements = MutableStateFlow<List<FloorElementEntity>>(emptyList())
+    private val _chatMessages = MutableStateFlow<List<ChatMessageEntity>>(emptyList())
+    val chatMessages = _chatMessages.asStateFlow()
 
     init {
         // Seed default subscription plans into memory
         _subscriptionPlans.value = defaultSubscriptionPlansList()
+        seedInitialLockersAndTrialPasses()
+        seedInitialChatMessages()
+    }
+
+    private fun seedInitialChatMessages() {
+        if (_chatMessages.value.isEmpty()) {
+            val now = System.currentTimeMillis()
+            val sampleMessages = listOf(
+                ChatMessageEntity(
+                    id = "MSG-001",
+                    libraryId = "LIB-DEMO",
+                    studentId = "STU-001",
+                    studentName = "Aman Verma",
+                    senderRole = "LIBRARIAN",
+                    senderName = "Library Helpdesk",
+                    message = "Welcome to LibDesk Smart Study Hall! 📚 Feel free to message here for any seat, Wi-Fi or hall inquiry. Strict silence is maintained.",
+                    timestamp = now - 3600000 * 2,
+                    timeFormatted = "09:00 AM",
+                    dateFormatted = "Today",
+                    status = "READ",
+                    isRead = true
+                ),
+                ChatMessageEntity(
+                    id = "MSG-002",
+                    libraryId = "LIB-DEMO",
+                    studentId = "STU-001",
+                    studentName = "Aman Verma",
+                    senderRole = "STUDENT",
+                    senderName = "Aman Verma",
+                    message = "Hi Sir, could you please confirm the high-speed Wi-Fi network credentials for Desk S-01?",
+                    timestamp = now - 3600000,
+                    timeFormatted = "10:15 AM",
+                    dateFormatted = "Today",
+                    status = "READ",
+                    isRead = true
+                ),
+                ChatMessageEntity(
+                    id = "MSG-003",
+                    libraryId = "LIB-DEMO",
+                    studentId = "STU-001",
+                    studentName = "Aman Verma",
+                    senderRole = "LIBRARIAN",
+                    senderName = "Library Helpdesk",
+                    message = "Yes! Network: LibDesk_5G_Prime, password is on the notice board. Have a productive study session!",
+                    timestamp = now - 1800000,
+                    timeFormatted = "10:30 AM",
+                    dateFormatted = "Today",
+                    status = "DELIVERED",
+                    isRead = false
+                )
+            )
+            _chatMessages.value = sampleMessages
+        }
+    }
+
+    private fun seedInitialLockersAndTrialPasses() {
+        if (_lockers.value.isEmpty()) {
+            val sampleLockers = listOf(
+                LockerEntity(id = "LOCKER-01", libraryId = "LIB-DEMO", lockerNumber = "L-101", size = "Standard", floor = "Ground Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "AVAILABLE"),
+                LockerEntity(id = "LOCKER-02", libraryId = "LIB-DEMO", lockerNumber = "L-102", size = "Standard", floor = "Ground Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "OCCUPIED", assignedStudentName = "Aman Verma", assignedStudentPhone = "9876543210", expiryDate = "2026-11-15", keyNumber = "K-102"),
+                LockerEntity(id = "LOCKER-03", libraryId = "LIB-DEMO", lockerNumber = "L-103", size = "Large", floor = "Ground Floor", monthlyRent = 350.0, depositAmount = 500.0, status = "AVAILABLE"),
+                LockerEntity(id = "LOCKER-04", libraryId = "LIB-DEMO", lockerNumber = "L-104", size = "Standard", floor = "1st Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "AVAILABLE"),
+                LockerEntity(id = "LOCKER-05", libraryId = "LIB-DEMO", lockerNumber = "L-105", size = "Small", floor = "1st Floor", monthlyRent = 150.0, depositAmount = 200.0, status = "MAINTENANCE")
+            )
+            _lockers.value = sampleLockers
+        }
+        if (_visitorPasses.value.isEmpty()) {
+            val samplePass = VisitorPassEntity(
+                id = "VP-001",
+                libraryId = "LIB-DEMO",
+                passNumber = "VP-1001",
+                visitorName = "Rohit Kumar",
+                mobile = "9812345678",
+                purpose = "1-Day UPSC Demo Trial",
+                visitDate = dateFormat.format(Date()),
+                timeSlot = "Morning (08:00 AM - 02:00 PM)",
+                assignedSeatNumber = "T-01",
+                feeAmount = 100.0,
+                paymentMode = "UPI",
+                status = "ACTIVE",
+                checkInTime = "08:15 AM"
+            )
+            _visitorPasses.value = listOf(samplePass)
+        }
+        if (_floorElements.value.isEmpty()) {
+            val defaultElements = listOf(
+                FloorElementEntity(id = "FE-ENTRY", libraryId = "LIB-DEMO", type = "DOOR", label = "Main Entrance", gridX = 0, gridY = 4, width = 2, height = 1),
+                FloorElementEntity(id = "FE-RECEPTION", libraryId = "LIB-DEMO", type = "RECEPTION", label = "Reception Desk", gridX = 2, gridY = 4, width = 2, height = 1),
+                FloorElementEntity(id = "FE-AC1", libraryId = "LIB-DEMO", type = "AC", label = "Split AC 2.0T", gridX = 0, gridY = 0, width = 1, height = 1),
+                FloorElementEntity(id = "FE-WATER", libraryId = "LIB-DEMO", type = "WATER_COOLER", label = "RO Water Station", gridX = 7, gridY = 4, width = 1, height = 1),
+                FloorElementEntity(id = "FE-RESTROOM", libraryId = "LIB-DEMO", type = "RESTROOM", label = "Restroom", gridX = 7, gridY = 0, width = 1, height = 1),
+                FloorElementEntity(id = "FE-S1", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 01", gridX = 1, gridY = 1, seatNumberRef = "Seat 01", isOccupied = true),
+                FloorElementEntity(id = "FE-S2", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 02", gridX = 2, gridY = 1, seatNumberRef = "Seat 02", isOccupied = false),
+                FloorElementEntity(id = "FE-S3", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 03", gridX = 3, gridY = 1, seatNumberRef = "Seat 03", isOccupied = true),
+                FloorElementEntity(id = "FE-S4", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 04", gridX = 5, gridY = 1, seatNumberRef = "Seat 04", isOccupied = false),
+                FloorElementEntity(id = "FE-S5", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 05", gridX = 6, gridY = 1, seatNumberRef = "Seat 05", isOccupied = false),
+                FloorElementEntity(id = "FE-S6", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 06", gridX = 1, gridY = 2, seatNumberRef = "Seat 06", isOccupied = false),
+                FloorElementEntity(id = "FE-S7", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 07", gridX = 2, gridY = 2, seatNumberRef = "Seat 07", isOccupied = true)
+            )
+            _floorElements.value = defaultElements
+        }
     }
 
     // ==========================================
@@ -241,52 +349,22 @@ class LibDeskRepository(val context: Context? = null) {
     private fun defaultSubscriptionPlansList(): List<SubscriptionPlans> {
         return listOf(
             SubscriptionPlans(
-                id = "SUB-PLAN-STARTER",
-                name = "Starter Launch",
-                description = "Essential digital library suite for small halls & study rooms",
-                price = 499.0,
-                durationMonths = 1,
-                maxSeats = 60,
-                features = "Up to 60 Dedicated Seats\nSmart Gate QR Code Attendance\nCash & UPI Fee Ledger\nReal-time Student Directory\nDigital Notice Board Broadcast\nInstant Setup in 2 Minutes",
-                badge = "Starter Pack",
+                id = "SUB-PLAN-TRIAL-15",
+                name = "15-Day Full Feature Free Trial",
+                description = "Complete unrestricted access to all LibDesk library management tools for 15 days",
+                price = 0.0,
+                durationMonths = 0,
+                durationDays = 15,
+                durationType = "DAYS",
+                maxSeats = 9999,
+                features = "All Features Unlocked\nUnlimited Seats & Multi-Halls\nSmart Gate QR Code Attendance\nWhatsApp Fee Slips & Reminders\nDigital NCERT & E-Book Library\nFull Expense & Profit/Loss Ledger\nAutomated Cloud Sync & Backup\nStudent Self-Service Portal",
+                badge = "15 Days Free Trial",
                 discountPercentage = 0.0,
                 upiId = "",
                 upiPayeeName = "",
                 supportWhatsApp = "",
                 isActive = true,
                 displayOrder = 1
-            ),
-            SubscriptionPlans(
-                id = "SUB-PLAN-PRO",
-                name = "Growth Pro",
-                description = "Most popular choice for growing libraries with multiple shifts",
-                price = 999.0,
-                durationMonths = 1,
-                maxSeats = 160,
-                features = "Up to 160 Dedicated & Flexible Seats\n3 Shifts Support (Morning/Evening/Full Day)\nDirect WhatsApp Fee Slips & Reminders\nStudent Self-Service Portal Access\nDigital E-Book Catalog & Issues\nFull Daily P&L Expense Tracking\nCloud-Synchronized Multi-Tenant Security",
-                badge = "Most Popular",
-                discountPercentage = 15.0,
-                upiId = "",
-                upiPayeeName = "",
-                supportWhatsApp = "",
-                isActive = true,
-                displayOrder = 2
-            ),
-            SubscriptionPlans(
-                id = "SUB-PLAN-ENTERPRISE",
-                name = "Enterprise Annual",
-                description = "Maximum scale with unlimited seats, custom branding & VIP support",
-                price = 7999.0,
-                durationMonths = 12,
-                maxSeats = 9999,
-                features = "Unlimited Seats & Multi-Halls\nCustom UPI QR Code for Member Fees\n2 Months Free on Annual Billing\nAutomated Cloud Sync & Backup\nPriority 24x7 WhatsApp VIP Support\nBiometric & RFID Turnstile Ready\nAdvanced Monthly Financial Reports",
-                badge = "Best Value (Save 35%)",
-                discountPercentage = 35.0,
-                upiId = "",
-                upiPayeeName = "",
-                supportWhatsApp = "",
-                isActive = true,
-                displayOrder = 3
             )
         )
     }
@@ -666,8 +744,12 @@ class LibDeskRepository(val context: Context? = null) {
             "OWNER" -> "OWNER"
             else -> "STUDENT"
         }
-        val safeUser = (if (user.id.isBlank()) user.copy(id = UUID.randomUUID().toString()) else user).copy(role = canonicalRole)
-        _users.value = _users.value.filter { it.id != safeUser.id } + safeUser
+        val safeUser = (if (user.id.isBlank()) user.copy(id = UUID.randomUUID().toString()) else user).copy(
+            role = canonicalRole,
+            name = user.name.ifBlank { user.email.substringBefore("@").ifBlank { "LibDesk User" } },
+            email = user.email.trim().lowercase()
+        )
+        _users.value = _users.value.filter { it.id != safeUser.id && !it.email.equals(safeUser.email, ignoreCase = true) } + safeUser
         val arr = JSONArray().apply {
             put(JSONObject().apply {
                 put("id", safeUser.id)
@@ -677,14 +759,18 @@ class LibDeskRepository(val context: Context? = null) {
                 put("name", safeUser.name)
                 put("phone", safeUser.phone)
                 put("avatarUrl", safeUser.avatarUrl)
-                put("studentIdRef", safeUser.studentIdRef)
+                if (!safeUser.studentIdRef.isNullOrBlank()) {
+                    put("studentIdRef", safeUser.studentIdRef)
+                }
                 put("isActive", safeUser.isActive)
-                put("createdAt", safeUser.createdAt)
+                put("createdAt", if (safeUser.createdAt > 0) safeUser.createdAt else System.currentTimeMillis())
             })
         }
         val (ok, msg) = SupabaseClient.upsertRecords("users", arr)
         if (!ok) {
-            android.util.Log.e("LibDeskRepository", "saveUser failed: $msg")
+            android.util.Log.e("LibDeskRepository", "saveUser to Supabase failed: $msg")
+        } else {
+            android.util.Log.i("LibDeskRepository", "saveUser to Supabase success for ${safeUser.email}")
         }
     }
 
@@ -2014,6 +2100,76 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     // ==========================================
+    // REAL-TIME SIGNAL-STYLE MESSAGING
+    // ==========================================
+
+    fun getChatMessagesForStudent(studentId: String): Flow<List<ChatMessageEntity>> =
+        _chatMessages.map { list ->
+            list.filter { it.studentId == studentId || studentId.isBlank() }
+                .sortedBy { it.timestamp }
+        }
+
+    fun getAllChatMessages(libraryId: String): Flow<List<ChatMessageEntity>> =
+        _chatMessages.map { list ->
+            list.filter { it.libraryId == libraryId || libraryId.isBlank() }
+                .sortedByDescending { it.timestamp }
+        }
+
+    fun setChatMessages(list: List<ChatMessageEntity>) {
+        _chatMessages.value = list
+    }
+
+    suspend fun sendChatMessage(msg: ChatMessageEntity) = withContext(Dispatchers.IO) {
+        val updated = _chatMessages.value.filter { it.id != msg.id } + msg
+        _chatMessages.value = updated
+
+        // Sync to Supabase Realtime / REST
+        if (SupabaseClient.isConfigured()) {
+            val arr = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("id", msg.id)
+                    put("libraryId", msg.libraryId)
+                    put("studentId", msg.studentId)
+                    put("studentName", msg.studentName)
+                    put("senderRole", msg.senderRole)
+                    put("senderName", msg.senderName)
+                    put("message", msg.message)
+                    put("timestamp", msg.timestamp)
+                    put("timeFormatted", msg.timeFormatted)
+                    put("dateFormatted", msg.dateFormatted)
+                    put("status", "DELIVERED")
+                    put("isRead", msg.isRead)
+                })
+            }
+            SupabaseClient.upsertRecords("chat_messages", arr)
+        }
+    }
+
+    suspend fun markChatMessagesAsRead(studentId: String, readerRole: String) = withContext(Dispatchers.IO) {
+        val updated = _chatMessages.value.map { msg ->
+            if (msg.studentId == studentId && msg.senderRole != readerRole && !msg.isRead) {
+                msg.copy(isRead = true, status = "READ")
+            } else msg
+        }
+        _chatMessages.value = updated
+
+        if (SupabaseClient.isConfigured()) {
+            val unreadSynced = updated.filter { it.studentId == studentId && it.status == "READ" }
+            if (unreadSynced.isNotEmpty()) {
+                val arr = JSONArray()
+                unreadSynced.forEach { m ->
+                    arr.put(JSONObject().apply {
+                        put("id", m.id)
+                        put("isRead", true)
+                        put("status", "READ")
+                    })
+                }
+                SupabaseClient.upsertRecords("chat_messages", arr)
+            }
+        }
+    }
+
+    // ==========================================
     // AUDIT LOGS
     // ==========================================
 
@@ -2070,6 +2226,7 @@ class LibDeskRepository(val context: Context? = null) {
     // ==========================================
 
     suspend fun pullAllLibrariesFromCloud(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (!SupabaseClient.isConfigured()) return@withContext Pair(true, "Offline local mode")
         try {
             val (ok, arr) = SupabaseClient.queryTable("libraries?select=*")
             if (ok && arr != null) {
@@ -2115,6 +2272,7 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     suspend fun pullAllSubscriptionPlansFromCloud(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (!SupabaseClient.isConfigured()) return@withContext Pair(true, "Offline local mode")
         try {
             val (ok, arr) = SupabaseClient.queryTable("subscription_plans?select=*")
             if (ok && arr != null && arr.length() > 0) {
@@ -2134,6 +2292,7 @@ class LibDeskRepository(val context: Context? = null) {
     }
 
     suspend fun pullSuperAdminFromCloud(): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (!SupabaseClient.isConfigured()) return@withContext Pair(true, "Offline local mode")
         try {
             val (ok, arr) = SupabaseClient.queryTable("super_admin_users?select=*")
             if (ok && arr != null && arr.length() > 0) {
@@ -2170,12 +2329,42 @@ class LibDeskRepository(val context: Context? = null) {
         }
     }
 
+    private fun <T> mergeSafeList(
+        currentList: List<T>,
+        incomingList: List<T>,
+        libraryId: String,
+        getId: (T) -> String,
+        getLibId: (T) -> String
+    ): List<T> {
+        if (incomingList.isEmpty()) {
+            // CRITICAL: NEVER wipe out local memory if cloud returns empty!
+            return currentList
+        }
+        val otherLibs = currentList.filter { getLibId(it) != libraryId }
+        val currentLib = currentList.filter { getLibId(it) == libraryId }
+        val incomingMap = incomingList.associateBy { getId(it) }
+        val currentMap = currentLib.associateBy { getId(it) }
+
+        val allIds = (currentMap.keys + incomingMap.keys)
+        val merged = allIds.mapNotNull { id ->
+            val local = currentMap[id]
+            val incoming = incomingMap[id]
+            when {
+                local != null && incoming != null -> incoming
+                local != null -> local // Keep locally created data pending sync!
+                else -> incoming
+            }
+        }
+        return otherLibs + merged
+    }
+
     suspend fun pullFromCloud(libraryId: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-        if (libraryId.isBlank()) return@withContext Pair(false, "Library ID is empty")
+        if (!SupabaseClient.isConfigured() || libraryId.isBlank()) return@withContext Pair(true, "Offline local mode")
         try {
             coroutineScope {
                 // Launch all table fetches concurrently in parallel for 10x faster performance
                 val libDeferred = async { SupabaseClient.queryTable("libraries?id=eq.$libraryId&select=*") }
+                val usersDeferred = async { SupabaseClient.fetchRecords("users", libraryId) }
                 val hallsDeferred = async { SupabaseClient.fetchRecords("halls", libraryId) }
                 val cabinsDeferred = async { SupabaseClient.fetchRecords("cabins", libraryId) }
                 val sectionsDeferred = async { SupabaseClient.fetchRecords("sections", libraryId) }
@@ -2192,6 +2381,7 @@ class LibDeskRepository(val context: Context? = null) {
                 val expensesDeferred = async { SupabaseClient.fetchRecords("expenses", libraryId) }
                 val finesDeferred = async { SupabaseClient.fetchRecords("fines", libraryId) }
                 val feedbackDeferred = async { SupabaseClient.fetchRecords("feedback_complaints", libraryId) }
+                val chatDeferred = async { SupabaseClient.fetchRecords("chat_messages", libraryId) }
                 val subDeferred = async { SupabaseClient.queryTable("library_subscriptions?libraryId=eq.$libraryId&select=*") }
                 val userSubDeferred = async { SupabaseClient.queryTable("user_subscriptions?libraryId=eq.$libraryId&select=*") }
 
@@ -2219,6 +2409,16 @@ class LibDeskRepository(val context: Context? = null) {
                     }
                 }
 
+                // 1b. Process Users
+                val (uOk, uArr) = usersDeferred.await()
+                if (uOk && uArr != null) {
+                    val usersList = mutableListOf<UserAccountEntity>()
+                    for (i in 0 until uArr.length()) {
+                        usersList.add(parseUser(uArr.getJSONObject(i)))
+                    }
+                    _users.value = mergeSafeList(_users.value, usersList, libraryId, { it.id }, { it.libraryId })
+                }
+
                 // 2. Process Halls
                 val (hOk, hArr) = hallsDeferred.await()
                 if (hOk && hArr != null) {
@@ -2226,7 +2426,13 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until hArr.length()) {
                         hallsList.add(parseHall(hArr.getJSONObject(i), libraryId))
                     }
-                    _halls.value = _halls.value.filter { it.libraryId != libraryId } + hallsList
+                    _halls.value = mergeSafeList(_halls.value, hallsList, libraryId, { it.id }, { it.libraryId })
+                    if (hallsList.isEmpty()) {
+                        val locHalls = _halls.value.filter { it.libraryId == libraryId }
+                        if (locHalls.isNotEmpty()) {
+                            repositoryScope.launch { locHalls.forEach { insertHall(it) } }
+                        }
+                    }
                 }
 
                 // 2b. Process Cabins
@@ -2236,7 +2442,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until cabArr.length()) {
                         cabList.add(parseCabin(cabArr.getJSONObject(i), libraryId))
                     }
-                    _cabins.value = _cabins.value.filter { it.libraryId != libraryId } + cabList
+                    _cabins.value = mergeSafeList(_cabins.value, cabList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 2c. Process Sections
@@ -2246,7 +2452,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until secArr.length()) {
                         secList.add(parseSection(secArr.getJSONObject(i), libraryId))
                     }
-                    _sections.value = _sections.value.filter { it.libraryId != libraryId } + secList
+                    _sections.value = mergeSafeList(_sections.value, secList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 3. Process Shifts
@@ -2256,7 +2462,13 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until shArr.length()) {
                         shiftsList.add(parseShift(shArr.getJSONObject(i), libraryId))
                     }
-                    _shifts.value = _shifts.value.filter { it.libraryId != libraryId } + shiftsList
+                    _shifts.value = mergeSafeList(_shifts.value, shiftsList, libraryId, { it.id }, { it.libraryId })
+                    if (shiftsList.isEmpty()) {
+                        val locShifts = _shifts.value.filter { it.libraryId == libraryId }
+                        if (locShifts.isNotEmpty()) {
+                            repositoryScope.launch { locShifts.forEach { insertShift(it) } }
+                        }
+                    }
                 }
 
                 // 4. Process Plans
@@ -2266,7 +2478,13 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until planArr.length()) {
                         plansList.add(parseMembershipPlan(planArr.getJSONObject(i), libraryId))
                     }
-                    _plans.value = _plans.value.filter { it.libraryId != libraryId } + plansList
+                    _plans.value = mergeSafeList(_plans.value, plansList, libraryId, { it.id }, { it.libraryId })
+                    if (plansList.isEmpty()) {
+                        val locPlans = _plans.value.filter { it.libraryId == libraryId }
+                        if (locPlans.isNotEmpty()) {
+                            repositoryScope.launch { locPlans.forEach { savePlan(it) } }
+                        }
+                    }
                 }
 
                 // 5. Process Students
@@ -2278,7 +2496,13 @@ class LibDeskRepository(val context: Context? = null) {
                         studentsList.add(parseStudent(sArr.getJSONObject(i), libraryId))
                         studentCount++
                     }
-                    _students.value = _students.value.filter { it.libraryId != libraryId } + studentsList
+                    _students.value = mergeSafeList(_students.value, studentsList, libraryId, { it.id }, { it.libraryId })
+                    if (studentsList.isEmpty()) {
+                        val locStudents = _students.value.filter { it.libraryId == libraryId }
+                        if (locStudents.isNotEmpty()) {
+                            repositoryScope.launch { locStudents.forEach { pushStudentToSupabase(it) } }
+                        }
+                    }
                 }
 
                 // 6. Process Seats
@@ -2288,7 +2512,13 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until seatArr.length()) {
                         seatsList.add(parseSeat(seatArr.getJSONObject(i), libraryId))
                     }
-                    _seats.value = _seats.value.filter { it.libraryId != libraryId } + seatsList
+                    _seats.value = mergeSafeList(_seats.value, seatsList, libraryId, { it.id }, { it.libraryId })
+                    if (seatsList.isEmpty()) {
+                        val locSeats = _seats.value.filter { it.libraryId == libraryId }
+                        if (locSeats.isNotEmpty()) {
+                            repositoryScope.launch { locSeats.forEach { saveSeat(it) } }
+                        }
+                    }
                 }
 
                 // 7. Process Notices
@@ -2298,7 +2528,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until notArr.length()) {
                         noticesList.add(parseNotice(notArr.getJSONObject(i), libraryId))
                     }
-                    _notices.value = _notices.value.filter { it.libraryId != libraryId } + noticesList
+                    _notices.value = mergeSafeList(_notices.value, noticesList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 8. Process Payments
@@ -2308,7 +2538,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until payArr.length()) {
                         paymentsList.add(parsePayment(payArr.getJSONObject(i), libraryId))
                     }
-                    _payments.value = _payments.value.filter { it.libraryId != libraryId } + paymentsList
+                    _payments.value = mergeSafeList(_payments.value, paymentsList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 9. Process Attendance
@@ -2318,7 +2548,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until attArr.length()) {
                         attList.add(parseAttendance(attArr.getJSONObject(i), libraryId))
                     }
-                    _attendance.value = _attendance.value.filter { it.libraryId != libraryId } + attList
+                    _attendance.value = mergeSafeList(_attendance.value, attList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 10. Process Books
@@ -2328,7 +2558,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until bkArr.length()) {
                         bkList.add(parseBook(bkArr.getJSONObject(i), libraryId))
                     }
-                    _books.value = _books.value.filter { it.libraryId != libraryId } + bkList
+                    _books.value = mergeSafeList(_books.value, bkList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 11. Process Book Issues
@@ -2338,7 +2568,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until issArr.length()) {
                         issList.add(parseBookIssue(issArr.getJSONObject(i), libraryId))
                     }
-                    _bookIssues.value = _bookIssues.value.filter { it.libraryId != libraryId } + issList
+                    _bookIssues.value = mergeSafeList(_bookIssues.value, issList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 12. Process Digital Materials
@@ -2348,7 +2578,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until matArr.length()) {
                         matList.add(parseDigitalMaterial(matArr.getJSONObject(i), libraryId))
                     }
-                    _materials.value = _materials.value.filter { it.libraryId != libraryId } + matList
+                    _materials.value = mergeSafeList(_materials.value, matList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 13. Process Expenses
@@ -2358,7 +2588,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until expArr.length()) {
                         expList.add(parseExpense(expArr.getJSONObject(i), libraryId))
                     }
-                    _expenses.value = _expenses.value.filter { it.libraryId != libraryId } + expList
+                    _expenses.value = mergeSafeList(_expenses.value, expList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 14. Process Fines
@@ -2368,7 +2598,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until fineArr.length()) {
                         fineList.add(parseFine(fineArr.getJSONObject(i), libraryId))
                     }
-                    _fines.value = _fines.value.filter { it.libraryId != libraryId } + fineList
+                    _fines.value = mergeSafeList(_fines.value, fineList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 15. Process Feedback Complaints
@@ -2378,7 +2608,7 @@ class LibDeskRepository(val context: Context? = null) {
                     for (i in 0 until fbArr.length()) {
                         fbList.add(parseFeedback(fbArr.getJSONObject(i), libraryId))
                     }
-                    _feedback.value = _feedback.value.filter { it.libraryId != libraryId } + fbList
+                    _feedback.value = mergeSafeList(_feedback.value, fbList, libraryId, { it.id }, { it.libraryId })
                 }
 
                 // 16. Process Subscriptions
@@ -2393,6 +2623,34 @@ class LibDeskRepository(val context: Context? = null) {
                 if (uSubOk && uSubArr != null && uSubArr.length() > 0) {
                     val uSub = parseUserSubscription(uSubArr.getJSONObject(0))
                     _userSubscriptions.value = _userSubscriptions.value.filter { it.libraryId != libraryId } + uSub
+                }
+
+                // 18. Process Real-Time Chat Messages
+                val (chatOk, chatArr) = chatDeferred.await()
+                if (chatOk && chatArr != null && chatArr.length() > 0) {
+                    val list = mutableListOf<ChatMessageEntity>()
+                    for (i in 0 until chatArr.length()) {
+                        val obj = chatArr.getJSONObject(i)
+                        list.add(
+                            ChatMessageEntity(
+                                id = optStringAny(obj, "id", fallback = UUID.randomUUID().toString()),
+                                libraryId = optStringAny(obj, "libraryId", fallback = libraryId),
+                                studentId = optStringAny(obj, "studentId", fallback = ""),
+                                studentName = optStringAny(obj, "studentName", fallback = ""),
+                                senderRole = optStringAny(obj, "senderRole", fallback = "STUDENT"),
+                                senderName = optStringAny(obj, "senderName", fallback = ""),
+                                message = optStringAny(obj, "message", fallback = ""),
+                                timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                                timeFormatted = optStringAny(obj, "timeFormatted", fallback = ""),
+                                dateFormatted = optStringAny(obj, "dateFormatted", fallback = ""),
+                                status = optStringAny(obj, "status", fallback = "DELIVERED"),
+                                isRead = obj.optBoolean("isRead", false)
+                            )
+                        )
+                    }
+                    if (list.isNotEmpty()) {
+                        _chatMessages.value = list
+                    }
                 }
 
                 Pair(true, "Cloud sync completed ($studentCount students synchronized)")
@@ -2886,5 +3144,204 @@ class LibDeskRepository(val context: Context? = null) {
             displayOrder = optIntAny(obj, "displayOrder", "display_order", fallback = 1),
             createdAt = optLongAny(obj, "createdAt", "created_at", fallback = System.currentTimeMillis())
         )
+    }
+
+    // ==========================================
+    // LOCKER MANAGEMENT
+    // ==========================================
+    fun getLockersByLibrary(libraryId: String): Flow<List<LockerEntity>> =
+        _lockers.map { list -> list.filter { it.libraryId == libraryId || libraryId.isBlank() } }
+
+    suspend fun saveLocker(locker: LockerEntity) = withContext(Dispatchers.IO) {
+        _lockers.value = _lockers.value.filter { it.id != locker.id } + locker
+    }
+
+    suspend fun deleteLocker(lockerId: String) = withContext(Dispatchers.IO) {
+        _lockers.value = _lockers.value.filter { it.id != lockerId }
+    }
+
+    suspend fun allocateLocker(
+        lockerId: String,
+        studentId: String,
+        studentName: String,
+        studentPhone: String,
+        expiryDate: String,
+        keyNumber: String = ""
+    ) = withContext(Dispatchers.IO) {
+        _lockers.value = _lockers.value.map {
+            if (it.id == lockerId) {
+                it.copy(
+                    status = "OCCUPIED",
+                    assignedStudentId = studentId,
+                    assignedStudentName = studentName,
+                    assignedStudentPhone = studentPhone,
+                    startDate = dateFormat.format(Date()),
+                    expiryDate = expiryDate,
+                    keyNumber = keyNumber
+                )
+            } else it
+        }
+    }
+
+    suspend fun releaseLocker(lockerId: String) = withContext(Dispatchers.IO) {
+        _lockers.value = _lockers.value.map {
+            if (it.id == lockerId) {
+                it.copy(
+                    status = "AVAILABLE",
+                    assignedStudentId = "",
+                    assignedStudentName = "",
+                    assignedStudentPhone = "",
+                    startDate = "",
+                    expiryDate = "",
+                    keyNumber = ""
+                )
+            } else it
+        }
+    }
+
+    // ==========================================
+    // VISITOR / 1-DAY TRIAL PASS
+    // ==========================================
+    fun getVisitorPassesByLibrary(libraryId: String): Flow<List<VisitorPassEntity>> =
+        _visitorPasses.map { list -> list.filter { it.libraryId == libraryId || libraryId.isBlank() } }
+
+    suspend fun saveVisitorPass(pass: VisitorPassEntity) = withContext(Dispatchers.IO) {
+        _visitorPasses.value = _visitorPasses.value.filter { it.id != pass.id } + pass
+    }
+
+    suspend fun checkoutVisitorPass(passId: String) = withContext(Dispatchers.IO) {
+        val nowTime = timeFormat.format(Date())
+        _visitorPasses.value = _visitorPasses.value.map {
+            if (it.id == passId) {
+                it.copy(status = "COMPLETED", checkOutTime = nowTime)
+            } else it
+        }
+    }
+
+    // ==========================================
+    // SEAT & SHIFT CHANGE REQUESTS
+    // ==========================================
+    fun getSeatShiftRequestsByLibrary(libraryId: String): Flow<List<SeatShiftRequestEntity>> =
+        _seatShiftRequests.map { list -> list.filter { it.libraryId == libraryId || libraryId.isBlank() } }
+
+    fun getSeatShiftRequestsByStudent(studentId: String): Flow<List<SeatShiftRequestEntity>> =
+        _seatShiftRequests.map { list -> list.filter { it.studentId == studentId } }
+
+    suspend fun submitSeatShiftRequest(request: SeatShiftRequestEntity) = withContext(Dispatchers.IO) {
+        _seatShiftRequests.value = listOf(request) + _seatShiftRequests.value.filter { it.id != request.id }
+    }
+
+    suspend fun resolveSeatShiftRequest(
+        requestId: String,
+        isApproved: Boolean,
+        adminRemarks: String = ""
+    ) = withContext(Dispatchers.IO) {
+        val req = _seatShiftRequests.value.find { it.id == requestId } ?: return@withContext
+        val newStatus = if (isApproved) "APPROVED" else "REJECTED"
+        
+        _seatShiftRequests.value = _seatShiftRequests.value.map {
+            if (it.id == requestId) {
+                it.copy(
+                    status = newStatus,
+                    adminRemarks = adminRemarks,
+                    reviewedAt = System.currentTimeMillis()
+                )
+            } else it
+        }
+
+        if (isApproved) {
+            // Update Student's actual seat and/or shift
+            _students.value = _students.value.map { st ->
+                if (st.id == req.studentId) {
+                    st.copy(
+                        seatNumber = if (req.requestedSeatNumber.isNotBlank()) req.requestedSeatNumber else st.seatNumber,
+                        shiftName = if (req.requestedShiftName.isNotBlank()) req.requestedShiftName else st.shiftName,
+                        shiftId = if (req.requestedShiftId.isNotBlank()) req.requestedShiftId else st.shiftId
+                    )
+                } else st
+            }
+            // Update Seats allocation if requestedSeatNumber is specified
+            if (req.requestedSeatNumber.isNotBlank()) {
+                _seats.value = _seats.value.map { seat ->
+                    when {
+                        seat.seatNumber == req.requestedSeatNumber -> {
+                            seat.copy(status = "OCCUPIED", assignedStudentId = req.studentId, assignedStudentName = req.studentName)
+                        }
+                        seat.seatNumber == req.currentSeatNumber -> {
+                            seat.copy(status = "AVAILABLE", assignedStudentId = "", assignedStudentName = "")
+                        }
+                        else -> seat
+                    }
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // GAMIFIED STUDY STREAKS & POMODORO
+    // ==========================================
+    fun getStudyStreakByStudent(studentId: String): Flow<StudyStreakEntity?> =
+        _studyStreaks.map { list -> list.find { it.studentId == studentId } }
+
+    suspend fun logStudyMinutes(studentId: String, libraryId: String, studentName: String, minutesToAdd: Int) = withContext(Dispatchers.IO) {
+        val todayStr = dateFormat.format(Date())
+        val existing = _studyStreaks.value.find { it.studentId == studentId }
+        
+        val updated = if (existing == null) {
+            StudyStreakEntity(
+                studentId = studentId,
+                libraryId = libraryId,
+                studentName = studentName,
+                streakDays = 1,
+                totalMinutesToday = minutesToAdd,
+                totalStudyMinutesAllTime = minutesToAdd,
+                lastStudyDate = todayStr,
+                totalSessions = 1,
+                unlockedBadges = "ROOKIE_SCHOLAR"
+            )
+        } else {
+            val isSameDay = existing.lastStudyDate == todayStr
+            val newTodayMinutes = if (isSameDay) existing.totalMinutesToday + minutesToAdd else minutesToAdd
+            val newStreakDays = if (isSameDay) existing.streakDays else existing.streakDays + 1
+            val newAllTime = existing.totalStudyMinutesAllTime + minutesToAdd
+            
+            // Calculate unlocked badges
+            val badges = existing.unlockedBadges.split(",").toMutableSet()
+            if (newStreakDays >= 3) badges.add("STREAK_3")
+            if (newStreakDays >= 7) badges.add("STREAK_7_FIRE")
+            if (newStreakDays >= 21) badges.add("HABIT_MASTER_21")
+            if (newAllTime >= 600) badges.add("HOURS_10_CLUB")
+            if (newAllTime >= 3000) badges.add("HOURS_50_CENTURY")
+            if (newAllTime >= 6000) badges.add("HOURS_100_LEGEND")
+
+            existing.copy(
+                streakDays = newStreakDays,
+                totalMinutesToday = newTodayMinutes,
+                totalStudyMinutesAllTime = newAllTime,
+                lastStudyDate = todayStr,
+                longestStreakDays = maxOf(existing.longestStreakDays, newStreakDays),
+                totalSessions = existing.totalSessions + 1,
+                unlockedBadges = badges.joinToString(",")
+            )
+        }
+        _studyStreaks.value = _studyStreaks.value.filter { it.studentId != studentId } + updated
+    }
+
+    // ==========================================
+    // INTERACTIVE FLOOR PLAN
+    // ==========================================
+    fun getFloorElementsByLibrary(libraryId: String, hallId: String = "MAIN_HALL"): Flow<List<FloorElementEntity>> =
+        _floorElements.map { list -> list.filter { it.libraryId == libraryId || libraryId.isBlank() } }
+
+    suspend fun saveFloorElements(elements: List<FloorElementEntity>) = withContext(Dispatchers.IO) {
+        _floorElements.value = elements
+    }
+
+    suspend fun addFloorElement(element: FloorElementEntity) = withContext(Dispatchers.IO) {
+        _floorElements.value = _floorElements.value.filter { it.id != element.id } + element
+    }
+
+    suspend fun removeFloorElement(elementId: String) = withContext(Dispatchers.IO) {
+        _floorElements.value = _floorElements.value.filter { it.id != elementId }
     }
 }

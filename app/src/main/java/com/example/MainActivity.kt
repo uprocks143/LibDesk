@@ -14,6 +14,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -38,7 +39,6 @@ import com.example.ui.profile.ProfileScreen
 import com.example.ui.scanner.SeatCheckInScannerModal
 import com.example.ui.student.StudentPortalScreen
 import com.example.ui.superadmin.SuperAdminScreen
-import com.example.ui.superadmin.RestrictedPlatformOwnerGate
 import com.example.ui.theme.LibDeskTheme
 import com.example.viewmodel.LibDeskViewModel
 import com.example.viewmodel.BackupViewModel
@@ -62,7 +62,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
-            LibDeskTheme(darkTheme = isDarkMode) {
+            val isAmoledMode by viewModel.isAmoledMode.collectAsStateWithLifecycle()
+            LibDeskTheme(darkTheme = isDarkMode, isAmoled = isAmoledMode) {
                 GlobalErrorBoundary(
                     onRetry = {
                         viewModel.clearUserMessage()
@@ -149,6 +150,7 @@ fun LibDeskApp(
     var isOnboardingMode by remember { mutableStateOf(false) }
     var showLibraryConfigView by remember { mutableStateOf(false) }
     var showNoticesAndHelpView by remember { mutableStateOf(false) }
+    var settingsActiveTab by remember { mutableIntStateOf(0) }
     var isSpeedDialFabExpanded by remember { mutableStateOf(false) }
 
     
@@ -163,10 +165,12 @@ fun LibDeskApp(
     var showUserProfileModal by remember { mutableStateOf(false) }
     var showProfileScreenModal by remember { mutableStateOf(false) }
     var showLogoutConfirmationDialog by remember { mutableStateOf(false) }
-    var showInfraEditorModal by remember { mutableStateOf(false) }
-    var showBackupScreen by remember { mutableStateOf(false) }
     var editingStudentForProfile by remember { mutableStateOf<StudentEntity?>(null) }
     var showSaaSOffersModal by remember { mutableStateOf(false) }
+    var showPrivacyPolicyModal by remember { mutableStateOf(false) }
+    var showDecibelMeterModal by remember { mutableStateOf(false) }
+    var showLibrarianChatModal by remember { mutableStateOf(false) }
+    var showStudentChatModal by remember { mutableStateOf(false) }
     var viewingNcertCatalog by remember { mutableStateOf(false) }
     var readingNcertBook by remember { mutableStateOf<com.example.data.model.NcertBook?>(null) }
 
@@ -215,7 +219,6 @@ fun LibDeskApp(
 
     val isAwaiting2Fa by viewModel.isAwaiting2Fa.collectAsStateWithLifecycle()
     val twoFaTargetEmail by viewModel.twoFaTargetEmail.collectAsStateWithLifecycle()
-    val activeOtpCode by viewModel.activeOtpCode.collectAsStateWithLifecycle()
     val otpTimerSeconds by viewModel.otpTimerSeconds.collectAsStateWithLifecycle()
     val superAdminProfile by viewModel.superAdminProfile.collectAsStateWithLifecycle()
 
@@ -228,7 +231,6 @@ fun LibDeskApp(
             superAdminProfile = superAdminProfile,
             isAwaiting2Fa = isAwaiting2Fa,
             twoFaTargetEmail = twoFaTargetEmail,
-            activeOtpCode = activeOtpCode,
             otpTimerSeconds = otpTimerSeconds,
             onRequest2FaOtp = { email, code, onOtpSent, onError ->
                 viewModel.requestSuperAdmin2FaOtp(email, code, onOtpSent, onError)
@@ -258,6 +260,12 @@ fun LibDeskApp(
             },
             onRegister = { name, email, libName, phone, password ->
                 viewModel.registerAndLogin(name, email, libName, phone, password)
+            },
+            onRequestOwnerSignupOtp = { email, name, phone, onOtpSent, onError ->
+                viewModel.requestOwnerSignupOtp(email, name, phone, onOtpSent, onError)
+            },
+            onVerifyOwnerSignupOtp = { email, enteredOtp, onVerified ->
+                viewModel.verifyOwnerSignupOtp(email, enteredOtp, onVerified)
             },
             onCheckLibraryTrialEligibility = { email, phone, onResult ->
                 viewModel.checkLibraryTrialEligibility(email, phone, onResult)
@@ -352,7 +360,6 @@ fun LibDeskApp(
         return
     }
 
-    
     if (isOnboardingMode) {
         BackHandler {
             isOnboardingMode = false
@@ -380,7 +387,9 @@ fun LibDeskApp(
                 showUserProfileModal ||
                 showProfileScreenModal ||
                 showLogoutConfirmationDialog ||
-                showInfraEditorModal ||
+                showLibrarianChatModal ||
+                showStudentChatModal ||
+                showDecibelMeterModal ||
                 editingStudentForProfile != null ||
                 isSpeedDialFabExpanded
 
@@ -405,14 +414,20 @@ fun LibDeskApp(
                 isSpeedDialFabExpanded -> {
                     isSpeedDialFabExpanded = false
                 }
-                showInfraEditorModal -> {
-                    showInfraEditorModal = false
-                }
                 showSaaSOffersModal -> {
                     showSaaSOffersModal = false
                 }
                 showLogoutConfirmationDialog -> {
                     showLogoutConfirmationDialog = false
+                }
+                showLibrarianChatModal -> {
+                    showLibrarianChatModal = false
+                }
+                showStudentChatModal -> {
+                    showStudentChatModal = false
+                }
+                showDecibelMeterModal -> {
+                    showDecibelMeterModal = false
                 }
                 showProfileScreenModal -> {
                     showProfileScreenModal = false
@@ -496,6 +511,7 @@ fun LibDeskApp(
                         if (currentRole != "OWNER") {
                             viewModel.switchRole()
                         }
+                        settingsActiveTab = 0
                         showLibraryConfigView = true
                         showNoticesAndHelpView = false
                     },
@@ -515,7 +531,14 @@ fun LibDeskApp(
                         currentManagerTab = 0
                         managerDashboardSection = 3
                     },
-                    onOpenSyncBackup = { showBackupScreen = true },
+                    onOpenSyncBackup = {
+                        if (currentRole != "OWNER") {
+                            viewModel.switchRole()
+                        }
+                        settingsActiveTab = 4
+                        showLibraryConfigView = true
+                        showNoticesAndHelpView = false
+                    },
                     onOpenQrScanner = { showQrScannerModal = true },
                     onShowLibraryQr = { showLibraryQrModal = true },
                     onOpenMySubscription = {
@@ -529,11 +552,34 @@ fun LibDeskApp(
                         if (currentRole == LibDeskRoles.STUDENT) {
                             showProfileScreenModal = true
                         } else {
-                            showUserProfileModal = true
+                            settingsActiveTab = 0
+                            showLibraryConfigView = true
+                            showNoticesAndHelpView = false
                         }
                     },
                     onOpenNcertCatalog = {
                         viewingNcertCatalog = true
+                    },
+                    onOpenPrivacyPolicy = {
+                        showPrivacyPolicyModal = true
+                    },
+                    onOpenDecibelMeter = {
+                        showDecibelMeterModal = true
+                    },
+                    onOpenLiveChat = {
+                        if (currentRole == LibDeskRoles.STUDENT) {
+                            showStudentChatModal = true
+                        } else {
+                            showLibrarianChatModal = true
+                        }
+                    },
+                    onExportFinancialReport = {
+                        com.example.util.ReportExportUtils.exportMonthlyFinancialCsv(
+                            context = context,
+                            library = library,
+                            payments = payments,
+                            expenses = expenses
+                        )
                     },
                     onLogout = { showLogoutConfirmationDialog = true },
                     onCloseDrawer = {
@@ -546,163 +592,204 @@ fun LibDeskApp(
                 currentRole = currentRole,
                 allowedRoles = setOf(LibDeskRoles.SUPER_ADMIN),
                 fallback = {
-                    Scaffold(
-                topBar = {
-                    LibDeskHeader(
-                        library = library,
-                        currentRole = currentRole,
-                        userName = currentUserName,
-                        notificationCount = activeAlertsCount,
-                        isOnline = isOnline,
-                        isDarkMode = isDarkMode,
-                        onToggleDarkMode = { viewModel.toggleDarkMode() },
-                        onOpenNotifications = { showNotificationsModal = true },
-                        onSwitchRole = { viewModel.switchRole() },
-onOpenSyncBackup = { showBackupScreen = true },
-                        onOpenMenu = {
-                            coroutineScope.launch {
-                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                            }
-                        }
-                    )
-                },
-                bottomBar = {
-                    if (currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView) {
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            tonalElevation = 0.dp
-                        ) {
-                            val navColors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            NavigationBarItem(
-                                selected = currentManagerTab == 0,
-                                onClick = { currentManagerTab = 0 },
-                                icon = { Icon(if (currentManagerTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Dashboard") },
-                                label = { Text("Dashboard", style = MaterialTheme.typography.labelSmall) },
-                                colors = navColors
-                            )
-                            NavigationBarItem(
-                                selected = currentManagerTab == 1,
-                                onClick = { currentManagerTab = 1 },
-                                icon = { Icon(if (currentManagerTab == 1) Icons.Filled.Chair else Icons.Outlined.Chair, contentDescription = "Seats") },
-                                label = { Text("Seats", style = MaterialTheme.typography.labelSmall) },
-                                colors = navColors
-                            )
-                            NavigationBarItem(
-                                selected = currentManagerTab == 2,
-                                onClick = { currentManagerTab = 2 },
-                                icon = { Icon(if (currentManagerTab == 2) Icons.Filled.People else Icons.Outlined.People, contentDescription = "Students") },
-                                label = { Text("Students", style = MaterialTheme.typography.labelSmall) },
-                                colors = navColors
-                            )
-                            NavigationBarItem(
-                                selected = currentManagerTab == 3,
-                                onClick = { currentManagerTab = 3 },
-                                icon = { Icon(if (currentManagerTab == 3) Icons.Filled.Payments else Icons.Outlined.Payments, contentDescription = "Finance") },
-                                label = { Text("Finance", style = MaterialTheme.typography.labelSmall) },
-                                colors = navColors
-                            )
-                        }
-                    }
-                },
-                floatingActionButton = {
-                    if (currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView && currentManagerTab == 0) {
-                        LibDeskSpeedDialFab(
-                            actions = listOf(
-                                SpeedDialAction(
-                                    id = "new_admission",
-                                    label = "New Admission",
-                                    icon = Icons.Default.PersonAdd,
-                                    containerColor = com.example.ui.theme.ButtonColor,
-                                    onClick = { showRegisterStudentModal = true }
-                                ),
-                                SpeedDialAction(
-                                    id = "record_fee",
-                                    label = "Record Fee",
-                                    icon = Icons.Default.Payments,
-                                    containerColor = com.example.ui.theme.ButtonColor,
-                                    onClick = { showAddPaymentModal = true }
-                                ),
-                                SpeedDialAction(
-                                    id = "post_notice",
-                                    label = "Post Notice",
-                                    icon = Icons.Default.Campaign,
-                                    containerColor = com.example.ui.theme.DangerRed,
-                                    onClick = { showPostNoticeModal = true }
-                                )
-                            ),
-                            isExpanded = isSpeedDialFabExpanded,
-                            onToggle = { isSpeedDialFabExpanded = !isSpeedDialFabExpanded },
-                            onDismiss = { isSpeedDialFabExpanded = false }
-                        )
-                    } else if (currentRole == "STUDENT") {
-                        ExtendedFloatingActionButton(
-                            onClick = { showQrScannerModal = true },
-                            containerColor = com.example.ui.theme.ButtonColor,
-                            contentColor = Color.White,
-                            shape = RoundedCornerShape(16.dp),
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.QrCodeScanner,
-                                    contentDescription = "Quick Check-in Scan",
-                                    modifier = Modifier.size(20.dp)
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val isExpandedLayout = maxWidth >= 720.dp
+                        Scaffold(
+                            topBar = {
+                                LibDeskHeader(
+                                    library = library,
+                                    currentRole = currentRole,
+                                    userName = currentUserName,
+                                    notificationCount = activeAlertsCount,
+                                    isOnline = isOnline,
+                                    isDarkMode = isDarkMode,
+                                    onToggleDarkMode = { viewModel.toggleDarkMode() },
+                                    onOpenNotifications = { showNotificationsModal = true },
+                                    onSwitchRole = { viewModel.switchRole() },
+                                    onOpenSyncBackup = {
+                                        settingsActiveTab = 4
+                                        showLibraryConfigView = true
+                                        showNoticesAndHelpView = false
+                                    },
+                                    onOpenMenu = {
+                                        coroutineScope.launch {
+                                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                        }
+                                    }
                                 )
                             },
-                            text = {
-                                Text(
-                                    text = "Quick Check-in",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        )
-                    }
-                },
-                snackbarHost = { SnackbarHost(snackbarHostState) },
-                modifier = Modifier.fillMaxSize()
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    if (isSpeedDialFabExpanded) {
-                        BackHandler {
-                            isSpeedDialFabExpanded = false
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.35f))
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    isSpeedDialFabExpanded = false
+                            bottomBar = {
+                                if (!isExpandedLayout && currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView) {
+                                    NavigationBar(
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                        tonalElevation = 0.dp
+                                    ) {
+                                        val navColors = NavigationBarItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        NavigationBarItem(
+                                            selected = currentManagerTab == 0,
+                                            onClick = { currentManagerTab = 0 },
+                                            icon = { Icon(if (currentManagerTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Dashboard") },
+                                            label = { Text("Dashboard", style = MaterialTheme.typography.labelSmall) },
+                                            colors = navColors
+                                        )
+                                        NavigationBarItem(
+                                            selected = currentManagerTab == 1,
+                                            onClick = { currentManagerTab = 1 },
+                                            icon = { Icon(if (currentManagerTab == 1) Icons.Filled.Chair else Icons.Outlined.Chair, contentDescription = "Seats") },
+                                            label = { Text("Seats", style = MaterialTheme.typography.labelSmall) },
+                                            colors = navColors
+                                        )
+                                        NavigationBarItem(
+                                            selected = currentManagerTab == 2,
+                                            onClick = { currentManagerTab = 2 },
+                                            icon = { Icon(if (currentManagerTab == 2) Icons.Filled.People else Icons.Outlined.People, contentDescription = "Students") },
+                                            label = { Text("Students", style = MaterialTheme.typography.labelSmall) },
+                                            colors = navColors
+                                        )
+                                        NavigationBarItem(
+                                            selected = currentManagerTab == 3,
+                                            onClick = { currentManagerTab = 3 },
+                                            icon = { Icon(if (currentManagerTab == 3) Icons.Filled.Payments else Icons.Outlined.Payments, contentDescription = "Finance") },
+                                            label = { Text("Finance", style = MaterialTheme.typography.labelSmall) },
+                                            colors = navColors
+                                        )
+                                    }
                                 }
-                        )
-                    }
+                            },
+                            floatingActionButton = {
+                                if (currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView && currentManagerTab == 0 && !isExpandedLayout) {
+                                    LibDeskSpeedDialFab(
+                                        actions = listOf(
+                                            SpeedDialAction(
+                                                id = "new_admission",
+                                                label = "New Admission",
+                                                icon = Icons.Default.PersonAdd,
+                                                containerColor = com.example.ui.theme.ButtonColor,
+                                                onClick = { showRegisterStudentModal = true }
+                                            ),
+                                            SpeedDialAction(
+                                                id = "record_fee",
+                                                label = "Record Fee",
+                                                icon = Icons.Default.Payments,
+                                                containerColor = com.example.ui.theme.ButtonColor,
+                                                onClick = { showAddPaymentModal = true }
+                                            ),
+                                            SpeedDialAction(
+                                                id = "post_notice",
+                                                label = "Post Notice",
+                                                icon = Icons.Default.Campaign,
+                                                containerColor = com.example.ui.theme.DangerRed,
+                                                onClick = { showPostNoticeModal = true }
+                                            )
+                                        ),
+                                        isExpanded = isSpeedDialFabExpanded,
+                                        onToggle = { isSpeedDialFabExpanded = !isSpeedDialFabExpanded },
+                                        onDismiss = { isSpeedDialFabExpanded = false }
+                                    )
+                                }
+                            },
+                            snackbarHost = { SnackbarHost(snackbarHostState) },
+                            modifier = Modifier.fillMaxSize()
+                        ) { innerPadding ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding)
+                            ) {
+                                if (isExpandedLayout && currentRole == "OWNER" && !showLibraryConfigView && !showNoticesAndHelpView) {
+                                    NavigationRail(
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                        header = {
+                                            FloatingActionButton(
+                                                onClick = { showRegisterStudentModal = true },
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                shape = CircleShape,
+                                                modifier = Modifier.size(48.dp)
+                                            ) {
+                                                Icon(Icons.Default.PersonAdd, contentDescription = "Add Student Admission")
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxHeight()
+                                    ) {
+                                        val railColors = NavigationRailItemDefaults.colors(
+                                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                            selectedIconColor = MaterialTheme.colorScheme.primary,
+                                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        NavigationRailItem(
+                                            selected = currentManagerTab == 0,
+                                            onClick = { currentManagerTab = 0 },
+                                            icon = { Icon(if (currentManagerTab == 0) Icons.Filled.Dashboard else Icons.Outlined.Dashboard, contentDescription = "Dashboard") },
+                                            label = { Text("Dashboard", style = MaterialTheme.typography.labelSmall) },
+                                            colors = railColors
+                                        )
+                                        NavigationRailItem(
+                                            selected = currentManagerTab == 1,
+                                            onClick = { currentManagerTab = 1 },
+                                            icon = { Icon(if (currentManagerTab == 1) Icons.Filled.Chair else Icons.Outlined.Chair, contentDescription = "Seats") },
+                                            label = { Text("Seats", style = MaterialTheme.typography.labelSmall) },
+                                            colors = railColors
+                                        )
+                                        NavigationRailItem(
+                                            selected = currentManagerTab == 2,
+                                            onClick = { currentManagerTab = 2 },
+                                            icon = { Icon(if (currentManagerTab == 2) Icons.Filled.People else Icons.Outlined.People, contentDescription = "Students") },
+                                            label = { Text("Students", style = MaterialTheme.typography.labelSmall) },
+                                            colors = railColors
+                                        )
+                                        NavigationRailItem(
+                                            selected = currentManagerTab == 3,
+                                            onClick = { currentManagerTab = 3 },
+                                            icon = { Icon(if (currentManagerTab == 3) Icons.Filled.Payments else Icons.Outlined.Payments, contentDescription = "Finance") },
+                                            label = { Text("Finance", style = MaterialTheme.typography.labelSmall) },
+                                            colors = railColors
+                                        )
+                                    }
+                                }
 
-                    if (normalizeUserRole(currentRole) == LibDeskRoles.OWNER) {
-                        RoleGate(
-                            currentRole = currentRole,
-                            requiredRole = LibDeskRoles.OWNER,
-                            onSignOut = { showLogoutConfirmationDialog = true },
-                            onSwitchToAllowedView = {
-                                // Previously called login(currentUserEmail, STUDENT, ...) which
-                                // reassigned this session's role with no backend check — a
-                                // privilege-escalation hole. A role mismatch here means the
-                                // session is in an inconsistent state, so the safe recovery is
-                                // to sign out and force a real re-authentication.
-                                viewModel.logout()
-                            }
-                        ) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                ) {
+                                    if (isSpeedDialFabExpanded) {
+                                        BackHandler {
+                                            isSpeedDialFabExpanded = false
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(alpha = 0.35f))
+                                                .clickable(
+                                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                    indication = null
+                                                ) {
+                                                    isSpeedDialFabExpanded = false
+                                                }
+                                        )
+                                    }
+
+                                    if (normalizeUserRole(currentRole) == LibDeskRoles.OWNER) {
+                                        RoleGate(
+                                            currentRole = currentRole,
+                                            requiredRole = LibDeskRoles.OWNER,
+                                            onSignOut = { showLogoutConfirmationDialog = true },
+                                            onSwitchToAllowedView = {
+                                                viewModel.logout()
+                                            }
+                                        ) {
                         if (showLibraryConfigView) {
                             Column(modifier = Modifier.fillMaxSize()) {
                                 Surface(
@@ -742,24 +829,49 @@ onOpenSyncBackup = { showBackupScreen = true },
                                     plans = plans,
                                     students = students,
                                     superAdminProfile = superAdminProfile,
+                                    initialTab = settingsActiveTab,
+                                    isSupabaseSyncing = isSupabaseSyncing,
+                                    supabaseStatusMessage = supabaseStatusMessage,
                                     onSelectLibrary = { libId ->
                                         viewModel.selectLibrary(libId)
                                     },
                                     onCreateLibrary = {
                                         isOnboardingMode = true
                                     },
-                                    onOpenSyncBackup = {
-                                        showBackupScreen = true
-                                    },
-                                    onEditProfile = {
-                                        showUserProfileModal = true
-                                    },
-                                    onEditInfrastructure = {
-                                        showInfraEditorModal = true
-                                    },
                                     onUpdateLibrary = { updatedLib ->
                                         viewModel.updateLibraryProfile(updatedLib)
-                                    }
+                                    },
+                                    onAddHall = { name, floor, seats ->
+                                        viewModel.addHall(name, floor, seats)
+                                    },
+                                    onEditHall = { hall ->
+                                        viewModel.updateHall(hall)
+                                    },
+                                    onDeleteHall = { hall ->
+                                        viewModel.deleteHall(hall)
+                                    },
+                                    onAddShift = { name, start, end, fee ->
+                                        viewModel.addShift(name, start, end, fee)
+                                    },
+                                    onEditShift = { shift ->
+                                        viewModel.updateShift(shift)
+                                    },
+                                    onDeleteShift = { shift ->
+                                        viewModel.deleteShift(shift)
+                                    },
+                                    onAddPlan = { name, duration, fee, durationType, discount, facilities, shiftId ->
+                                        viewModel.addMembershipPlan(name, duration, fee, durationType, discount, facilities, shiftId)
+                                    },
+                                    onEditPlan = { plan ->
+                                        viewModel.updateMembershipPlan(plan)
+                                    },
+                                    onDeletePlan = { plan ->
+                                        viewModel.deleteMembershipPlan(plan)
+                                    },
+                                    onManualCloudSync = {
+                                        viewModel.syncLocalToSupabaseCloud()
+                                    },
+                                    viewModel = viewModel
                                 )
                             }
                         } else if (showNoticesAndHelpView) {
@@ -797,6 +909,9 @@ onOpenSyncBackup = { showBackupScreen = true },
                                     notices = notices,
                                     feedbackList = feedbackList,
                                     superAdminProfile = superAdminProfile,
+                                    library = library,
+                                    students = students,
+                                    viewModel = viewModel,
                                     onPostNotice = { title, content, cat, prio ->
                                         viewModel.postNotice(title, content, cat, prio)
                                     },
@@ -982,14 +1097,17 @@ onOpenSyncBackup = { showBackupScreen = true },
                                 },
                                 onRequestLogout = {
                                     showLogoutConfirmationDialog = true
-                                }
+                                },
+                                viewModel = viewModel
                             )
                         }
                     }
                 }
             }
-                }
-            ) {
+        }
+    }
+}
+) {
                 SuperAdminScreen(
                     viewModel = viewModel,
                     onNavigateToLibrary = { _ ->
@@ -1218,88 +1336,6 @@ onOpenSyncBackup = { showBackupScreen = true },
         )
     }
 
-    if (showInfraEditorModal) {
-        com.example.ui.manager.InfrastructureEditorModal(
-            halls = halls,
-            shifts = shifts,
-            plans = plans,
-            onAddHall = { name, floor, count -> viewModel.addHall(name, floor, count) },
-            onEditHall = { hall -> viewModel.updateHall(hall) },
-            onDeleteHall = { hall -> viewModel.deleteHall(hall) },
-            onAddShift = { name, start, end, fee -> viewModel.addShift(name, start, end, fee) },
-            onEditShift = { shift -> viewModel.updateShift(shift) },
-            onDeleteShift = { shift -> viewModel.deleteShift(shift) },
-            onAddPlan = { name, duration, fee, durationType, discount, facilities, shiftId -> viewModel.addMembershipPlan(name, duration, fee, durationType, discount, facilities, shiftId) },
-            onEditPlan = { plan -> viewModel.updateMembershipPlan(plan) },
-            onDeletePlan = { plan -> viewModel.deleteMembershipPlan(plan) },
-            onClose = { showInfraEditorModal = false }
-        )
-    }
-    if (showBackupScreen) {
-        val backupViewModel: BackupViewModel = viewModel()
-        val backupState by backupViewModel.backupState.collectAsStateWithLifecycle()
-        val lastBackupTime by backupViewModel.lastBackupTime.collectAsStateWithLifecycle()
-        
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showBackupScreen = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            androidx.compose.material3.Surface(modifier = Modifier.fillMaxSize()) {
-                BackupSettingsScreen(
-                    onBack = { showBackupScreen = false },
-                    onExportLocal = { uri -> 
-                        backupViewModel.exportBackup(uri, "libdesk_secure") 
-                    },
-                    onImportLocal = { uri -> 
-                        backupViewModel.restoreFromUri(uri, "libdesk_secure") { success ->
-                            if (success) {
-                                // android.widget.Toast.makeText(context, "Restore completed. LibDesk data replaced.", android.widget.Toast.LENGTH_LONG).show()
-                            } else {
-                                // android.widget.Toast.makeText(context, "Restore failed. Invalid backup or corrupted data.", android.widget.Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
-                    onBackupNow = {
-                        backupViewModel.createLocalBackup("libdesk_secure")
-                    },
-                    lastBackupTime = lastBackupTime,
-                    backupState = backupState,
-                    history = backupViewModel.history.collectAsStateWithLifecycle().value,
-                    onDeleteHistory = { id -> backupViewModel.deleteHistory(id) },
-                    // These were previously never wired up, so every Google Drive
-                    // button in this screen silently called a no-op default lambda.
-                    driveBackups = backupViewModel.driveBackups.collectAsStateWithLifecycle().value,
-                    isDriveLoading = backupViewModel.isDriveLoading.collectAsStateWithLifecycle().value,
-                    driveStatusMessage = backupViewModel.driveStatusMessage.collectAsStateWithLifecycle().value,
-                    savedDriveToken = backupViewModel.getSavedDriveToken(),
-                    onSaveDriveToken = { token -> backupViewModel.saveDriveToken(token) },
-                    onUploadToGoogleDrive = { token, password, onResult ->
-                        backupViewModel.uploadToGoogleDriveApi(token, password, onResult)
-                    },
-                    onRestoreFromGoogleDrive = { fileId, token, password, onResult ->
-                        backupViewModel.restoreFromGoogleDriveApi(fileId, token, password, onResult)
-                    },
-                    onRefreshDriveFiles = { token -> backupViewModel.refreshDriveFiles(token) },
-                    googleAccountEmail = backupViewModel.googleAccountEmail.collectAsStateWithLifecycle().value,
-                    onSetGoogleAccountEmail = { backupViewModel.setGoogleAccountEmail(it) },
-                    backupFrequency = backupViewModel.backupFrequency.collectAsStateWithLifecycle().value,
-                    onSetBackupFrequency = { backupViewModel.setBackupFrequency(it) },
-                    backupNetwork = backupViewModel.backupNetwork.collectAsStateWithLifecycle().value,
-                    onSetBackupNetwork = { backupViewModel.setBackupNetwork(it) },
-                    includeDocuments = backupViewModel.includeDocuments.collectAsStateWithLifecycle().value,
-                    onSetIncludeDocuments = { backupViewModel.setIncludeDocuments(it) },
-                    lastLocalBackupTime = backupViewModel.lastLocalBackupTime.collectAsStateWithLifecycle().value,
-                    lastDriveBackupTime = backupViewModel.lastDriveBackupTime.collectAsStateWithLifecycle().value,
-                    lastBackupSizeBytes = backupViewModel.lastBackupSizeBytes.collectAsStateWithLifecycle().value,
-                    onPerformWhatsAppBackup = { backupViewModel.performWhatsAppStyleBackup { _, _ -> } },
-                    onTestDriveConnection = { token, onResult ->
-                        backupViewModel.testDriveConnection(token, onResult)
-                    }
-                )
-            }
-        }
-    }
-
 
     if (editingStudentForProfile != null) {
         UserProfileModal(
@@ -1369,6 +1405,76 @@ onOpenSyncBackup = { showBackupScreen = true },
                 onNavigateBack = { readingNcertBook = null },
                 modifier = Modifier.fillMaxSize()
             )
+        }
+    }
+
+    // Comprehensive Library Privacy Policy & DPDP Act 2023 Modal
+    if (showPrivacyPolicyModal) {
+        com.example.ui.components.LibraryPrivacyAndTermsModal(
+            libraryName = library?.name ?: "LibDesk Smart Library",
+            onDismiss = { showPrivacyPolicyModal = false }
+        )
+    }
+
+    // Real-Time Silent Zone Decibel Meter Modal
+    if (showDecibelMeterModal) {
+        com.example.ui.components.SilentZoneDecibelMeterModal(
+            hallName = library?.name ?: "Main Study Hall",
+            onDismiss = { showDecibelMeterModal = false }
+        )
+    }
+
+    // Signal-Inspired Real-Time Librarian Desk Chat
+    if (showLibrarianChatModal) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showLibrarianChatModal = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding()
+            ) {
+                com.example.ui.chat.LibrarianSignalChatScreen(
+                    library = library,
+                    students = students,
+                    viewModel = viewModel,
+                    onNavigateBack = { showLibrarianChatModal = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    // Signal-Inspired Real-Time Student Desk Chat Modal
+    if (showStudentChatModal && activeStudent != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showStudentChatModal = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding()
+            ) {
+                com.example.ui.chat.StudentSignalChatScreen(
+                    student = activeStudent!!,
+                    library = library,
+                    viewModel = viewModel,
+                    onNavigateBack = { showStudentChatModal = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }

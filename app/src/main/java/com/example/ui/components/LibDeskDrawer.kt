@@ -54,6 +54,10 @@ fun LibDeskDrawerContent(
     subscriptionPlanName: String? = null,
     onOpenProfile: () -> Unit = {},
     onOpenNcertCatalog: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
+    onOpenDecibelMeter: () -> Unit = {},
+    onOpenLiveChat: () -> Unit = {},
+    onExportFinancialReport: () -> Unit = {},
     onLogout: () -> Unit = {},
     onCloseDrawer: () -> Unit,
     modifier: Modifier = Modifier
@@ -89,10 +93,11 @@ fun LibDeskDrawerContent(
                         .fillMaxWidth()
                         .padding(20.dp)
                 ) {
+                    val isSuperAdmin = currentRole == "SUPER_ADMIN"
                     val isOwner = currentRole == "OWNER"
-                    val roleBadgeText = when (currentRole) {
-                        "SUPER_ADMIN" -> "SUPER ADMIN"
-                        "OWNER" -> "LIBRARY OWNER"
+                    val roleBadgeText = when {
+                        isSuperAdmin -> "SUPER ADMIN"
+                        isOwner -> "LIBRARY OWNER"
                         else -> "STUDENT"
                     }
 
@@ -131,7 +136,6 @@ fun LibDeskDrawerContent(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -143,12 +147,19 @@ fun LibDeskDrawerContent(
                             }
                     ) {
 
-                        val initials = if (isOwner) {
-                            val name = currentUserName.ifBlank { library?.ownerName ?: "Owner" }
-                            name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "OW" }
-                        } else {
-                            val name = currentUserName.ifBlank { activeStudent?.fullName ?: "Student" }
-                            name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "ST" }
+                        val initials = when {
+                            isSuperAdmin -> {
+                                val name = currentUserName.ifBlank { "Super Admin" }
+                                name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "SA" }
+                            }
+                            isOwner -> {
+                                val name = currentUserName.ifBlank { library?.ownerName ?: "Owner" }
+                                name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "OW" }
+                            }
+                            else -> {
+                                val name = currentUserName.ifBlank { activeStudent?.fullName ?: "Student" }
+                                name.split(" ").mapNotNull { it.firstOrNull()?.toString() }.take(2).joinToString("").uppercase().ifBlank { "ST" }
+                            }
                         }
 
                         Box(
@@ -157,10 +168,8 @@ fun LibDeskDrawerContent(
                                 .clip(CircleShape)
                                 .background(
                                     Brush.linearGradient(
-                                        listOf(
-                                            Color(0xFF2563EB),
-                                            Color(0xFF8B5CF6)
-                                        )
+                                        if (isSuperAdmin) listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))
+                                        else listOf(Color(0xFF2563EB), Color(0xFF8B5CF6))
                                     )
                                 ),
                             contentAlignment = Alignment.Center
@@ -176,15 +185,15 @@ fun LibDeskDrawerContent(
                         Spacer(modifier = Modifier.width(14.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            val displayName = if (isOwner) {
-                                currentUserName.ifBlank { library?.ownerName ?: "Library Owner" }
-                            } else {
-                                currentUserName.ifBlank { activeStudent?.fullName ?: "Student Member" }
+                            val displayName = when {
+                                isSuperAdmin -> currentUserName.ifBlank { "Super Administrator" }
+                                isOwner -> currentUserName.ifBlank { library?.ownerName ?: "Library Owner" }
+                                else -> currentUserName.ifBlank { activeStudent?.fullName ?: "Student Member" }
                             }
-                            val displayEmail = if (isOwner) {
-                                currentUserEmail.ifBlank { library?.email ?: "" }
-                            } else {
-                                currentUserEmail.ifBlank { activeStudent?.email ?: "" }
+                            val displayEmail = when {
+                                isSuperAdmin -> currentUserEmail.ifBlank { "admin@libdesk.com" }
+                                isOwner -> currentUserEmail.ifBlank { library?.email ?: "" }
+                                else -> currentUserEmail.ifBlank { activeStudent?.email ?: "" }
                             }
 
                             Text(
@@ -204,7 +213,10 @@ fun LibDeskDrawerContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = library?.name?.takeIf { it.isNotBlank() && it != "Library" } ?: (if (currentUserName.isNotBlank()) "$currentUserName's Library" else "My Library"),
+                                text = when {
+                                    isSuperAdmin -> "LibDesk SaaS Platform Owner"
+                                    else -> library?.name?.takeIf { it.isNotBlank() && it != "Library" } ?: (if (currentUserName.isNotBlank()) "$currentUserName's Library" else "My Library")
+                                },
                                 color = drawerHeaderSubtext,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -230,7 +242,6 @@ fun LibDeskDrawerContent(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = Color.White.copy(alpha = 0.12f),
@@ -243,14 +254,22 @@ fun LibDeskDrawerContent(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Icon(
-                                imageVector = if (isOwner) Icons.Default.AdminPanelSettings else Icons.Default.School,
+                                imageVector = when {
+                                    isSuperAdmin -> Icons.Default.Shield
+                                    isOwner -> Icons.Default.AdminPanelSettings
+                                    else -> Icons.Default.School
+                                },
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isOwner) "Library Owner" else "Student",
+                                text = when {
+                                    isSuperAdmin -> "SaaS Super Admin"
+                                    isOwner -> "Library Owner"
+                                    else -> "Student"
+                                },
                                 color = Color.White,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -485,6 +504,52 @@ fun LibDeskDrawerContent(
                     )
                 }
             }
+
+            DrawerNavItem(
+                icon = Icons.Default.Forum,
+                title = "Live Desk Chat (Signal)",
+                subtitle = "Realtime direct messaging via Supabase",
+                badge = "Realtime",
+                onClick = {
+                    onOpenLiveChat()
+                    onCloseDrawer()
+                }
+            )
+
+            DrawerNavItem(
+                icon = Icons.Default.GraphicEq,
+                title = "Silent Zone Decibel Meter",
+                subtitle = "Reading hall real-time noise & silence gauge",
+                badge = "Noise Monitor",
+                onClick = {
+                    onOpenDecibelMeter()
+                    onCloseDrawer()
+                }
+            )
+
+            if (currentRole == LibDeskRoles.OWNER || currentRole == LibDeskRoles.SUPER_ADMIN) {
+                DrawerNavItem(
+                    icon = Icons.Default.Summarize,
+                    title = "Export Monthly P&L (Excel)",
+                    subtitle = "1-Click CSV/Excel report for CA & accounts",
+                    badge = "Report",
+                    onClick = {
+                        onExportFinancialReport()
+                        onCloseDrawer()
+                    }
+                )
+            }
+
+            DrawerNavItem(
+                icon = Icons.Default.PrivacyTip,
+                title = "Privacy Policy & Terms",
+                subtitle = "Seat, locker, CCTV, refund & DPDP Act rules",
+                badge = "DPDP 2023",
+                onClick = {
+                    onOpenPrivacyPolicy()
+                    onCloseDrawer()
+                }
+            )
 
             DrawerNavItem(
                 icon = Icons.Default.Logout,
