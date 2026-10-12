@@ -57,6 +57,9 @@ fun LibDeskDrawerContent(
     onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDecibelMeter: () -> Unit = {},
     onOpenLiveChat: () -> Unit = {},
+    onOpenFrontDeskKiosk: () -> Unit = {},
+    onOpenLockers: () -> Unit = {},
+    onOpenDueScheduler: () -> Unit = {},
     onExportFinancialReport: () -> Unit = {},
     onLogout: () -> Unit = {},
     onCloseDrawer: () -> Unit,
@@ -339,6 +342,36 @@ fun LibDeskDrawerContent(
                         badge = "Poster",
                         onClick = {
                             onShowLibraryQr()
+                            onCloseDrawer()
+                        }
+                    )
+                    DrawerNavItem(
+                        icon = Icons.Default.TabletAndroid,
+                        title = "Front-Desk Tablet Kiosk Mode",
+                        subtitle = "Turn this tablet/phone into a front-gate self attendance kiosk",
+                        badge = "Kiosk",
+                        onClick = {
+                            onOpenFrontDeskKiosk()
+                            onCloseDrawer()
+                        }
+                    )
+                    DrawerNavItem(
+                        icon = Icons.Default.Lock,
+                        title = "Lockers & Key Allocation Tracker",
+                        subtitle = "Manage student lockers, keys, deposits & rent slips",
+                        badge = "Lockers",
+                        onClick = {
+                            onOpenLockers()
+                            onCloseDrawer()
+                        }
+                    )
+                    DrawerNavItem(
+                        icon = Icons.Default.ScheduleSend,
+                        title = "Monthly Due Date Auto-Scheduler",
+                        subtitle = "Auto-calculate dues & dispatch 1-click WhatsApp payment links",
+                        badge = "Scheduler",
+                        onClick = {
+                            onOpenDueScheduler()
                             onCloseDrawer()
                         }
                     )

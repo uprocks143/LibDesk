@@ -83,6 +83,9 @@ fun ManagerDashboardScreen(
     onAddMaterial: (title: String, desc: String, category: String, subject: String, exam: String, fileType: String, fileSize: String, fileUrl: String, accessPolicy: String) -> Unit = { _, _, _, _, _, _, _, _, _ -> },
     onToggleBookmark: (DigitalMaterialEntity) -> Unit = {},
     onAutoAddFreeMaterials: () -> Unit = {},
+    onOpenFrontDeskKiosk: () -> Unit = {},
+    onOpenLockers: () -> Unit = {},
+    onOpenDueScheduler: () -> Unit = {},
     viewModel: LibDeskViewModel? = null,
     initialSection: Int = 0,
     modifier: Modifier = Modifier
@@ -120,6 +123,8 @@ fun ManagerDashboardScreen(
     var selectedNoticeForDetail by remember { mutableStateOf<NoticeEntity?>(null) }
     var showDecibelMeterModal by remember { mutableStateOf(false) }
     var showLiveChatModal by remember { mutableStateOf(false) }
+    var showLocalLockersModal by remember { mutableStateOf(false) }
+    var showLocalDueSchedulerModal by remember { mutableStateOf(false) }
     var catalogSearchQuery by remember { mutableStateOf("") }
     var selectedBookCategory by remember { mutableStateOf("ALL") }
 
@@ -1223,6 +1228,69 @@ fun ManagerDashboardScreen(
                                         Icon(Icons.Default.ChatBubble, null, tint = Color(0xFF1E90FF), modifier = Modifier.size(15.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text("Student Chat", style = MaterialTheme.typography.labelLarge.copy(color = Color(0xFF1E90FF), fontWeight = FontWeight.Bold))
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF0D9488).copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, Color(0xFF0D9488).copy(alpha = 0.5f)),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onOpenFrontDeskKiosk() }
+                                        .testTag("quick_action_gate_kiosk")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.TabletAndroid, null, tint = Color(0xFF0D9488), modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Gate Kiosk", style = MaterialTheme.typography.labelLarge.copy(color = Color(0xFF0D9488), fontWeight = FontWeight.Bold))
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF7C3AED).copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, Color(0xFF7C3AED).copy(alpha = 0.5f)),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            onOpenLockers()
+                                            showLocalLockersModal = true
+                                        }
+                                        .testTag("quick_action_lockers")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Lock, null, tint = Color(0xFF7C3AED), modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Lockers & Keys", style = MaterialTheme.typography.labelLarge.copy(color = Color(0xFF7C3AED), fontWeight = FontWeight.Bold))
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFFEA580C).copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, Color(0xFFEA580C).copy(alpha = 0.5f)),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            onOpenDueScheduler()
+                                            showLocalDueSchedulerModal = true
+                                        }
+                                        .testTag("quick_action_due_scheduler")
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.ScheduleSend, null, tint = Color(0xFFEA580C), modifier = Modifier.size(15.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Due Scheduler", style = MaterialTheme.typography.labelLarge.copy(color = Color(0xFFEA580C), fontWeight = FontWeight.Bold))
                                     }
                                 }
 
@@ -2832,6 +2900,56 @@ fun ManagerDashboardScreen(
                 )
             }
         }
+    }
+
+    if (showLocalLockersModal && viewModel != null) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showLocalLockersModal = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxSize(0.96f)
+                    .systemBarsPadding()
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Lockers & Key Allocation Tracker",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        IconButton(onClick = { showLocalLockersModal = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                    ManagerLockersScreen(
+                        viewModel = viewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+
+    if (showLocalDueSchedulerModal && viewModel != null) {
+        MonthlyDuesSchedulerModal(
+            library = library,
+            students = students,
+            viewModel = viewModel,
+            onDismiss = { showLocalDueSchedulerModal = false }
+        )
     }
     }
 }

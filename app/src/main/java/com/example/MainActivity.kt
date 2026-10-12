@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.entities.*
 import com.example.data.remote.SupabaseClient
 import com.example.ui.auth.AuthScreen
+import com.example.ui.auth.SupabaseAuthScreen
 import com.example.ui.components.*
 import com.example.ui.manager.*
 import com.example.ui.onboarding.OnboardingWizardScreen
@@ -40,6 +42,8 @@ import com.example.ui.scanner.SeatCheckInScannerModal
 import com.example.ui.student.StudentPortalScreen
 import com.example.ui.superadmin.SuperAdminScreen
 import com.example.ui.theme.LibDeskTheme
+import com.example.ui.kiosk.FrontDeskKioskScreen
+import com.example.ui.payment.UpiPaymentShareModal
 import com.example.viewmodel.LibDeskViewModel
 import com.example.viewmodel.BackupViewModel
 import com.example.ui.backup.BackupSettingsScreen
@@ -139,6 +143,8 @@ fun LibDeskApp(
     val expenses by viewModel.expenses.collectAsStateWithLifecycle()
     val notices by viewModel.notices.collectAsStateWithLifecycle()
     val feedbackList by viewModel.feedbackList.collectAsStateWithLifecycle()
+    val libraryEvents by viewModel.libraryEvents.collectAsStateWithLifecycle()
+    val lockers by viewModel.lockers.collectAsStateWithLifecycle()
     val userMessage by viewModel.userMessage.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
@@ -173,6 +179,10 @@ fun LibDeskApp(
     var showStudentChatModal by remember { mutableStateOf(false) }
     var viewingNcertCatalog by remember { mutableStateOf(false) }
     var readingNcertBook by remember { mutableStateOf<com.example.data.model.NcertBook?>(null) }
+    var showFrontDeskKioskView by remember { mutableStateOf(false) }
+    var showLockersModal by remember { mutableStateOf(false) }
+    var showDueSchedulerModal by remember { mutableStateOf(false) }
+    var showUpiPaymentShareModalForStudent by remember { mutableStateOf<StudentEntity?>(null) }
 
     val currentSubscription by viewModel.currentSubscription.collectAsStateWithLifecycle()
     val saasPlans by viewModel.saasPlans.collectAsStateWithLifecycle()
@@ -223,57 +233,74 @@ fun LibDeskApp(
     val superAdminProfile by viewModel.superAdminProfile.collectAsStateWithLifecycle()
 
     
-    if (!isAuthenticated) {
-        AuthScreen(
-            libraries = allLibraries,
-            shifts = shifts,
-            plans = plans,
-            superAdminProfile = superAdminProfile,
-            isAwaiting2Fa = isAwaiting2Fa,
-            twoFaTargetEmail = twoFaTargetEmail,
-            otpTimerSeconds = otpTimerSeconds,
-            onRequest2FaOtp = { email, code, onOtpSent, onError ->
-                viewModel.requestSuperAdmin2FaOtp(email, code, onOtpSent, onError)
-            },
-            onVerify2FaOtp = { otp, onSuccess, onError ->
-                viewModel.verifySuperAdminOtp(otp, onSuccess, onError)
-            },
-            onResend2FaOtp = { onOtpSent ->
-                viewModel.resendSuperAdminOtp(onOtpSent)
-            },
-            onCancel2Fa = { viewModel.cancel2Fa() },
-            onClaimAdminSlot = { name, email, mobile, pin, is2Fa, onSuccess, onError ->
-                viewModel.claimSuperAdminSlot(name, email, mobile, pin, is2Fa, onSuccess, onError)
-            },
-            onResetAdminSlot = {
-                // Public unauthenticated reset is permanently disabled for platform security
-            },
-            onResetPassword = { email, newPassword, onSuccess, onError ->
-                viewModel.resetUserPassword(email, newPassword, onSuccess, onError)
-            },
-            onLogin = { _, _, _ ->
-                
-            },
+    var showSupabaseAuthDirect by remember { mutableStateOf(false) }
 
-            onAuthenticate = { identifier, password, role, onSuccess, onError ->
-                viewModel.authenticateWithPassword(identifier, password, role, onSuccess = onSuccess, onError = onError)
-            },
-            onRegister = { name, email, libName, phone, password ->
-                viewModel.registerAndLogin(name, email, libName, phone, password)
-            },
-            onRequestOwnerSignupOtp = { email, name, phone, onOtpSent, onError ->
-                viewModel.requestOwnerSignupOtp(email, name, phone, onOtpSent, onError)
-            },
-            onVerifyOwnerSignupOtp = { email, enteredOtp, onVerified ->
-                viewModel.verifyOwnerSignupOtp(email, enteredOtp, onVerified)
-            },
-            onCheckLibraryTrialEligibility = { email, phone, onResult ->
-                viewModel.checkLibraryTrialEligibility(email, phone, onResult)
-            },
-            onStudentQrSignup = { libId, fullName, mobile, email, exam, shift, plan, password ->
-                viewModel.registerStudentViaQr(libId, fullName, mobile, email, exam, shift, plan, password)
-            }
-        )
+    if (!isAuthenticated) {
+        if (showSupabaseAuthDirect) {
+            SupabaseAuthScreen(
+                onAuthSuccess = { email, role, name ->
+                    viewModel.onSupabaseLoginSuccess(email, role, name)
+                    showSupabaseAuthDirect = false
+                },
+                onNavigateBack = {
+                    showSupabaseAuthDirect = false
+                }
+            )
+        } else {
+            AuthScreen(
+                libraries = allLibraries,
+                shifts = shifts,
+                plans = plans,
+                superAdminProfile = superAdminProfile,
+                isAwaiting2Fa = isAwaiting2Fa,
+                twoFaTargetEmail = twoFaTargetEmail,
+                otpTimerSeconds = otpTimerSeconds,
+                onRequest2FaOtp = { email, code, onOtpSent, onError ->
+                    viewModel.requestSuperAdmin2FaOtp(email, code, onOtpSent, onError)
+                },
+                onVerify2FaOtp = { otp, onSuccess, onError ->
+                    viewModel.verifySuperAdminOtp(otp, onSuccess, onError)
+                },
+                onResend2FaOtp = { onOtpSent ->
+                    viewModel.resendSuperAdminOtp(onOtpSent)
+                },
+                onCancel2Fa = { viewModel.cancel2Fa() },
+                onClaimAdminSlot = { name, email, mobile, pin, is2Fa, onSuccess, onError ->
+                    viewModel.claimSuperAdminSlot(name, email, mobile, pin, is2Fa, onSuccess, onError)
+                },
+                onResetAdminSlot = {
+                    // Public unauthenticated reset is permanently disabled for platform security
+                },
+                onResetPassword = { email, newPassword, onSuccess, onError ->
+                    viewModel.resetUserPassword(email, newPassword, onSuccess, onError)
+                },
+                onLogin = { _, _, _ ->
+                    
+                },
+
+                onAuthenticate = { identifier, password, role, onSuccess, onError ->
+                    viewModel.authenticateWithPassword(identifier, password, role, onSuccess = onSuccess, onError = onError)
+                },
+                onRegister = { name, email, libName, phone, password ->
+                    viewModel.registerAndLogin(name, email, libName, phone, password)
+                },
+                onRequestOwnerSignupOtp = { email, name, phone, onOtpSent, onError ->
+                    viewModel.requestOwnerSignupOtp(email, name, phone, onOtpSent, onError)
+                },
+                onVerifyOwnerSignupOtp = { email, enteredOtp, onVerified ->
+                    viewModel.verifyOwnerSignupOtp(email, enteredOtp, onVerified)
+                },
+                onCheckLibraryTrialEligibility = { email, phone, onResult ->
+                    viewModel.checkLibraryTrialEligibility(email, phone, onResult)
+                },
+                onStudentQrSignup = { libId, fullName, mobile, email, exam, shift, plan, password ->
+                    viewModel.registerStudentViaQr(libId, fullName, mobile, email, exam, shift, plan, password)
+                },
+                onOpenSupabaseAuth = {
+                    showSupabaseAuthDirect = true
+                }
+            )
+        }
         return
     }
 
@@ -377,6 +404,10 @@ fun LibDeskApp(
                 viewingReceiptForPayment != null ||
                 viewingNcertCatalog ||
                 readingNcertBook != null ||
+                showFrontDeskKioskView ||
+                showLockersModal ||
+                showDueSchedulerModal ||
+                showUpiPaymentShareModalForStudent != null ||
                 showQrScannerModal ||
                 showLibraryQrModal ||
                 showSaaSOffersModal ||
@@ -428,6 +459,18 @@ fun LibDeskApp(
                 }
                 showDecibelMeterModal -> {
                     showDecibelMeterModal = false
+                }
+                showFrontDeskKioskView -> {
+                    showFrontDeskKioskView = false
+                }
+                showLockersModal -> {
+                    showLockersModal = false
+                }
+                showDueSchedulerModal -> {
+                    showDueSchedulerModal = false
+                }
+                showUpiPaymentShareModalForStudent != null -> {
+                    showUpiPaymentShareModalForStudent = null
                 }
                 showProfileScreenModal -> {
                     showProfileScreenModal = false
@@ -572,6 +615,15 @@ fun LibDeskApp(
                         } else {
                             showLibrarianChatModal = true
                         }
+                    },
+                    onOpenFrontDeskKiosk = {
+                        showFrontDeskKioskView = true
+                    },
+                    onOpenLockers = {
+                        showLockersModal = true
+                    },
+                    onOpenDueScheduler = {
+                        showDueSchedulerModal = true
                     },
                     onExportFinancialReport = {
                         com.example.util.ReportExportUtils.exportMonthlyFinancialCsv(
@@ -959,6 +1011,9 @@ fun LibDeskApp(
                                     onToggleBookmark = { doc ->
                                         viewModel.toggleBookmark(doc)
                                     },
+                                    onOpenFrontDeskKiosk = { showFrontDeskKioskView = true },
+                                    onOpenLockers = { showLockersModal = true },
+                                    onOpenDueScheduler = { showDueSchedulerModal = true },
                                     viewModel = viewModel,
                                     initialSection = managerDashboardSection
                                 )
@@ -1077,6 +1132,8 @@ fun LibDeskApp(
                                 shifts = shifts,
                                 plans = plans,
                                 halls = halls,
+                                events = libraryEvents,
+                                lockers = lockers,
                                 onViewIdCard = { st ->
                                     viewingIdCardForStudent = st
                                 },
@@ -1154,6 +1211,10 @@ fun LibDeskApp(
         val libLng = if (activeLib != null && activeLib.longitude != 0.0) activeLib.longitude else 77.2090
         val libName = activeLib?.name ?: "Your Library"
         val targetStudent = activeStudent ?: students.firstOrNull()
+        val todayDateStr = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }
+        val targetStudentAttendance = allAttendance.find { it.studentId == targetStudent?.id && it.date == todayDateStr }
+        val isCheckedInNow = targetStudentAttendance?.status == "CHECKED_IN"
+        val checkInTimestamp = targetStudentAttendance?.checkInTime.orEmpty()
 
         SeatCheckInScannerModal(
             allocatedSeatNumber = if (isStudent) (targetStudent?.seatNumber ?: "") else "",
@@ -1161,6 +1222,8 @@ fun LibDeskApp(
             allocatedShiftName = if (isStudent) (targetStudent?.shiftName?.ifBlank { "Full Day Shift" } ?: "Full Day Shift") else "Full Day Shift",
             studentName = if (isStudent) (targetStudent?.fullName ?: "Member") else "Library Owner",
             isStudentMode = isStudent,
+            isCurrentlyCheckedIn = isCheckedInNow,
+            todayCheckInTime = checkInTimestamp,
             libraryLatitude = libLat,
             libraryLongitude = libLng,
             libraryName = libName,
@@ -1476,5 +1539,109 @@ fun LibDeskApp(
                 )
             }
         }
+    }
+
+    // Front-Desk Tablet Kiosk Mode for Library Gates & Reception Desks
+    if (showFrontDeskKioskView) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showFrontDeskKioskView = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+            ) {
+                FrontDeskKioskScreen(
+                    library = library,
+                    students = students,
+                    todayAttendance = todayAttendance,
+                    viewModel = viewModel,
+                    onExitKiosk = { showFrontDeskKioskView = false },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+
+    // Locker & Key Allocation Tracker Modal
+    if (showLockersModal) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showLockersModal = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            )
+        ) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .fillMaxSize(0.96f)
+                    .systemBarsPadding()
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF7C3AED).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Locker & Key Allocation Tracker",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        IconButton(onClick = { showLockersModal = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                    ManagerLockersScreen(
+                        viewModel = viewModel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+    }
+
+    // Monthly Due Date Auto-Scheduler & Batch WhatsApp Dispatcher Modal
+    if (showDueSchedulerModal) {
+        MonthlyDuesSchedulerModal(
+            library = library,
+            students = students,
+            viewModel = viewModel,
+            onDismiss = { showDueSchedulerModal = false },
+            onCollectFeeForStudent = { _ ->
+                showDueSchedulerModal = false
+                showAddPaymentModal = true
+            }
+        )
+    }
+
+    // 1-Click UPI Payment Link & Branded QR Code Modal
+    if (showUpiPaymentShareModalForStudent != null) {
+        UpiPaymentShareModal(
+            student = showUpiPaymentShareModalForStudent!!,
+            library = library,
+            onDismiss = { showUpiPaymentShareModalForStudent = null }
+        )
     }
 }

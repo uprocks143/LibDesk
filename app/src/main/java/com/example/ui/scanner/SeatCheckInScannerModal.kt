@@ -3,29 +3,27 @@ package com.example.ui.scanner
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.util.Size
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.Preview
+import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -36,10 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,21 +46,21 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.data.local.entities.StudentEntity
+import com.example.ui.components.generateQrBitmap
 import com.example.ui.theme.LibDeskColors
 import com.example.util.LocationVerificationResult
 import com.example.util.LocationVerificationUtils
 import com.google.zxing.*
 import com.google.zxing.common.GlobalHistogramBinarizer
 import com.google.zxing.common.HybridBinarizer
-import java.util.concurrent.Executors
-
-import com.example.data.local.entities.StudentEntity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
+import java.util.*
+import java.util.concurrent.Executors
 
 data class SessionScanRecord(
     val id: String = UUID.randomUUID().toString(),
@@ -75,8 +74,8 @@ data class SessionScanRecord(
 )
 
 /**
- * Industrial-grade Seat QR & Student ID Scanner Component for quick check-ins.
- * Supports both Student Self Check-In and Librarian Desk Rapid ID Scanning.
+ * CameraX & ZXing QR Code Scanner for quick seat check-in and check-out.
+ * Supports Student Self-Scan (allocated seat QR) and Librarian Desk ID Rapid Scanning.
  */
 @Composable
 fun SeatCheckInScannerModal(
@@ -85,6 +84,8 @@ fun SeatCheckInScannerModal(
     allocatedShiftName: String = "Full Day Shift",
     studentName: String = "Member",
     isStudentMode: Boolean = true,
+    isCurrentlyCheckedIn: Boolean = false,
+    todayCheckInTime: String = "",
     libraryLatitude: Double = 28.6139,
     libraryLongitude: Double = 77.2090,
     libraryName: String = "Library Desk",
@@ -94,7 +95,6 @@ fun SeatCheckInScannerModal(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
     var manualInput by remember { mutableStateOf("") }
@@ -103,6 +103,7 @@ fun SeatCheckInScannerModal(
     var isVerifying by remember { mutableStateOf(false) }
     var lastResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var autoScanNext by remember { mutableStateOf(!isStudentMode) }
+    var showSeatQrStickerModal by remember { mutableStateOf(false) }
     val sessionScans = remember { mutableStateListOf<SessionScanRecord>() }
 
     // Camera Permission State
@@ -165,6 +166,17 @@ fun SeatCheckInScannerModal(
         }
     }
 
+    fun playAudioFeedback(success: Boolean) {
+        try {
+            val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 90)
+            if (success) {
+                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+            } else {
+                toneGen.startTone(ToneGenerator.TONE_PROP_NACK, 200)
+            }
+        } catch (_: Exception) {}
+    }
+
     fun triggerHapticFeedback(success: Boolean) {
         try {
             val vibrator = ContextCompat.getSystemService(context, Vibrator::class.java)
@@ -201,6 +213,7 @@ fun SeatCheckInScannerModal(
         onScanCode(code.trim(), locNote) { success, message ->
             isVerifying = false
             lastResult = Pair(success, message)
+            playAudioFeedback(success)
             triggerHapticFeedback(success)
 
             if (success) {
@@ -213,7 +226,7 @@ fun SeatCheckInScannerModal(
                 }
                 val sName = matched?.fullName ?: if (isStudentMode) studentName else "Student Member"
                 val sCode = matched?.studentCode ?: cleanCode
-                val sSeat = matched?.seatNumber?.ifBlank { "General Desk" } ?: "General Desk"
+                val sSeat = matched?.seatNumber?.ifBlank { allocatedSeatNumber.ifBlank { "General Desk" } } ?: "General Desk"
                 val sMode = if (message.contains("Checked OUT", ignoreCase = true)) "OUT" else "IN"
                 val sTime = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
 
@@ -284,28 +297,41 @@ fun SeatCheckInScannerModal(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(44.dp)
                                 .clip(CircleShape)
-                                .background(if (isStudentMode) MaterialTheme.colorScheme.primaryContainer else LibDeskColors.warningSoft),
+                                .background(
+                                    if (isCurrentlyCheckedIn) LibDeskColors.warningSoft
+                                    else if (isStudentMode) MaterialTheme.colorScheme.primaryContainer
+                                    else LibDeskColors.warningSoft
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isStudentMode) Icons.Default.QrCodeScanner else Icons.Default.Badge,
+                                imageVector = if (isCurrentlyCheckedIn) Icons.Default.Logout
+                                else if (isStudentMode) Icons.Default.QrCodeScanner
+                                else Icons.Default.Badge,
                                 contentDescription = null,
-                                tint = if (isStudentMode) MaterialTheme.colorScheme.onPrimaryContainer else LibDeskColors.warning,
-                                modifier = Modifier.size(22.dp)
+                                tint = if (isCurrentlyCheckedIn) LibDeskColors.warning
+                                else if (isStudentMode) MaterialTheme.colorScheme.onPrimaryContainer
+                                else LibDeskColors.warning,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = if (isStudentMode) "Seat Check-In Scanner" else "Librarian Student ID Scanner",
+                                text = if (isStudentMode) {
+                                    if (isCurrentlyCheckedIn) "Seat Check-Out Scanner" else "Seat Check-In Scanner"
+                                } else "Librarian Rapid QR Scanner",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (isStudentMode) "Scan allocated seat QR sticker or gate pass" else "Scan student ID card, QR badge, or barcode for quick check-in",
-                                fontSize = 12.5.sp,
+                                text = if (isStudentMode) {
+                                    if (isCurrentlyCheckedIn) "Scan allocated seat QR sticker to Check OUT"
+                                    else "Scan allocated seat QR sticker to Check IN"
+                                } else "Scan student ID card, QR badge, or seat pass",
+                                fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -326,6 +352,129 @@ fun SeatCheckInScannerModal(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Live Attendance Status & Next Action Banner
+                if (isStudentMode) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isCurrentlyCheckedIn) LibDeskColors.successSoft.copy(alpha = 0.85f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = BorderStroke(
+                            1.2.dp,
+                            if (isCurrentlyCheckedIn) LibDeskColors.success.copy(alpha = 0.4f)
+                            else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isCurrentlyCheckedIn) LibDeskColors.success else Color.Gray)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isCurrentlyCheckedIn) "STATUS: CURRENTLY CHECKED IN" else "STATUS: NOT CHECKED IN",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 11.5.sp,
+                                        color = if (isCurrentlyCheckedIn) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                if (allocatedSeatNumber.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                    ) {
+                                        Text(
+                                            text = "Seat $allocatedSeatNumber",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = if (isCurrentlyCheckedIn) {
+                                    "Checked in since ${todayCheckInTime.ifBlank { "earlier today" }}. Point camera at your desk QR sticker to Check OUT and log your study hours."
+                                } else {
+                                    "Point camera at the unique QR code sticker affixed on Seat #$allocatedSeatNumber in $allocatedHallName to punch attendance and check in."
+                                },
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 17.sp
+                            )
+
+                            // Quick Action Chips (Test scan & View QR Sticker)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (allocatedSeatNumber.isNotBlank()) {
+                                    AssistChip(
+                                        onClick = {
+                                            submitCodeForCheckIn("LIBDESK:SEAT:$allocatedSeatNumber")
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Bolt,
+                                                contentDescription = null,
+                                                tint = LibDeskColors.warning,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        },
+                                        label = {
+                                            Text(
+                                                text = if (isCurrentlyCheckedIn) "⚡ Test Check-Out Seat $allocatedSeatNumber"
+                                                else "⚡ Test Check-In Seat $allocatedSeatNumber",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.testTag("test_scan_allocated_seat_chip")
+                                    )
+                                }
+
+                                AssistChip(
+                                    onClick = { showSeatQrStickerModal = true },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.QrCode,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    label = {
+                                        Text(
+                                            text = "View Seat QR Sticker",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.testTag("view_seat_qr_sticker_chip")
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 // Librarian Mode Controls & Rapid Queue Toggle
                 if (!isStudentMode) {
@@ -373,80 +522,27 @@ fun SeatCheckInScannerModal(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                // Allocated Seat Card (rule-based reference for student self check-in)
-                if (allocatedSeatNumber.isNotBlank() && isStudentMode) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Chair,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = "Allocated Seat: $allocatedSeatNumber",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "$allocatedHallName • $allocatedShiftName",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = LibDeskColors.successSoft
-                            ) {
-                                Text(
-                                    text = "Cloud Sync",
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = LibDeskColors.success,
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
                 // Camera Controls Bar (Torch & Switch Camera)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Camera Viewfinder",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "CameraX Optical Scanner",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilledTonalButton(
@@ -460,16 +556,16 @@ fun SeatCheckInScannerModal(
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             modifier = Modifier
-                                .height(38.dp)
+                                .height(36.dp)
                                 .testTag("switch_camera_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FlipCameraAndroid,
                                 contentDescription = "Switch Camera",
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Switch", fontSize = 12.sp)
+                            Text("Switch", fontSize = 11.5.sp)
                         }
 
                         FilledTonalButton(
@@ -482,17 +578,17 @@ fun SeatCheckInScannerModal(
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             modifier = Modifier
-                                .height(38.dp)
+                                .height(36.dp)
                                 .testTag("toggle_torch_button")
                         ) {
                             Icon(
                                 imageVector = if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
                                 contentDescription = "Flashlight",
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(15.dp),
                                 tint = if (isTorchOn) LibDeskColors.warning else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (isTorchOn) "Torch ON" else "Torch", fontSize = 12.sp)
+                            Text(if (isTorchOn) "Torch ON" else "Torch", fontSize = 11.5.sp)
                         }
                     }
                 }
@@ -509,7 +605,7 @@ fun SeatCheckInScannerModal(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp)
+                            .height(290.dp)
                     )
                 } else {
                     Surface(
@@ -650,29 +746,46 @@ fun SeatCheckInScannerModal(
                 // Result Card (Success or Rule-Based Rejection)
                 lastResult?.let { (success, message) ->
                     Spacer(modifier = Modifier.height(12.dp))
+                    val isCheckOut = message.contains("Checked OUT", ignoreCase = true)
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = if (success) LibDeskColors.successSoft else MaterialTheme.colorScheme.errorContainer,
+                        color = if (success) {
+                            if (isCheckOut) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.85f)
+                            else LibDeskColors.successSoft
+                        } else MaterialTheme.colorScheme.errorContainer,
                         border = BorderStroke(
                             1.dp,
-                            if (success) LibDeskColors.success.copy(alpha = 0.4f) else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
+                            if (success) {
+                                if (isCheckOut) MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f)
+                                else LibDeskColors.success.copy(alpha = 0.4f)
+                            } else MaterialTheme.colorScheme.error.copy(alpha = 0.4f)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = if (success) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
+                                    imageVector = if (success) {
+                                        if (isCheckOut) Icons.Default.Logout else Icons.Default.CheckCircle
+                                    } else Icons.Default.ErrorOutline,
                                     contentDescription = null,
-                                    tint = if (success) LibDeskColors.success else MaterialTheme.colorScheme.error,
+                                    tint = if (success) {
+                                        if (isCheckOut) MaterialTheme.colorScheme.secondary else LibDeskColors.success
+                                    } else MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(22.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = if (success) "Attendance Cloud Logged" else "Rule Validation Blocked",
+                                    text = if (success) {
+                                        if (isCheckOut) "Study Session Logged & Checked OUT"
+                                        else "Seat Verified & Checked IN"
+                                    } else "Rule Validation Blocked",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
-                                    color = if (success) LibDeskColors.success else MaterialTheme.colorScheme.onErrorContainer
+                                    color = if (success) {
+                                        if (isCheckOut) MaterialTheme.colorScheme.onSecondaryContainer
+                                        else LibDeskColors.success
+                                    } else MaterialTheme.colorScheme.onErrorContainer
                                 )
                             }
 
@@ -681,7 +794,8 @@ fun SeatCheckInScannerModal(
                             Text(
                                 text = message,
                                 fontSize = 13.sp,
-                                color = if (success) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onErrorContainer
+                                color = if (success) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onErrorContainer,
+                                lineHeight = 18.sp
                             )
 
                             Spacer(modifier = Modifier.height(10.dp))
@@ -706,7 +820,7 @@ fun SeatCheckInScannerModal(
                                         onClick = onClose,
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = LibDeskColors.success,
+                                            containerColor = if (isCheckOut) MaterialTheme.colorScheme.secondary else LibDeskColors.success,
                                             contentColor = Color.White
                                         ),
                                         modifier = Modifier.testTag("confirm_checkin_done_button")
@@ -733,7 +847,7 @@ fun SeatCheckInScannerModal(
                 OutlinedTextField(
                     value = manualInput,
                     onValueChange = { manualInput = it },
-                    label = { Text(if (isStudentMode) "Seat Number or Code" else "Student Code or Seat") },
+                    label = { Text(if (isStudentMode) "Seat Number or Code (e.g. $allocatedSeatNumber)" else "Student Code or Seat") },
                     placeholder = {
                         Text(
                             if (isStudentMode) {
@@ -873,10 +987,22 @@ fun SeatCheckInScannerModal(
             }
         }
     }
+
+    // Modal to View/Print Seat QR Code Sticker
+    if (showSeatQrStickerModal) {
+        SeatQrStickerDialog(
+            seatNumber = allocatedSeatNumber.ifBlank { "A-12" },
+            hallName = allocatedHallName,
+            shiftName = allocatedShiftName,
+            libraryName = libraryName,
+            studentName = studentName,
+            onClose = { showSeatQrStickerModal = false }
+        )
+    }
 }
 
 /**
- * Real-time CameraX Viewfinder with ZXing Barcode Decoder and Animated Reticle
+ * Real-time CameraX Viewfinder with ZXing Barcode Decoder, Zoom Controls, Tap-to-Focus, and Reticle.
  */
 @Composable
 private fun SeatCameraViewfinderView(
@@ -886,12 +1012,13 @@ private fun SeatCameraViewfinderView(
     modifier: Modifier = Modifier
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    var boundCamera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
+    var boundCamera by remember { mutableStateOf<Camera?>(null) }
     var cameraProviderInstance by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
     var lastScannedTimestamp by remember { mutableLongStateOf(0L) }
+    var currentZoom by remember { mutableFloatStateOf(1.0f) }
 
     DisposableEffect(lifecycleOwner, cameraLensFacing) {
         onDispose {
@@ -949,6 +1076,7 @@ private fun SeatCameraViewfinderView(
                             }
 
                             val imageAnalysis = ImageAnalysis.Builder()
+                                .setTargetResolution(Size(1280, 720))
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build()
 
@@ -958,7 +1086,9 @@ private fun SeatCameraViewfinderView(
                                         BarcodeFormat.QR_CODE,
                                         BarcodeFormat.DATA_MATRIX,
                                         BarcodeFormat.CODE_128,
-                                        BarcodeFormat.CODE_39
+                                        BarcodeFormat.CODE_39,
+                                        BarcodeFormat.EAN_13,
+                                        BarcodeFormat.UPC_A
                                     ),
                                     DecodeHintType.TRY_HARDER to true
                                 )
@@ -1036,7 +1166,12 @@ private fun SeatCameraViewfinderView(
                                     } catch (_: NotFoundException) {
                                         try {
                                             result = multiFormatReader.decodeWithState(BinaryBitmap(GlobalHistogramBinarizer(source)))
-                                        } catch (_: Exception) {}
+                                        } catch (_: Exception) {
+                                            try {
+                                                // Inverted contrast check (white on dark)
+                                                result = multiFormatReader.decodeWithState(BinaryBitmap(HybridBinarizer(source.invert())))
+                                            } catch (_: Exception) {}
+                                        }
                                     } catch (_: Exception) {}
 
                                     val text = result?.text
@@ -1066,17 +1201,35 @@ private fun SeatCameraViewfinderView(
 
                     previewView
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(boundCamera) {
+                        detectTapGestures { offset ->
+                            boundCamera?.let { cam ->
+                                val factory = SurfaceOrientedMeteringPointFactory(size.width.toFloat(), size.height.toFloat())
+                                val point = factory.createPoint(offset.x, offset.y)
+                                val action = FocusMeteringAction.Builder(point).build()
+                                cam.cameraControl.startFocusAndMetering(action)
+                            }
+                        }
+                    }
             )
         }
 
-        // Viewfinder Targeting Frame Overlay
+        // Viewfinder Darkening Overlay with Center Cutout
         Box(
             modifier = Modifier
                 .size(200.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+                .border(2.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.9f), RoundedCornerShape(16.dp))
         ) {
+            // Corner Reticle Indicators
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp)
+            )
+
             // Animated Laser Scan Line
             Box(
                 modifier = Modifier
@@ -1096,6 +1249,233 @@ private fun SeatCameraViewfinderView(
                         )
                     )
             )
+        }
+
+        // Instruction Text above targeting box
+        Text(
+            text = "Align Seat QR code inside frame",
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 16.dp)
+                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+
+        // Zoom Ratio Quick Controls (1x, 2x, 3x)
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp)
+                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf(1.0f, 2.0f, 3.0f).forEach { zoom ->
+                val isSelected = currentZoom == zoom
+                Surface(
+                    shape = CircleShape,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clickable {
+                            currentZoom = zoom
+                            boundCamera?.cameraControl?.setZoomRatio(zoom)
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "${zoom.toInt()}x",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Printable & Scannable Desk QR Sticker Modal.
+ * Shows the unique QR code for the seat so managers can print stickers or students can preview it.
+ */
+@Composable
+fun SeatQrStickerDialog(
+    seatNumber: String,
+    hallName: String,
+    shiftName: String,
+    libraryName: String,
+    studentName: String,
+    onClose: () -> Unit
+) {
+    val qrPayload = "LIBDESK:SEAT:$seatNumber"
+    val qrBitmap = remember(qrPayload) {
+        generateQrBitmap(qrPayload, 512)
+    }
+
+    Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .wrapContentHeight()
+                .padding(vertical = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header with close button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Desk QR Code Sticker",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Affix on desk surface for instant check-in/out",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // High Contrast QR Card (Sticker Layout)
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color.White,
+                    border = BorderStroke(2.dp, Color(0xFF0F172A)),
+                    shadowElevation = 4.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Sticker Top Banner
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0F172A)
+                        ) {
+                            Text(
+                                text = libraryName.uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "SEAT #$seatNumber",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF0F172A),
+                            letterSpacing = 1.sp
+                        )
+
+                        Text(
+                            text = "$hallName • $shiftName",
+                            fontSize = 12.sp,
+                            color = Color(0xFF64748B),
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // High-contrast QR bitmap
+                        qrBitmap?.let { bmp ->
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = "Seat QR Code",
+                                modifier = Modifier
+                                    .size(200.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "SCAN WITH LIBDESK APP",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF0F172A),
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "Scan at Entry to Check IN • Scan at Exit to Check OUT",
+                            fontSize = 9.5.sp,
+                            color = Color(0xFF64748B),
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "Payload: $qrPayload",
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onClose,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Dismiss")
+                    }
+
+                    Button(
+                        onClick = onClose,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Ready to Scan")
+                    }
+                }
+            }
         }
     }
 }

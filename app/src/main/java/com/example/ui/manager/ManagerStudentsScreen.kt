@@ -46,6 +46,8 @@ import com.example.ui.components.DateRangeUtils
 import com.example.ui.theme.*
 import com.example.util.ImageShareUtils
 import com.example.util.FormFormatters
+import com.example.util.WhatsAppAlertUtils
+import com.example.ui.payment.UpiPaymentShareModal
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +80,7 @@ fun ManagerStudentsScreen(
     var selectedStudentForSeat by remember { mutableStateOf<StudentEntity?>(null) }
     var selectedStudentForReminder by remember { mutableStateOf<StudentEntity?>(null) }
     var studentToArchive by remember { mutableStateOf<StudentEntity?>(null) }
+    var studentForUpiModal by remember { mutableStateOf<StudentEntity?>(null) }
 
     val activeCount = remember(students) { students.count { it.status.equals("ACTIVE", ignoreCase = true) } }
     val archivedCount = remember(students) { students.count { it.status.equals("ARCHIVED", ignoreCase = true) || it.status.equals("LEFT", ignoreCase = true) } }
@@ -379,6 +382,11 @@ fun ManagerStudentsScreen(
                 selectedStudentForDetails = null
                 selectedStudentForReminder = st
             },
+            onOpenUpiModal = {
+                val st = selectedStudentForDetails!!
+                selectedStudentForDetails = null
+                studentForUpiModal = st
+            },
             onEditProfile = {
                 val st = selectedStudentForDetails!!
                 selectedStudentForDetails = null
@@ -445,7 +453,20 @@ fun ManagerStudentsScreen(
         SendReminderDialog(
             student = selectedStudentForReminder!!,
             library = library,
-            onClose = { selectedStudentForReminder = null }
+            onClose = { selectedStudentForReminder = null },
+            onOpenUpiModal = {
+                val st = selectedStudentForReminder
+                selectedStudentForReminder = null
+                studentForUpiModal = st
+            }
+        )
+    }
+
+    if (studentForUpiModal != null) {
+        UpiPaymentShareModal(
+            student = studentForUpiModal!!,
+            library = library,
+            onDismiss = { studentForUpiModal = null }
         )
     }
 }
@@ -784,6 +805,7 @@ fun StudentProfileDetailsDialog(
     onViewId: () -> Unit,
     onCollectFee: () -> Unit,
     onSendReminder: () -> Unit = {},
+    onOpenUpiModal: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     onArchiveStudent: () -> Unit = {},
     onReactivateStudent: () -> Unit = {},
@@ -1020,6 +1042,18 @@ fun StudentProfileDetailsDialog(
                                     Icon(imageVector = Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp), tint = LibDeskColors.success)
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("WhatsApp", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedButton(
+                                    onClick = onOpenUpiModal,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7)),
+                                    border = BorderStroke(1.dp, Color(0xFF0284C7)),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(imageVector = Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF0284C7))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("UPI QR", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                 }
 
                                 Button(
@@ -1375,7 +1409,8 @@ fun QuickAssignSeatDialog(
 fun SendReminderDialog(
     student: StudentEntity,
     library: LibraryEntity? = null,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onOpenUpiModal: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val messageText = "Dear ${student.fullName},\nThis is a friendly reminder from ${library?.name ?: "LibDesk Library"} regarding your pending fee dues of *${formatCurrency(student.dueAmount)}*.\n\nPlease scan the UPI QR in the attached official card or pay to UPI ID: *${library?.upiId ?: ""}*.\nThank you!"
@@ -1473,6 +1508,45 @@ fun SendReminderDialog(
                 }
 
                 
+                // 1-Click WhatsApp Direct UPI Payment Link
+                Button(
+                    onClick = {
+                        WhatsAppAlertUtils.sendFeeDueReminder(
+                            context = context,
+                            studentName = student.fullName,
+                            phone = student.mobile,
+                            libraryName = library?.name ?: "LibDesk Study Library",
+                            dueAmount = student.dueAmount,
+                            dueDate = student.expiryDate.ifBlank { "Immediate" },
+                            upiId = library?.upiId ?: ""
+                        )
+                        onClose()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("1-Click UPI Payment Link in WhatsApp", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
+                }
+
+                // Branded UPI QR Code & Instant Link Modal
+                OutlinedButton(
+                    onClick = {
+                        onClose()
+                        onOpenUpiModal()
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7)),
+                    border = BorderStroke(1.dp, Color(0xFF0284C7)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.QrCode, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Branded UPI QR Code & Link Modal", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0284C7))
+                }
+
                 Button(
                     onClick = {
                         val reminderBitmap = ImageShareUtils.createFeeReminderBitmap(library, student)

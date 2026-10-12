@@ -917,6 +917,7 @@ fun PaymentHistorySection(
     var customFromDate by remember { mutableStateOf(DateRangeUtils.getDaysAgo(30)) }
     var customToDate by remember { mutableStateOf(DateRangeUtils.getToday()) }
     var showSummaryPreviewDialog by remember { mutableStateOf(false) }
+    var studentForUpiShare by remember { mutableStateOf<StudentEntity?>(null) }
 
     val (effectiveFrom, effectiveTo, dateRangeLabel) = remember(datePreset, customFromDate, customToDate) {
         when (datePreset) {

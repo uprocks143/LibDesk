@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -69,6 +70,7 @@ fun AuthScreen(
     onVerifyOwnerSignupOtp: (email: String, enteredOtp: String, onVerified: (Boolean, String?) -> Unit) -> Unit = { _, _, _ -> },
     onCheckLibraryTrialEligibility: ((email: String, phone: String, onResult: (Boolean, String?) -> Unit) -> Unit)? = null,
     onStudentQrSignup: (libraryId: String, name: String, mobile: String, email: String, exam: String, shift: ShiftEntity?, plan: MembershipPlanEntity?, password: String) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onOpenSupabaseAuth: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -597,7 +599,66 @@ fun AuthScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Direct Supabase Auth Entry Card
+                if (onOpenSupabaseAuth != null) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenSupabaseAuth() }
+                            .testTag("open_supabase_auth_banner")
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudSync,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Direct Supabase Auth",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Sign in or register directly using Supabase Auth client",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Open Supabase Auth",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 if (selectedRole != "SUPER_ADMIN") {
                     // Unified Role Selector (Step 1) - Only General Roles (Owner & Student)
@@ -614,8 +675,8 @@ fun AuthScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             listOf(
-                                Triple("OWNER", "🏢 Library Owner", Icons.Default.Business),
-                                Triple("STUDENT", "🎓 Student Member", Icons.Default.School)
+                                Triple("OWNER", "Library Owner", Icons.Default.Business),
+                                Triple("STUDENT", "Student Member", Icons.Default.School)
                             ).forEach { (roleKey, label, icon) ->
                                 val isSelected = selectedRole == roleKey
                                 Surface(
@@ -667,7 +728,7 @@ fun AuthScreen(
                                 isRegisterMode = false
                                 errorMessage = null
                             },
-                            label = { Text("🔑 Sign In") },
+                            label = { Text("Sign In") },
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.testTag("mode_sign_in")
                         )
@@ -678,7 +739,7 @@ fun AuthScreen(
                                 isRegisterMode = true
                                 errorMessage = null
                             },
-                            label = { Text("📝 Register New Account") },
+                            label = { Text("Register New Account") },
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.testTag("mode_register")
                         )

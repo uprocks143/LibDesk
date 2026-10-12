@@ -54,8 +54,13 @@ fun StudentMemberDashboard(
     shifts: List<ShiftEntity> = emptyList(),
     plans: List<MembershipPlanEntity> = emptyList(),
     halls: List<HallEntity> = emptyList(),
+    events: List<LibraryEventEntity> = emptyList(),
+    lockers: List<LockerEntity> = emptyList(),
     onOpenQrScanner: () -> Unit,
     onViewIdCard: (StudentEntity) -> Unit,
+    onQuickCheckIn: () -> Unit = {},
+    onQuickCheckOut: () -> Unit = {},
+    onRsvpEvent: (eventId: String) -> Unit = {},
     onGoToFeeTab: () -> Unit,
     onGoToProfileTab: () -> Unit,
     onGoToSeatLayout: () -> Unit = {},
@@ -89,6 +94,10 @@ fun StudentMemberDashboard(
         } else if (student.seatNumber.isNotBlank()) {
             seats.find { it.seatNumber.equals(student.seatNumber, ignoreCase = true) }
         } else null
+    }
+
+    val assignedLocker = remember(lockers, student.id) {
+        lockers.find { it.assignedStudentId == student.id }
     }
 
     val assignedHall = remember(halls, assignedSeat, student) {
@@ -152,7 +161,46 @@ fun StudentMemberDashboard(
                 )
             }
 
-            // 1b. Live Target Exam Countdown Tracker Card
+            // 2. User's Current Seat Status (Full Details, Amenities, Floor Zone, Shift, Locker)
+            item {
+                CurrentSeatStatusCard(
+                    student = student,
+                    seat = assignedSeat,
+                    hall = assignedHall,
+                    shift = assignedShift,
+                    assignedLocker = assignedLocker,
+                    isCurrentlyCheckedIn = isCurrentlyCheckedIn,
+                    checkInTime = todayAttendance?.checkInTime.orEmpty(),
+                    onGoToSeatLayout = onGoToSeatLayout,
+                    onGoToSeatRequest = onGoToProfileTab,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // 3. Quick Access Buttons for Check-In / Check-Out
+            item {
+                QuickAccessAttendanceCard(
+                    student = student,
+                    todayAttendance = todayAttendance,
+                    isCurrentlyCheckedIn = isCurrentlyCheckedIn,
+                    onQuickCheckIn = onQuickCheckIn,
+                    onQuickCheckOut = onQuickCheckOut,
+                    onOpenQrScanner = onOpenQrScanner,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // 4. Upcoming Library Events & Academic Workshops
+            item {
+                UpcomingLibraryEventsSection(
+                    events = events,
+                    currentStudentId = student.id,
+                    onRsvpEvent = onRsvpEvent,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // 5. Live Target Exam Countdown Tracker Card
             item {
                 ExamCountdownWidgetCard(
                     student = student,
@@ -236,19 +284,7 @@ fun StudentMemberDashboard(
                 }
             }
 
-            // 2. Quick-Action QR Code Check-In Hub (Hero Element)
-            item {
-                StudentQuickActionQrCard(
-                    seatNumber = student.seatNumber.ifBlank { assignedSeat?.seatNumber ?: "Allocated Desk" },
-                    shiftName = student.shiftName.ifBlank { assignedShift?.name ?: "Regular Shift" },
-                    isCurrentlyCheckedIn = isCurrentlyCheckedIn,
-                    checkInTime = todayAttendance?.checkInTime.orEmpty(),
-                    onOpenQrScanner = onOpenQrScanner,
-                    onViewIdCard = { onViewIdCard(student) }
-                )
-            }
-
-            // 2b. Official NCERT Textbooks Hub Card (Class 1 to 12)
+            // 6. Official NCERT Textbooks Hub Card (Class 1 to 12)
             item {
                 Card(
                     shape = RoundedCornerShape(18.dp),
@@ -401,20 +437,7 @@ fun StudentMemberDashboard(
                 }
             }
 
-            // 3. Upcoming Seat Reservation Card
-            item {
-                StudentUpcomingSeatReservationCard(
-                    student = student,
-                    seat = assignedSeat,
-                    hall = assignedHall,
-                    shift = assignedShift,
-                    isCurrentlyCheckedIn = isCurrentlyCheckedIn,
-                    onOpenQrScanner = onOpenQrScanner,
-                    onGoToSeatLayout = onGoToSeatLayout
-                )
-            }
-
-            // 4. Active Membership Card with Validity Progress & Fee Status
+            // 8. Active Membership Card with Validity Progress & Fee Status
             item {
                 StudentActiveMembershipCard(
                     student = student,
@@ -453,137 +476,225 @@ private fun StudentTodayBriefingCard(
     isCurrentlyCheckedIn: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val firstName = remember(student.fullName) {
+        student.fullName.trim().split(" ").firstOrNull()?.replaceFirstChar { it.uppercase() } ?: "Scholar"
+    }
+    val greeting = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when (hour) {
+            in 4..11 -> "Good Morning, $firstName ☀️"
+            in 12..16 -> "Good Afternoon, $firstName 🌤️"
+            in 17..21 -> "Good Evening, $firstName 🌇"
+            else -> "Night Study Session, $firstName 🌙"
+        }
+    }
+
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                            MaterialTheme.colorScheme.surface
+                        )
+                    )
+                )
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Greeting & Live Status Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+                Column {
                     Text(
-                        text = todayFormatted,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                        text = greeting,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            letterSpacing = (-0.3).sp
                         )
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = todayFormatted,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
                 }
+
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (isCurrentlyCheckedIn) LibDeskColors.successSoft else MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Text(
-                        text = if (isCurrentlyCheckedIn) "In Library" else "Out of Library",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            color = if (isCurrentlyCheckedIn) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isCurrentlyCheckedIn) LibDeskColors.successSoft else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isCurrentlyCheckedIn) LibDeskColors.success.copy(alpha = 0.4f)
+                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                     )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (isCurrentlyCheckedIn) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                        )
+                        Text(
+                            text = if (isCurrentlyCheckedIn) "In Library" else "Out of Library",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp,
+                                color = if (isCurrentlyCheckedIn) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
                 }
             }
 
+            // Quick Info Metrics Chips
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Quick chip 1: Desk
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        Text(
-                            text = "Assigned Desk",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.EventSeat,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(13.dp)
                             )
-                        )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Desk",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = "Desk #$seatNumber",
-                            style = MaterialTheme.typography.bodySmall.copy(
+                            style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             ),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
                 // Quick chip 2: Membership Validity
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        Text(
-                            text = "Membership",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.VerifiedUser,
+                                contentDescription = null,
+                                tint = if (daysRemaining > 5) LibDeskColors.success else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(13.dp)
                             )
-                        )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Pass Validity",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = if (daysRemaining > 0) "$daysRemaining Days Left" else "Expired",
-                            style = MaterialTheme.typography.bodySmall.copy(
+                            style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = if (daysRemaining > 5) LibDeskColors.success else MaterialTheme.colorScheme.error
                             ),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
                 // Quick chip 3: Attendance status
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
-                        Text(
-                            text = "Today's Status",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isCurrentlyCheckedIn) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                contentDescription = null,
+                                tint = if (isCurrentlyCheckedIn) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(13.dp)
                             )
-                        )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Today",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            text = if (isCurrentlyCheckedIn) "Present" else "Not Marked",
-                            style = MaterialTheme.typography.bodySmall.copy(
+                            text = if (isCurrentlyCheckedIn) "Punched In" else "Not Punched",
+                            style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = if (isCurrentlyCheckedIn) LibDeskColors.success else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

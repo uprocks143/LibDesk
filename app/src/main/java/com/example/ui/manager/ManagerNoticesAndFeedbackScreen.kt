@@ -82,7 +82,7 @@ fun ManagerNoticesAndFeedbackScreen(
                 Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Notices (${notices.size})") })
                 Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Grievances (${feedbackList.size})") })
                 Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Support Helpline") })
-                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("💬 Live Chat") })
+                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Live Chat") })
             }
 
             if (selectedTab == 0) {

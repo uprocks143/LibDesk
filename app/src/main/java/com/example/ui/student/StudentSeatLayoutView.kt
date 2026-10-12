@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import com.example.ui.scanner.SeatQrStickerDialog
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -267,6 +268,7 @@ fun StudentSeatLayoutView(
             seat = seat,
             isMySeat = isMySeat,
             student = student,
+            libraryName = library?.name ?: "Library Study Hub",
             onDismiss = { inspectingSeat = null },
             onOpenQrScanner = {
                 inspectingSeat = null
@@ -1543,11 +1545,13 @@ private fun StudentSeatDetailModal(
     seat: SeatEntity,
     isMySeat: Boolean,
     student: StudentEntity?,
+    libraryName: String = "Library Study Hub",
     onDismiss: () -> Unit,
     onOpenQrScanner: () -> Unit,
     onViewIdCard: () -> Unit,
     onRequestSeat: () -> Unit
 ) {
+    var showQrSticker by remember { mutableStateOf(false) }
     val status = seat.status.uppercase()
     val isAvailable = status == "AVAILABLE"
     val isOccupied = status == "OCCUPIED"
@@ -1742,6 +1746,18 @@ private fun StudentSeatDetailModal(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("View Digital ID Pass", fontWeight = FontWeight.SemiBold)
                     }
+
+                    OutlinedButton(
+                        onClick = { showQrSticker = true },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.QrCode, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("View Desk QR Code Sticker", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             } else if (isAvailable) {
                 Button(
@@ -1786,6 +1802,17 @@ private fun StudentSeatDetailModal(
                 }
             }
         }
+    }
+
+    if (showQrSticker) {
+        SeatQrStickerDialog(
+            seatNumber = seat.seatNumber,
+            hallName = seat.hallName.ifBlank { "Main Study Hall" },
+            shiftName = seat.assignedShiftName.ifBlank { student?.shiftName?.ifBlank { "Full Day Shift" } ?: "Full Day Shift" },
+            libraryName = libraryName,
+            studentName = student?.fullName ?: "Member",
+            onClose = { showQrSticker = false }
+        )
     }
 }
 

@@ -1,115 +1,50 @@
 package com.example.data.remote
 
-import android.util.Log
-import com.example.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
-import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.Realtime
-import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.storage.Storage
-import io.github.jan.supabase.storage.storage
 
 /**
  * Supabase SDK Configuration Object.
- * Initializes the official Supabase Kotlin SDK with the URL and API Key
- * provided via environment variables (BuildConfig / .env).
+ * Delegates to the unified [SupabaseClientConfig] singleton.
  */
 object SupabaseConfig {
-    private const val TAG = "SupabaseConfig"
+    const val DEFAULT_PROJECT_URL = SupabaseClientConfig.DEFAULT_SUPABASE_URL
+    const val DEFAULT_PUBLISHABLE_KEY = SupabaseClientConfig.DEFAULT_SUPABASE_ANON_KEY
 
-    const val DEFAULT_PROJECT_URL = "https://unconfigured.supabase.co"
-    const val DEFAULT_PUBLISHABLE_KEY = "unconfigured_key_waiting_for_user"
-
-    fun isValidUrl(url: String?): Boolean {
-        if (url.isNullOrBlank()) return false
-        val trimmed = url.trim().lowercase()
-        return !trimmed.contains("your-project") &&
-                !trimmed.contains("unconfigured") &&
-                !trimmed.contains("example.com") &&
-                !trimmed.contains("placeholder") &&
-                (trimmed.startsWith("http://") || trimmed.startsWith("https://"))
-    }
-
-    fun isValidKey(key: String?): Boolean {
-        if (key.isNullOrBlank()) return false
-        val trimmed = key.trim().lowercase()
-        return !trimmed.contains("your-anon-key") &&
-                !trimmed.contains("unconfigured") &&
-                !trimmed.contains("placeholder") &&
-                trimmed.length > 10
-    }
+    fun isValidUrl(url: String?): Boolean = SupabaseClientConfig.isValidUrl(url)
+    fun isValidKey(key: String?): Boolean = SupabaseClientConfig.isValidKey(key)
 
     val supabaseUrl: String
-        get() {
-            val url = try {
-                BuildConfig.SUPABASE_URL
-            } catch (_: Throwable) {
-                ""
-            }
-            return if (isValidUrl(url)) url.trim().removeSuffix("/") else DEFAULT_PROJECT_URL
-        }
+        get() = SupabaseClientConfig.supabaseUrl
 
     val supabaseKey: String
-        get() {
-            val key = try {
-                BuildConfig.SUPABASE_ANON_KEY
-            } catch (_: Throwable) {
-                ""
-            }
-            return if (isValidKey(key)) key.trim() else DEFAULT_PUBLISHABLE_KEY
-        }
-
-    @Volatile
-    private var _client: SupabaseClient? = null
+        get() = SupabaseClientConfig.supabaseKey
 
     /**
      * Singleton instance of the official Supabase Kotlin SDK client.
      */
     val client: SupabaseClient
-        get() = _client ?: synchronized(this) {
-            _client ?: createClient(supabaseUrl, supabaseKey).also { _client = it }
-        }
+        get() = SupabaseClientConfig.client
 
     val postgrest: Postgrest
-        get() = client.postgrest
+        get() = SupabaseClientConfig.postgrest
 
     val auth: Auth
-        get() = client.auth
+        get() = SupabaseClientConfig.auth
 
     val realtime: Realtime
-        get() = client.realtime
+        get() = SupabaseClientConfig.realtime
 
     val storage: Storage
-        get() = client.storage
-
-    /**
-     * Creates and configures a new Supabase Kotlin SDK client with core plugins.
-     */
-    fun createClient(url: String, key: String): SupabaseClient {
-        Log.i(TAG, "Initializing Supabase Kotlin SDK Client ($url)")
-        return createSupabaseClient(
-            supabaseUrl = url,
-            supabaseKey = key
-        ) {
-            install(Postgrest)
-            install(Auth)
-            install(Realtime)
-            install(Storage)
-        }
-    }
+        get() = SupabaseClientConfig.storage
 
     /**
      * Reconfigures the Supabase client dynamically if updated at runtime.
      */
     fun reconfigure(url: String, key: String) {
-        synchronized(this) {
-            val validUrl = if (isValidUrl(url)) url.trim().removeSuffix("/") else DEFAULT_PROJECT_URL
-            val validKey = if (isValidKey(key)) key.trim() else DEFAULT_PUBLISHABLE_KEY
-            _client = createClient(validUrl, validKey)
-        }
+        SupabaseClientConfig.reconfigure(url, key)
     }
 }

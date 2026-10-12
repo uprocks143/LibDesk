@@ -1106,7 +1106,7 @@ fun QrScannerModal(
                                 Icon(Icons.Default.GpsFixed, contentDescription = null, tint = LibDeskColors.success, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column {
-                                    Text("📍 GPS Verified at Library", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = LibDeskColors.success)
+                                    Text("GPS Verified at Library", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = LibDeskColors.success)
                                     Text(
                                         locationResult?.locationLabel ?: "Within premises • Ready for Attendance Punch",
                                         fontSize = 14.sp,

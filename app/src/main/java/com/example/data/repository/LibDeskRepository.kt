@@ -62,12 +62,15 @@ class LibDeskRepository(val context: Context? = null) {
     private val _floorElements = MutableStateFlow<List<FloorElementEntity>>(emptyList())
     private val _chatMessages = MutableStateFlow<List<ChatMessageEntity>>(emptyList())
     val chatMessages = _chatMessages.asStateFlow()
+    private val _events = MutableStateFlow<List<LibraryEventEntity>>(emptyList())
+    val events = _events.asStateFlow()
 
     init {
         // Seed default subscription plans into memory
         _subscriptionPlans.value = defaultSubscriptionPlansList()
         seedInitialLockersAndTrialPasses()
         seedInitialChatMessages()
+        seedInitialEvents()
     }
 
     private fun seedInitialChatMessages() {
@@ -125,7 +128,7 @@ class LibDeskRepository(val context: Context? = null) {
         if (_lockers.value.isEmpty()) {
             val sampleLockers = listOf(
                 LockerEntity(id = "LOCKER-01", libraryId = "LIB-DEMO", lockerNumber = "L-101", size = "Standard", floor = "Ground Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "AVAILABLE"),
-                LockerEntity(id = "LOCKER-02", libraryId = "LIB-DEMO", lockerNumber = "L-102", size = "Standard", floor = "Ground Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "OCCUPIED", assignedStudentName = "Aman Verma", assignedStudentPhone = "9876543210", expiryDate = "2026-11-15", keyNumber = "K-102"),
+                LockerEntity(id = "LOCKER-02", libraryId = "LIB-DEMO", lockerNumber = "L-102", size = "Standard", floor = "Ground Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "OCCUPIED", assignedStudentId = "STU-001", assignedStudentName = "Aman Verma", assignedStudentPhone = "9876543210", expiryDate = "2026-11-15", keyNumber = "K-102"),
                 LockerEntity(id = "LOCKER-03", libraryId = "LIB-DEMO", lockerNumber = "L-103", size = "Large", floor = "Ground Floor", monthlyRent = 350.0, depositAmount = 500.0, status = "AVAILABLE"),
                 LockerEntity(id = "LOCKER-04", libraryId = "LIB-DEMO", lockerNumber = "L-104", size = "Standard", floor = "1st Floor", monthlyRent = 250.0, depositAmount = 300.0, status = "AVAILABLE"),
                 LockerEntity(id = "LOCKER-05", libraryId = "LIB-DEMO", lockerNumber = "L-105", size = "Small", floor = "1st Floor", monthlyRent = 150.0, depositAmount = 200.0, status = "MAINTENANCE")
@@ -166,6 +169,120 @@ class LibDeskRepository(val context: Context? = null) {
                 FloorElementEntity(id = "FE-S7", libraryId = "LIB-DEMO", type = "SEAT", label = "Seat 07", gridX = 2, gridY = 2, seatNumberRef = "Seat 07", isOccupied = true)
             )
             _floorElements.value = defaultElements
+        }
+    }
+
+    private fun seedInitialEvents() {
+        if (_events.value.isEmpty()) {
+            val sampleEvents = listOf(
+                LibraryEventEntity(
+                    id = "EVT-001",
+                    libraryId = "LIB-DEMO",
+                    title = "UPSC CSE Prelims All-India Mock Test & Analysis",
+                    description = "Full-length 100 question GS Paper 1 simulation on OMR answer sheets with negative marking. Detailed answer keys, sectional percentile benchmark, and video explanation provided post-test.",
+                    category = "MOCK_TEST",
+                    date = "Saturday, 18 Oct 2026",
+                    time = "10:00 AM – 01:00 PM",
+                    venue = "Hall A (Silent Zone) & Seminar Room",
+                    speakerOrOrganizer = "AIR-45 Mentorship Panel & Academic Cell",
+                    maxParticipants = 45,
+                    registeredStudentIds = listOf("STU-001", "STU-002", "STU-003"),
+                    bannerEmoji = "📝",
+                    isFeatured = true
+                ),
+                LibraryEventEntity(
+                    id = "EVT-002",
+                    libraryId = "LIB-DEMO",
+                    title = "SSC CGL & Banking Speed Quant & Reasoning Workshop",
+                    description = "High-yield calculation speed tricks, Vedic mathematics squares & cubes, syllogism shortcuts, and data interpretation caselets. Handouts and formula cheat sheets included.",
+                    category = "WORKSHOP",
+                    date = "Tuesday, 21 Oct 2026",
+                    time = "05:00 PM – 07:00 PM",
+                    venue = "Conference Room 1 (Floor 1)",
+                    speakerOrOrganizer = "Prof. R.K. Sharma (Quantitative Aptitude Specialist)",
+                    maxParticipants = 35,
+                    registeredStudentIds = listOf("STU-004", "STU-005"),
+                    bannerEmoji = "⚡",
+                    isFeatured = true
+                ),
+                LibraryEventEntity(
+                    id = "EVT-003",
+                    libraryId = "LIB-DEMO",
+                    title = "8-Hour Deep Work Silent Study Marathon",
+                    description = "Ultra-productive distraction-free study sprint following structured 50-minute focus and 10-minute relaxation intervals. Free fresh filter coffee, glucose refreshments, and focus certificate for participants who finish all 8 cycles.",
+                    category = "COMMUNITY",
+                    date = "Sunday, 26 Oct 2026",
+                    time = "08:00 AM – 04:00 PM",
+                    venue = "All Main Study Halls (Silent Zones)",
+                    speakerOrOrganizer = "LibDesk Student Engagement Team",
+                    maxParticipants = 60,
+                    registeredStudentIds = listOf("STU-001", "STU-007"),
+                    bannerEmoji = "⏳",
+                    isFeatured = true
+                ),
+                LibraryEventEntity(
+                    id = "EVT-004",
+                    libraryId = "LIB-DEMO",
+                    title = "Weekly Current Affairs Editorial & Group Discussion Circle",
+                    description = "Interactive discussion on The Hindu and Indian Express key editorials of the week, Supreme Court constitutional judgments, international summits, and monthly PIB digest review.",
+                    category = "BOOK_CLUB",
+                    date = "Friday, 31 Oct 2026",
+                    time = "06:30 PM – 08:00 PM",
+                    venue = "Library Discussion Terrace & Lounge",
+                    speakerOrOrganizer = "LibDesk Aspirants Editorial Board",
+                    maxParticipants = 25,
+                    registeredStudentIds = listOf("STU-001"),
+                    bannerEmoji = "📖",
+                    isFeatured = false
+                ),
+                LibraryEventEntity(
+                    id = "EVT-005",
+                    libraryId = "LIB-DEMO",
+                    title = "Scheduled 5G Leased Line & Central UPS Inverter Servicing",
+                    description = "Routine maintenance of primary 500 Mbps fiber optical line and battery bank testing. Backup Wi-Fi network and study lights remain fully operational with zero disruption to silent study.",
+                    category = "MAINTENANCE",
+                    date = "Monday, 03 Nov 2026",
+                    time = "11:30 PM – 03:30 AM (Night)",
+                    venue = "Main Server & Electrical Facility",
+                    speakerOrOrganizer = "Facility Engineering & IT Desk",
+                    maxParticipants = 0,
+                    registeredStudentIds = emptyList(),
+                    bannerEmoji = "🛠️",
+                    isFeatured = false
+                )
+            )
+            _events.value = sampleEvents
+        }
+    }
+
+    // ==========================================
+    // LIBRARY EVENTS OPERATIONS
+    // ==========================================
+
+    fun getLibraryEvents(libraryId: String): Flow<List<LibraryEventEntity>> =
+        _events.map { list -> list.filter { it.libraryId.isBlank() || it.libraryId == libraryId || it.libraryId == "LIB-DEMO" } }
+
+    fun getAllLibraryEvents(): Flow<List<LibraryEventEntity>> = _events.asStateFlow()
+
+    suspend fun saveLibraryEvent(event: LibraryEventEntity) = withContext(Dispatchers.IO) {
+        _events.value = _events.value.filter { it.id != event.id } + event
+    }
+
+    suspend fun deleteLibraryEvent(eventId: String) = withContext(Dispatchers.IO) {
+        _events.value = _events.value.filter { it.id != eventId }
+    }
+
+    suspend fun toggleEventRsvp(eventId: String, studentId: String) = withContext(Dispatchers.IO) {
+        _events.value = _events.value.map { ev ->
+            if (ev.id == eventId) {
+                val isRegistered = ev.registeredStudentIds.contains(studentId)
+                val updatedIds = if (isRegistered) {
+                    ev.registeredStudentIds.filter { it != studentId }
+                } else {
+                    ev.registeredStudentIds + studentId
+                }
+                ev.copy(registeredStudentIds = updatedIds)
+            } else ev
         }
     }
 
@@ -1421,11 +1538,18 @@ class LibDeskRepository(val context: Context? = null) {
         val isGateAttendanceQr = trimmed.startsWith("LIBDESK_GATE_ATTENDANCE:") ||
                 trimmed.startsWith("LIBDESK_GATE:") ||
                 trimmed.startsWith("GATE_ATTENDANCE:") ||
-                trimmed.startsWith("LIBDESK:ATTENDANCE:")
+                trimmed.startsWith("LIBDESK:ATTENDANCE:") ||
+                trimmed.startsWith("GATE_QR:")
 
         val cleanCode = when {
             isGateAttendanceQr -> trimmed
+            trimmed.startsWith("SEAT_CHECKIN:") -> {
+                val payload = trimmed.removePrefix("SEAT_CHECKIN:").trim()
+                if (payload.contains(":")) payload.substringBefore(":").trim() else payload
+            }
             trimmed.startsWith("LIBDESK:SEAT:") -> trimmed.removePrefix("LIBDESK:SEAT:").trim()
+            trimmed.startsWith("LIBDESK_SEAT:") -> trimmed.removePrefix("LIBDESK_SEAT:").trim()
+            trimmed.startsWith("LIBDESK_SEAT_QR:") -> trimmed.removePrefix("LIBDESK_SEAT_QR:").trim()
             trimmed.startsWith("SEAT:") -> trimmed.removePrefix("SEAT:").trim()
             trimmed.startsWith("SEAT-") -> trimmed.removePrefix("SEAT-").trim()
             trimmed.startsWith("QR-SEAT-") -> trimmed.removePrefix("QR-SEAT-").trim()
@@ -1433,7 +1557,13 @@ class LibDeskRepository(val context: Context? = null) {
             trimmed.startsWith("LIBDESK:STUDENT:") -> trimmed.removePrefix("LIBDESK:STUDENT:").trim()
             trimmed.startsWith("STUDENT:") -> trimmed.removePrefix("STUDENT:").trim()
             trimmed.startsWith("STU:") -> trimmed.removePrefix("STU:").trim()
-            trimmed.contains(":") -> trimmed.substringAfterLast(":").trim()
+            trimmed.contains("/seat/") -> trimmed.substringAfterLast("/seat/").substringBefore("?").trim()
+            trimmed.contains(":") -> {
+                // Check if the part before or after contains 'SEAT' or is the seat code
+                val parts = trimmed.split(":")
+                val seatPart = parts.find { it.startsWith("SEAT", ignoreCase = true) }
+                seatPart?.removePrefix("SEAT")?.removePrefix("-")?.trim() ?: trimmed.substringAfterLast(":").trim()
+            }
             else -> trimmed
         }
 
@@ -1452,8 +1582,13 @@ class LibDeskRepository(val context: Context? = null) {
         }
 
         if (student == null && !isGateAttendanceQr) {
+            val normalizedClean = cleanCode.replace("-", "").replace(" ", "").uppercase()
             val seat = _seats.value.find {
-                it.libraryId == libraryId && (it.seatNumber.equals(cleanCode, ignoreCase = true) || it.id == cleanCode)
+                it.libraryId == libraryId && (
+                    it.seatNumber.equals(cleanCode, ignoreCase = true) ||
+                    it.id == cleanCode ||
+                    it.seatNumber.replace("-", "").replace(" ", "").equals(normalizedClean, ignoreCase = true)
+                )
             }
             if (seat != null && seat.assignedStudentId.isNotBlank()) {
                 student = _students.value.find { it.id == seat.assignedStudentId || it.mobile == seat.assignedStudentId }
@@ -1478,7 +1613,12 @@ class LibDeskRepository(val context: Context? = null) {
             val allocatedSeatUpper = student.seatNumber.trim().uppercase()
 
             if (allocatedSeatUpper.isNotBlank()) {
-                if (scannedSeatUpper != allocatedSeatUpper) {
+                val matches = scannedSeatUpper == allocatedSeatUpper ||
+                    scannedSeatUpper.replace("-", "").replace(" ", "") == allocatedSeatUpper.replace("-", "").replace(" ", "") ||
+                    scannedSeatUpper.removePrefix("SEAT").trim() == allocatedSeatUpper.removePrefix("SEAT").trim() ||
+                    scannedSeatUpper.removePrefix("SEAT-").trim() == allocatedSeatUpper.removePrefix("SEAT-").trim()
+
+                if (!matches) {
                     return@withContext Pair(
                         false,
                         "❌ Seat Allocation Mismatch: Scanned Seat '$cleanCode' does not match your assigned Seat '${student.seatNumber}'."

@@ -345,6 +345,10 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         .flatMapLatest { id -> repository.getStudyStreakByStudent(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val libraryEvents: StateFlow<List<LibraryEventEntity>> = _currentLibraryId
+        .flatMapLatest { id -> repository.getLibraryEvents(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
 
     
     private val _isAwaiting2Fa = MutableStateFlow(false)
@@ -1277,6 +1281,97 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun onSupabaseLoginSuccess(email: String, role: String, name: String) {
+        viewModelScope.launch {
+            val cleanEmail = email.trim()
+            val cleanName = name.ifBlank { cleanEmail.substringBefore("@") }
+            val normalizedRole = when (role.trim().uppercase()) {
+                "SUPER_ADMIN" -> "SUPER_ADMIN"
+                "STUDENT" -> "STUDENT"
+                else -> "OWNER"
+            }
+
+            _isAuthenticated.value = true
+            _currentUserEmail.value = cleanEmail
+            _currentUserName.value = cleanName
+            _currentRole.value = normalizedRole
+            _userMessage.value = "Welcome back, $cleanName!"
+
+            when (normalizedRole) {
+                "SUPER_ADMIN" -> {
+                    val admin = (superAdminProfile.value ?: SuperAdminUserEntity()).copy(
+                        email = cleanEmail,
+                        name = cleanName,
+                        role = "SUPER_ADMIN",
+                        isClaimed = true
+                    )
+                    repository.saveSuperAdmin(admin)
+                }
+                "STUDENT" -> {
+                    var student = repository.findStudentByIdentifier(cleanEmail)
+                    if (student == null) {
+                        val allLibs = allLibraries.value
+                        val targetLib = allLibs.find { it.id == _currentLibraryId.value } ?: allLibs.firstOrNull()
+                        val libId = targetLib?.id ?: "LIB-MAIN"
+                        val newStudent = StudentEntity(
+                            id = "STU-${UUID.randomUUID().toString().take(6).uppercase()}",
+                            libraryId = libId,
+                            studentCode = "STU-${(1000..9999).random()}",
+                            fullName = cleanName,
+                            mobile = "",
+                            email = cleanEmail,
+                            status = "ACTIVE",
+                            joiningDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                        )
+                        repository.saveStudent(newStudent)
+                        student = newStudent
+                    }
+                    _activeStudentId.value = student.id
+                    if (student.libraryId.isNotBlank()) {
+                        _currentLibraryId.value = student.libraryId
+                    }
+                }
+                "OWNER" -> {
+                    val allLibs = allLibraries.value
+                    val ownedLib = allLibs.find { it.ownerEmail.equals(cleanEmail, ignoreCase = true) }
+                        ?: allLibs.find { it.email.equals(cleanEmail, ignoreCase = true) }
+                        ?: allLibs.firstOrNull()
+                    if (ownedLib != null) {
+                        _currentLibraryId.value = ownedLib.id
+                    } else {
+                        val newLibId = "LIB-${UUID.randomUUID().toString().take(6).uppercase()}"
+                        val newLib = LibraryEntity(
+                            id = newLibId,
+                            name = "$cleanName's Library",
+                            code = "LIB-${(1000..9999).random()}",
+                            ownerName = cleanName,
+                            ownerEmail = cleanEmail,
+                            address = "Main Campus",
+                            city = "New Delhi",
+                            state = "Delhi",
+                            upiId = "library@upi",
+                            upiPayeeName = cleanName
+                        )
+                        repository.saveLibrary(newLib)
+                        _currentLibraryId.value = newLibId
+                    }
+                }
+            }
+
+            persistAuthSession(
+                authenticated = true,
+                email = _currentUserEmail.value,
+                name = _currentUserName.value,
+                role = _currentRole.value,
+                libraryId = _currentLibraryId.value,
+                studentId = _activeStudentId.value
+            )
+            if (_currentLibraryId.value.isNotBlank()) {
+                supabaseSyncManager.pullSupabaseToLocal(_currentLibraryId.value)
+            }
+        }
+    }
+
     fun toggleSeatStatusById(seatId: String, newStatus: String) {
         viewModelScope.launch {
             val currentSeats = seats.value
@@ -1997,6 +2092,63 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun quickCheckIn(studentId: String? = null, seatNumber: String? = null) {
+        performDirectSeatCheckIn(studentId, seatNumber)
+    }
+
+    fun quickCheckOut(studentId: String? = null, onCompleted: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val targetStudentId = studentId ?: _activeStudentId.value
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val currentLogs = attendanceLogs.value
+            val activeRecord = currentLogs.find {
+                it.studentId == targetStudentId &&
+                (it.date == todayStr || it.date.startsWith(todayStr)) &&
+                it.status.equals("CHECKED_IN", ignoreCase = true) &&
+                it.checkOutTime.isBlank()
+            } ?: currentLogs.find {
+                it.studentId == targetStudentId &&
+                it.status.equals("CHECKED_IN", ignoreCase = true) &&
+                it.checkOutTime.isBlank()
+            }
+            if (activeRecord != null) {
+                val nowTime = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+                val duration = try {
+                    val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
+                    val t1 = sdf.parse(activeRecord.checkInTime)
+                    val t2 = sdf.parse(nowTime)
+                    if (t1 != null && t2 != null) {
+                        val diff = (t2.time - t1.time) / (60 * 1000)
+                        if (diff > 0) diff.toInt() else 60
+                    } else 60
+                } catch (e: Exception) { 60 }
+                val updated = activeRecord.copy(
+                    checkOutTime = nowTime,
+                    durationMinutes = duration,
+                    status = "CHECKED_OUT"
+                )
+                repository.updateAttendance(updated)
+                val hours = duration / 60
+                val mins = duration % 60
+                val msg = "Checked Out at $nowTime! Session duration: ${hours}h ${mins}m."
+                _userMessage.value = msg
+                onCompleted?.invoke(msg)
+            } else {
+                _userMessage.value = "No active check-in found to check out."
+            }
+        }
+    }
+
+    fun toggleEventRsvp(eventId: String, studentId: String? = null) {
+        viewModelScope.launch {
+            val effectiveStudentId = studentId ?: _activeStudentId.value
+            if (effectiveStudentId.isNotBlank()) {
+                repository.toggleEventRsvp(eventId, effectiveStudentId)
+                _userMessage.value = "Event registration status updated!"
+            }
+        }
+    }
+
     fun scanQrAttendance(
         code: String,
         studentIdContext: String? = null,
@@ -2062,6 +2214,65 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
             )
             repository.manualAttendance(att)
             // SnackbarController.showSuccess("Attendance recorded for $studentName")
+        }
+    }
+
+    fun recordAttendance(
+        student: StudentEntity,
+        seatNumber: String = "Unassigned",
+        shiftName: String = "Full Day",
+        punchType: String = "PUNCH_IN"
+    ) {
+        viewModelScope.launch {
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val timeNow = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+            if (punchType == "PUNCH_IN") {
+                val att = AttendanceEntity(
+                    id = "ATT-KIOSK-${UUID.randomUUID().toString().take(8)}",
+                    libraryId = _currentLibraryId.value,
+                    studentId = student.id,
+                    studentName = student.fullName,
+                    seatNumber = seatNumber.ifBlank { student.seatNumber.ifBlank { "Unassigned" } },
+                    hallName = student.hallName.ifBlank { "Main Study Hall" },
+                    shiftName = shiftName.ifBlank { student.shiftName.ifBlank { "Full Day" } },
+                    date = todayStr,
+                    checkInTime = timeNow,
+                    checkOutTime = "",
+                    durationMinutes = 0,
+                    status = "CHECKED_IN",
+                    mode = "KIOSK",
+                    notes = "Tablet Kiosk Check-In"
+                )
+                repository.manualAttendance(att)
+                _userMessage.value = "${student.fullName} checked in at $timeNow"
+            } else {
+                val activeAtt = attendanceLogs.value.find {
+                    it.studentId == student.id && it.checkOutTime.isBlank()
+                }
+                if (activeAtt != null) {
+                    markAttendanceCheckOut(activeAtt.id, timeNow)
+                    _userMessage.value = "${student.fullName} checked out at $timeNow"
+                } else {
+                    val att = AttendanceEntity(
+                        id = "ATT-KIOSK-${UUID.randomUUID().toString().take(8)}",
+                        libraryId = _currentLibraryId.value,
+                        studentId = student.id,
+                        studentName = student.fullName,
+                        seatNumber = seatNumber.ifBlank { student.seatNumber.ifBlank { "Unassigned" } },
+                        hallName = student.hallName.ifBlank { "Main Study Hall" },
+                        shiftName = shiftName.ifBlank { student.shiftName.ifBlank { "Full Day" } },
+                        date = todayStr,
+                        checkInTime = timeNow,
+                        checkOutTime = timeNow,
+                        durationMinutes = 1,
+                        status = "CHECKED_OUT",
+                        mode = "KIOSK",
+                        notes = "Tablet Kiosk Check-Out"
+                    )
+                    repository.manualAttendance(att)
+                    _userMessage.value = "${student.fullName} checked out at $timeNow"
+                }
+            }
         }
     }
 

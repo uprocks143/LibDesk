@@ -527,4 +527,23 @@ data class FloorElementEntity(
     val isOccupied: Boolean = false
 )
 
+data class LibraryEventEntity(
+    val id: String,
+    val libraryId: String,
+    val title: String,
+    val description: String,
+    val category: String = "WORKSHOP", // "MOCK_TEST", "WORKSHOP", "SEMINAR", "BOOK_CLUB", "MAINTENANCE"
+    val date: String, // e.g. "2026-10-18"
+    val time: String, // e.g. "10:00 AM - 01:00 PM"
+    val venue: String = "Seminar Hall / Main Zone",
+    val speakerOrOrganizer: String = "Library Academic Team",
+    val maxParticipants: Int = 50,
+    val registeredStudentIds: List<String> = emptyList(),
+    val isOnline: Boolean = false,
+    val meetingLink: String = "",
+    val bannerEmoji: String = "📚",
+    val isFeatured: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
 

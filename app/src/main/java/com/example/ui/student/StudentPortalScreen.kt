@@ -44,6 +44,7 @@ import com.example.notification.StudentNotificationHelper
 import com.example.ui.pdf.PdfViewerDialog
 import com.example.ui.theme.*
 import com.example.viewmodel.LibDeskViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.util.ImageShareUtils
 import androidx.compose.ui.res.painterResource
@@ -66,6 +67,8 @@ fun StudentPortalScreen(
     shifts: List<ShiftEntity> = emptyList(),
     plans: List<MembershipPlanEntity> = emptyList(),
     halls: List<HallEntity> = emptyList(),
+    events: List<LibraryEventEntity> = emptyList(),
+    lockers: List<LockerEntity> = emptyList(),
     onViewIdCard: (StudentEntity) -> Unit,
     onViewReceipt: (PaymentEntity) -> Unit,
     onToggleBookmark: (DigitalMaterialEntity) -> Unit,
@@ -286,39 +289,48 @@ fun StudentPortalScreen(
             }
 
         
+        data class StudentTabItem(val id: Int, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
         val tabList = remember {
             listOf(
-                0 to "Dashboard",
-                9 to "💬 Desk Chat",
-                8 to "🔥 Focus & Streaks",
-                7 to "NCERT Books",
-                6 to "Seat Layout",
-                5 to "Profile & Seat",
-                1 to "E-Resources",
-                2 to "My Books",
-                3 to "Fee & Dues",
-                4 to "Help & Notices"
+                StudentTabItem(0, "Dashboard", Icons.Default.Dashboard),
+                StudentTabItem(9, "Desk Chat", Icons.Default.ChatBubble),
+                StudentTabItem(8, "Focus & Streaks", Icons.Default.Timer),
+                StudentTabItem(7, "NCERT Books", Icons.Default.MenuBook),
+                StudentTabItem(6, "Seat Layout", Icons.Default.Chair),
+                StudentTabItem(5, "Profile & Seat", Icons.Default.Person),
+                StudentTabItem(1, "E-Resources", Icons.Default.Article),
+                StudentTabItem(2, "My Books", Icons.Default.AutoStories),
+                StudentTabItem(3, "Fee & Dues", Icons.Default.Payments),
+                StudentTabItem(4, "Help & Notices", Icons.Default.Campaign)
             )
         }
         val activeTabIndex = remember(selectedTab) {
-            tabList.indexOfFirst { it.first == selectedTab }.coerceAtLeast(0)
+            tabList.indexOfFirst { it.id == selectedTab }.coerceAtLeast(0)
         }
 
         ScrollableTabRow(
             selectedTabIndex = activeTabIndex,
             containerColor = MaterialTheme.colorScheme.background,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            contentColor = MaterialTheme.colorScheme.primary,
             edgePadding = 12.dp
         ) {
-            tabList.forEach { (id, title) ->
+            tabList.forEach { tabItem ->
+                val isSelected = selectedTab == tabItem.id
                 Tab(
-                    selected = selectedTab == id,
-                    onClick = { selectedTab = id },
+                    selected = isSelected,
+                    onClick = { selectedTab = tabItem.id },
+                    icon = {
+                        Icon(
+                            imageVector = tabItem.icon,
+                            contentDescription = tabItem.title,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
                     text = {
                         Text(
-                            text = title,
-                            fontWeight = if (selectedTab == id) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 13.5.sp
+                            text = tabItem.title,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.5.sp
                         )
                     }
                 )
@@ -327,6 +339,9 @@ fun StudentPortalScreen(
 
         when (selectedTab) {
             0 -> {
+                val vmEvents = viewModel?.libraryEvents?.collectAsStateWithLifecycle()?.value ?: events
+                val vmLockers = viewModel?.lockers?.collectAsStateWithLifecycle()?.value ?: lockers
+
                 StudentMemberDashboard(
                     student = student,
                     library = library,
@@ -335,8 +350,19 @@ fun StudentPortalScreen(
                     shifts = shifts,
                     plans = plans,
                     halls = halls,
+                    events = vmEvents,
+                    lockers = vmLockers,
                     onOpenQrScanner = onOpenQrScanner,
                     onViewIdCard = onViewIdCard,
+                    onQuickCheckIn = {
+                        viewModel?.quickCheckIn(student.id, student.seatNumber)
+                    },
+                    onQuickCheckOut = {
+                        viewModel?.quickCheckOut(student.id)
+                    },
+                    onRsvpEvent = { eventId ->
+                        viewModel?.toggleEventRsvp(eventId, student.id)
+                    },
                     onGoToFeeTab = { selectedTab = 3 },
                     onGoToProfileTab = { selectedTab = 5 },
                     onGoToSeatLayout = { selectedTab = 6 },
