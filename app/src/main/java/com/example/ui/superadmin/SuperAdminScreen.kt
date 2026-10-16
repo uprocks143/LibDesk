@@ -71,6 +71,7 @@ fun SuperAdminScreen(
     onTabChange: (Int) -> Unit = {},
     onOpenMenu: () -> Unit = {},
     onNavigateToLibrary: (String) -> Unit = {},
+    onOpenSupabaseConfig: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     val superAdminProfile by viewModel.superAdminProfile.collectAsState()
@@ -129,7 +130,7 @@ fun SuperAdminScreen(
                 2 -> PaymentsTab(allSubscriptions, libraries, saasPlans, viewModel)
                 3 -> PlansTab(saasPlans, viewModel)
                 4 -> BroadcastTab(libraries, viewModel)
-                5 -> SettingsTab(superAdminProfile, viewModel, onLogout)
+                5 -> SettingsTab(superAdminProfile, viewModel, onOpenSupabaseConfig, onLogout)
             }
         }
     }
@@ -1250,7 +1251,7 @@ private fun BroadcastTab(libraries: List<LibraryEntity>, viewModel: LibDeskViewM
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewModel, onLogout: () -> Unit) {
+private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewModel, onOpenSupabaseConfig: () -> Unit, onLogout: () -> Unit) {
     var name by remember(profile) { mutableStateOf(profile?.name ?: "") }
     var email by remember(profile) { mutableStateOf(profile?.email ?: "") }
     var mobile by remember(profile) { mutableStateOf(profile?.mobile ?: "") }
@@ -1365,6 +1366,46 @@ private fun SettingsTab(profile: SuperAdminUserEntity?, viewModel: LibDeskViewMo
                     Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Sync UPI ID Across All Plans")
+                }
+            }
+        }
+
+        Text("Supabase Cloud Database & Auth", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CloudSync,
+                        contentDescription = null,
+                        tint = Color(0xFF3ECF8E),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (com.example.data.remote.SupabaseClient.isConfigured()) "Supabase Connected" else "Supabase Keys Unconfigured",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Text(
+                    text = "Configure project URL, anon public key, live connection status, and test PostgreSQL tables.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onOpenSupabaseConfig,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3ECF8E)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Configure Supabase Database & Auth", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }

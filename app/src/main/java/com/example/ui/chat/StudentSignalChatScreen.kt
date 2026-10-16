@@ -257,7 +257,7 @@ fun StudentSignalChatScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Ask for Wi-Fi credentials, AC comfort, quiet zone alerts, book renewals, or any help. Your messages are synced in real time via Supabase.",
+                            text = "Ask for Wi-Fi credentials, AC comfort, quiet zone alerts, book renewals, or any help. Your messages are securely synced in real time.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center

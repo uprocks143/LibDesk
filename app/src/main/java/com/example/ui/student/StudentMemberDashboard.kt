@@ -411,7 +411,7 @@ fun StudentMemberDashboard(
                                         color = Color(0xFF10B981).copy(alpha = 0.18f)
                                     ) {
                                         Text(
-                                            text = "Supabase Realtime",
+                                            text = "Live Realtime",
                                             fontSize = 10.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color(0xFF047857),

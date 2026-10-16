@@ -33,7 +33,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.entities.*
 import com.example.data.remote.SupabaseClient
 import com.example.ui.auth.AuthScreen
-import com.example.ui.auth.SupabaseAuthScreen
 import com.example.ui.components.*
 import com.example.ui.manager.*
 import com.example.ui.onboarding.OnboardingWizardScreen
@@ -231,76 +230,56 @@ fun LibDeskApp(
     val twoFaTargetEmail by viewModel.twoFaTargetEmail.collectAsStateWithLifecycle()
     val otpTimerSeconds by viewModel.otpTimerSeconds.collectAsStateWithLifecycle()
     val superAdminProfile by viewModel.superAdminProfile.collectAsStateWithLifecycle()
-
-    
-    var showSupabaseAuthDirect by remember { mutableStateOf(false) }
+    var showSupabaseConnectionDialog by remember { mutableStateOf(false) }
 
     if (!isAuthenticated) {
-        if (showSupabaseAuthDirect) {
-            SupabaseAuthScreen(
-                onAuthSuccess = { email, role, name ->
-                    viewModel.onSupabaseLoginSuccess(email, role, name)
-                    showSupabaseAuthDirect = false
-                },
-                onNavigateBack = {
-                    showSupabaseAuthDirect = false
-                }
-            )
-        } else {
-            AuthScreen(
-                libraries = allLibraries,
-                shifts = shifts,
-                plans = plans,
-                superAdminProfile = superAdminProfile,
-                isAwaiting2Fa = isAwaiting2Fa,
-                twoFaTargetEmail = twoFaTargetEmail,
-                otpTimerSeconds = otpTimerSeconds,
-                onRequest2FaOtp = { email, code, onOtpSent, onError ->
-                    viewModel.requestSuperAdmin2FaOtp(email, code, onOtpSent, onError)
-                },
-                onVerify2FaOtp = { otp, onSuccess, onError ->
-                    viewModel.verifySuperAdminOtp(otp, onSuccess, onError)
-                },
-                onResend2FaOtp = { onOtpSent ->
-                    viewModel.resendSuperAdminOtp(onOtpSent)
-                },
-                onCancel2Fa = { viewModel.cancel2Fa() },
-                onClaimAdminSlot = { name, email, mobile, pin, is2Fa, onSuccess, onError ->
-                    viewModel.claimSuperAdminSlot(name, email, mobile, pin, is2Fa, onSuccess, onError)
-                },
-                onResetAdminSlot = {
-                    // Public unauthenticated reset is permanently disabled for platform security
-                },
-                onResetPassword = { email, newPassword, onSuccess, onError ->
-                    viewModel.resetUserPassword(email, newPassword, onSuccess, onError)
-                },
-                onLogin = { _, _, _ ->
-                    
-                },
-
-                onAuthenticate = { identifier, password, role, onSuccess, onError ->
-                    viewModel.authenticateWithPassword(identifier, password, role, onSuccess = onSuccess, onError = onError)
-                },
-                onRegister = { name, email, libName, phone, password ->
-                    viewModel.registerAndLogin(name, email, libName, phone, password)
-                },
-                onRequestOwnerSignupOtp = { email, name, phone, onOtpSent, onError ->
-                    viewModel.requestOwnerSignupOtp(email, name, phone, onOtpSent, onError)
-                },
-                onVerifyOwnerSignupOtp = { email, enteredOtp, onVerified ->
-                    viewModel.verifyOwnerSignupOtp(email, enteredOtp, onVerified)
-                },
-                onCheckLibraryTrialEligibility = { email, phone, onResult ->
-                    viewModel.checkLibraryTrialEligibility(email, phone, onResult)
-                },
-                onStudentQrSignup = { libId, fullName, mobile, email, exam, shift, plan, password ->
-                    viewModel.registerStudentViaQr(libId, fullName, mobile, email, exam, shift, plan, password)
-                },
-                onOpenSupabaseAuth = {
-                    showSupabaseAuthDirect = true
-                }
-            )
-        }
+        AuthScreen(
+            libraries = allLibraries,
+            shifts = shifts,
+            plans = plans,
+            superAdminProfile = superAdminProfile,
+            isAwaiting2Fa = isAwaiting2Fa,
+            twoFaTargetEmail = twoFaTargetEmail,
+            otpTimerSeconds = otpTimerSeconds,
+            onRequest2FaOtp = { email, code, onOtpSent, onError ->
+                viewModel.requestSuperAdmin2FaOtp(email, code, onOtpSent, onError)
+            },
+            onVerify2FaOtp = { otp, onSuccess, onError ->
+                viewModel.verifySuperAdminOtp(otp, onSuccess, onError)
+            },
+            onResend2FaOtp = { onOtpSent ->
+                viewModel.resendSuperAdminOtp(onOtpSent)
+            },
+            onCancel2Fa = { viewModel.cancel2Fa() },
+            onClaimAdminSlot = { name, email, mobile, pin, is2Fa, onSuccess, onError ->
+                viewModel.claimSuperAdminSlot(name, email, mobile, pin, is2Fa, onSuccess, onError)
+            },
+            onResetAdminSlot = {
+                // Public unauthenticated reset is permanently disabled for platform security
+            },
+            onResetPassword = { email, newPassword, onSuccess, onError ->
+                viewModel.resetUserPassword(email, newPassword, onSuccess, onError)
+            },
+            onLogin = { _, _, _ -> },
+            onAuthenticate = { identifier, password, role, onSuccess, onError ->
+                viewModel.authenticateWithPassword(identifier, password, role, onSuccess = onSuccess, onError = onError)
+            },
+            onRegister = { name, email, libName, phone, password ->
+                viewModel.registerAndLogin(name, email, libName, phone, password)
+            },
+            onRequestOwnerSignupOtp = { email, name, phone, onOtpSent, onError ->
+                viewModel.requestOwnerSignupOtp(email, name, phone, onOtpSent, onError)
+            },
+            onVerifyOwnerSignupOtp = { email, enteredOtp, onVerified ->
+                viewModel.verifyOwnerSignupOtp(email, enteredOtp, onVerified)
+            },
+            onCheckLibraryTrialEligibility = { email, phone, onResult ->
+                viewModel.checkLibraryTrialEligibility(email, phone, onResult)
+            },
+            onStudentQrSignup = { libId, fullName, mobile, email, exam, shift, plan, password ->
+                viewModel.registerStudentViaQr(libId, fullName, mobile, email, exam, shift, plan, password)
+            }
+        )
         return
     }
 
@@ -416,6 +395,7 @@ fun LibDeskApp(
                 showPostNoticeModal ||
                 showNotificationsModal ||
                 showUserProfileModal ||
+                showSupabaseConnectionDialog ||
                 showProfileScreenModal ||
                 showLogoutConfirmationDialog ||
                 showLibrarianChatModal ||
@@ -477,6 +457,9 @@ fun LibDeskApp(
                 }
                 showUserProfileModal -> {
                     showUserProfileModal = false
+                }
+                showSupabaseConnectionDialog -> {
+                    showSupabaseConnectionDialog = false
                 }
                 editingStudentForProfile != null -> {
                     editingStudentForProfile = null
@@ -581,6 +564,9 @@ fun LibDeskApp(
                         settingsActiveTab = 4
                         showLibraryConfigView = true
                         showNoticesAndHelpView = false
+                    },
+                    onOpenSupabaseConfig = {
+                        showSupabaseConnectionDialog = true
                     },
                     onOpenQrScanner = { showQrScannerModal = true },
                     onShowLibraryQr = { showLibraryQrModal = true },
@@ -923,6 +909,9 @@ fun LibDeskApp(
                                     onManualCloudSync = {
                                         viewModel.syncLocalToSupabaseCloud()
                                     },
+                                    onOpenSupabaseConfig = {
+                                        showSupabaseConnectionDialog = true
+                                    },
                                     viewModel = viewModel
                                 )
                             }
@@ -1175,6 +1164,9 @@ fun LibDeskApp(
                     },
                     selectedTabFromDrawer = superAdminTab,
                     onTabChange = { superAdminTab = it },
+                    onOpenSupabaseConfig = {
+                        showSupabaseConnectionDialog = true
+                    },
                     onOpenMenu = {
                         coroutineScope.launch {
                             if (drawerState.isClosed) drawerState.open() else drawerState.close()
@@ -1642,6 +1634,22 @@ fun LibDeskApp(
             student = showUpiPaymentShareModalForStudent!!,
             library = library,
             onDismiss = { showUpiPaymentShareModalForStudent = null }
+        )
+    }
+
+    // Supabase Cloud Database & Auth Configuration Modal
+    if (showSupabaseConnectionDialog) {
+        SupabaseConnectionDialog(
+            isOpen = true,
+            onDismiss = { showSupabaseConnectionDialog = false },
+            onSaveCredentials = { url, key ->
+                viewModel.updateSupabaseCredentials(url, key)
+            },
+            onSyncDatabase = {
+                viewModel.syncLocalToSupabaseCloud()
+            },
+            isSyncing = isSupabaseSyncing,
+            syncStatusMessage = supabaseStatusMessage
         )
     }
 }

@@ -2498,6 +2498,130 @@ class LibDeskRepository(val context: Context? = null) {
         return otherLibs + merged
     }
 
+    suspend fun pushAllLocalDataToSupabase(libraryId: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        if (!SupabaseClient.isConfigured() || libraryId.isBlank()) {
+            return@withContext Pair(false, "Supabase connection is not active or Library ID is missing.")
+        }
+        var count = 0
+        try {
+            val lib = _libraries.value.find { it.id == libraryId }
+            if (lib != null) {
+                val libArr = org.json.JSONArray().put(org.json.JSONObject().apply {
+                    put("id", lib.id)
+                    put("name", lib.name)
+                    put("code", lib.code)
+                    put("ownerName", lib.ownerName)
+                    put("ownerEmail", lib.ownerEmail)
+                    put("ownerPhone", lib.ownerPhone)
+                    put("address", lib.address)
+                    put("city", lib.city)
+                    put("state", lib.state)
+                    put("upiId", lib.upiId)
+                    put("upiPayeeName", lib.upiPayeeName)
+                    put("updatedAt", lib.updatedAt)
+                })
+                SupabaseClient.upsertRecords("libraries", libArr)
+                count++
+            }
+
+            val halls = _halls.value.filter { it.libraryId == libraryId }
+            if (halls.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                halls.forEach { h ->
+                    arr.put(org.json.JSONObject().apply {
+                        put("id", h.id)
+                        put("libraryId", h.libraryId)
+                        put("name", h.name)
+                        put("capacity", h.seatCount)
+                        put("floor", h.floor)
+                    })
+                }
+                SupabaseClient.upsertRecords("halls", arr)
+                count += halls.size
+            }
+
+            val shifts = _shifts.value.filter { it.libraryId == libraryId }
+            if (shifts.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                shifts.forEach { s ->
+                    arr.put(org.json.JSONObject().apply {
+                        put("id", s.id)
+                        put("libraryId", s.libraryId)
+                        put("name", s.name)
+                        put("startTime", s.startTime)
+                        put("endTime", s.endTime)
+                        put("fee", s.fee)
+                    })
+                }
+                SupabaseClient.upsertRecords("shifts", arr)
+                count += shifts.size
+            }
+
+            val plans = _plans.value.filter { it.libraryId == libraryId }
+            if (plans.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                plans.forEach { p ->
+                    arr.put(org.json.JSONObject().apply {
+                        put("id", p.id)
+                        put("libraryId", p.libraryId)
+                        put("name", p.name)
+                        put("durationMonths", p.durationMonths)
+                        put("price", p.baseFee)
+                    })
+                }
+                SupabaseClient.upsertRecords("membership_plans", arr)
+                count += plans.size
+            }
+
+            val seats = _seats.value.filter { it.libraryId == libraryId }
+            if (seats.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                seats.forEach { s ->
+                    arr.put(org.json.JSONObject().apply {
+                        put("id", s.id)
+                        put("libraryId", s.libraryId)
+                        put("hallId", s.hallId)
+                        put("seatNumber", s.seatNumber)
+                        put("isBooked", s.status == "BOOKED" || s.status == "OCCUPIED")
+                        put("studentId", s.assignedStudentId)
+                        put("studentName", s.assignedStudentName)
+                        put("assignedShiftId", s.assignedShiftId)
+                        put("assignedShiftName", s.assignedShiftName)
+                    })
+                }
+                SupabaseClient.upsertRecords("seats", arr)
+                count += seats.size
+            }
+
+            val students = _students.value.filter { it.libraryId == libraryId }
+            if (students.isNotEmpty()) {
+                val arr = org.json.JSONArray()
+                students.forEach { s ->
+                    arr.put(org.json.JSONObject().apply {
+                        put("id", s.id)
+                        put("libraryId", s.libraryId)
+                        put("fullName", s.fullName)
+                        put("email", s.email)
+                        put("mobile", s.mobile)
+                        put("seatId", s.seatId)
+                        put("seatNumber", s.seatNumber)
+                        put("hallName", s.hallName)
+                        put("status", s.status)
+                        put("totalFee", s.totalFee)
+                        put("paidAmount", s.paidAmount)
+                        put("dueAmount", s.dueAmount)
+                    })
+                }
+                SupabaseClient.upsertRecords("students", arr)
+                count += students.size
+            }
+
+            Pair(true, "Successfully pushed $count records to Supabase Cloud!")
+        } catch (e: Exception) {
+            Pair(false, "Push to Supabase failed: ${e.message}")
+        }
+    }
+
     suspend fun pullFromCloud(libraryId: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
         if (!SupabaseClient.isConfigured() || libraryId.isBlank()) return@withContext Pair(true, "Offline local mode")
         try {

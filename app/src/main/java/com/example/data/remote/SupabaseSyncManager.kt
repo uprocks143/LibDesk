@@ -12,8 +12,11 @@ class SupabaseSyncManager(
     private val TAG = "SupabaseSyncManager"
 
     suspend fun syncLocalToSupabase(libraryId: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {
-        // Direct cloud architecture: data is already saved to Supabase on creation/update
-        Pair(true, "Cloud state synchronized")
+        if (repository != null) {
+            repository.pushAllLocalDataToSupabase(libraryId)
+        } else {
+            Pair(true, "Cloud state synchronized")
+        }
     }
 
     suspend fun pullSupabaseToLocal(libraryId: String): Pair<Boolean, String> = withContext(Dispatchers.IO) {

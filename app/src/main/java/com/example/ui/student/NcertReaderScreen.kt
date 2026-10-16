@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -18,6 +19,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -39,15 +41,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.download.DownloadState
-import com.example.data.download.NcertPdfGenerator
 import com.example.data.model.NcertBook
 import com.example.data.repository.NcertRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+
+data class NcertChapterItem(
+    val title: String,
+    val suffix: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
@@ -61,8 +70,30 @@ fun NcertReaderScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // 0: PDF Canvas, 1: Digital Chapter Notes & Exercises, 2: Online Web Portal
+    // 0: Original PDF Canvas, 1: Official Portal WebView, 2: Chapter Notes & Q/A
     var selectedReaderMode by remember { mutableIntStateOf(0) }
+
+    // NCERT Book Code extraction (e.g. jemh1, jesc1, aejm1)
+    val bookCode = remember(book.sourceUrl) {
+        Regex("""([a-zA-Z]{4,6}\d)""", RegexOption.IGNORE_CASE)
+            .find(book.sourceUrl)?.value?.lowercase() ?: ""
+    }
+
+    // Chapters list for this book
+    val chapters = remember(bookCode) {
+        val list = mutableListOf<NcertChapterItem>()
+        list.add(NcertChapterItem("Prelims / Index", "ps"))
+        for (i in 1..16) {
+            val numStr = if (i < 10) "0$i" else "$i"
+            list.add(NcertChapterItem("Chapter $i", numStr))
+        }
+        list
+    }
+
+    var selectedChapter by remember {
+        val initialSuffix = if (book.sourceUrl.contains("ps.pdf", ignoreCase = true)) "ps" else "01"
+        mutableStateOf(chapters.firstOrNull { it.suffix == initialSuffix } ?: chapters[1])
+    }
 
     var pdfRenderer by remember { mutableStateOf<PdfRenderer?>(null) }
     var fileDescriptor by remember { mutableStateOf<ParcelFileDescriptor?>(null) }
@@ -71,12 +102,14 @@ fun NcertReaderScreen(
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var downloadProgress by remember { mutableIntStateOf(0) }
+    var bytesDownloadedText by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableIntStateOf(0) }
 
     var isNightMode by remember { mutableStateOf(false) }
     var bookmarks by remember { mutableStateOf(setOf<Int>()) }
     var showJumpDialog by remember { mutableStateOf(false) }
+    var showChapterSheet by remember { mutableStateOf(false) }
 
     // Zoom and pan state for PDF canvas
     var scale by remember { mutableFloatStateOf(1f) }
@@ -84,7 +117,7 @@ fun NcertReaderScreen(
     var offsetY by remember { mutableFloatStateOf(0f) }
 
     val transformState = rememberTransformableState { zoomChange, offsetChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 3.5f)
+        scale = (scale * zoomChange).coerceIn(1f, 4.0f)
         if (scale > 1f) {
             offsetX += offsetChange.x
             offsetY += offsetChange.y
@@ -100,7 +133,7 @@ fun NcertReaderScreen(
             val page = renderer.openPage(pageIndex)
             val maxDimension = 2048
             val pageMax = maxOf(page.width, page.height).coerceAtLeast(1)
-            val scaleFactor = (maxDimension.toFloat() / pageMax).coerceIn(1.0f, 2.0f)
+            val scaleFactor = (maxDimension.toFloat() / pageMax).coerceIn(1.0f, 2.5f)
             val width = (page.width * scaleFactor).toInt().coerceAtLeast(1)
             val height = (page.height * scaleFactor).toInt().coerceAtLeast(1)
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -151,52 +184,38 @@ fun NcertReaderScreen(
             isLoading = false
             errorMessage = null
         } catch (e: Exception) {
-            android.util.Log.w("NcertReader", "PdfRenderer init error, generating fallback", e)
-            coroutineScope.launch {
-                try {
-                    val fallbackFile = NcertPdfGenerator.generateNcertBookPdf(context, book)
-                    val fd = ParcelFileDescriptor.open(fallbackFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                    val renderer = PdfRenderer(fd)
-                    fileDescriptor = fd
-                    pdfRenderer = renderer
-                    totalPages = renderer.pageCount
-                    renderPage(renderer, 0)
-                    isLoading = false
-                    errorMessage = null
-                } catch (genEx: Exception) {
-                    errorMessage = "Unable to render PDF: ${genEx.localizedMessage}"
-                    isLoading = false
-                }
-            }
+            android.util.Log.e("NcertReader", "PdfRenderer init error", e)
+            errorMessage = "Unable to open original PDF. File may be incomplete. Please tap Retry to download."
+            isLoading = false
         }
     }
 
-    LaunchedEffect(book.id, retryTrigger) {
+    // Load or download selected chapter
+    LaunchedEffect(book.id, selectedChapter.suffix, retryTrigger) {
         isLoading = true
         errorMessage = null
-        val existingFile: File? = repository.getDownloadedFile(book)
-        if (existingFile != null && existingFile.exists() && existingFile.length() > 1024L) {
+        downloadProgress = 0
+        bytesDownloadedText = ""
+
+        val existingFile: File? = repository.getDownloadedFile(book, selectedChapter.suffix)
+        if (existingFile != null && existingFile.exists() && repository.isDownloaded(book, selectedChapter.suffix)) {
             initializeRenderer(existingFile)
         } else {
-            repository.downloadBook(book).collect { state ->
+            repository.downloadBook(book, selectedChapter.suffix).collect { state ->
                 when (state) {
                     is DownloadState.Progress -> {
                         downloadProgress = state.percentage
+                        val mbDownloaded = state.bytesDownloaded / (1024f * 1024f)
+                        val mbTotal = state.totalBytes / (1024f * 1024f)
+                        bytesDownloadedText = String.format(java.util.Locale.US, "%.1f / %.1f MB", mbDownloaded, mbTotal)
                     }
                     is DownloadState.Success -> {
                         repository.markBookDownloaded(book.id, state.file)
                         initializeRenderer(state.file)
                     }
                     is DownloadState.Error -> {
-                        // On download error, immediately generate local high-quality PDF
-                        try {
-                            val genFile = NcertPdfGenerator.generateNcertBookPdf(context, book)
-                            repository.markBookDownloaded(book.id, genFile)
-                            initializeRenderer(genFile)
-                        } catch (e: Exception) {
-                            errorMessage = state.message
-                            isLoading = false
-                        }
+                        errorMessage = state.message
+                        isLoading = false
                     }
                 }
             }
@@ -215,11 +234,14 @@ fun NcertReaderScreen(
     BackHandler {
         if (showJumpDialog) {
             showJumpDialog = false
+        } else if (showChapterSheet) {
+            showChapterSheet = false
         } else {
             onNavigateBack()
         }
     }
 
+    // Jump to Page Dialog
     if (showJumpDialog) {
         var pageInput by remember { mutableStateOf((currentPageIndex + 1).toString()) }
         AlertDialog(
@@ -255,6 +277,111 @@ fun NcertReaderScreen(
         )
     }
 
+    // Chapter Selection Modal Bottom Sheet
+    if (showChapterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showChapterSheet = false },
+            sheetState = rememberModalBottomSheetState()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Select Chapter",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = "${book.bookTitle} (Class ${book.classLevel})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    chapters.forEach { ch ->
+                        val isSelected = ch.suffix == selectedChapter.suffix
+                        val isChDownloaded = repository.isDownloaded(book, ch.suffix)
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedChapter = ch
+                                    showChapterSheet = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (ch.suffix == "ps") Icons.Default.Subject else Icons.Default.MenuBook,
+                                        contentDescription = null,
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Column {
+                                        Text(
+                                            text = ch.title,
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                            ),
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Official NCERT PDF: ${bookCode.ifBlank { "book" }}${ch.suffix}.pdf",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+
+                                if (isChDownloaded) {
+                                    Surface(
+                                        color = androidx.compose.ui.graphics.Color(0xFFE8F5E9),
+                                        shape = RoundedCornerShape(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Saved",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -263,13 +390,17 @@ fun NcertReaderScreen(
                         Text(
                             text = book.bookTitle,
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = "Class ${book.classLevel} • ${book.subject} (${book.medium})",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Class ${book.classLevel} • ${selectedChapter.title}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 },
                 navigationIcon = {
@@ -278,26 +409,32 @@ fun NcertReaderScreen(
                     }
                 },
                 actions = {
+                    // Open in External PDF Viewer (Adobe Acrobat / Google Drive)
                     IconButton(
                         onClick = {
                             try {
-                                val file = repository.getDownloadedFile(book)
+                                val file = repository.getDownloadedFile(book, selectedChapter.suffix)
                                 if (file != null && file.exists()) {
                                     val uri = repository.getFileUri(file)
                                     val intent = Intent(Intent.ACTION_VIEW).apply {
                                         setDataAndType(uri, "application/pdf")
                                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                    context.startActivity(Intent.createChooser(intent, "Open PDF with"))
+                                    context.startActivity(Intent.createChooser(intent, "Open NCERT PDF with"))
                                 } else {
-                                    Toast.makeText(context, "Preparing PDF file...", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Downloading PDF first...", Toast.LENGTH_SHORT).show()
                                 }
                             } catch (e: Exception) {
-                                Toast.makeText(context, "No PDF viewer installed", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "No external PDF viewer installed", Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = "Share or Open Externally")
+                        Icon(Icons.Default.Share, contentDescription = "Open in External App")
+                    }
+
+                    // Chapter Selection Button
+                    IconButton(onClick = { showChapterSheet = true }) {
+                        Icon(Icons.Default.List, contentDescription = "Chapters")
                     }
 
                     if (selectedReaderMode == 0 && totalPages > 0) {
@@ -405,7 +542,7 @@ fun NcertReaderScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Reader Mode Selector
+            // Mode Selector Tabs
             PrimaryTabRow(
                 selectedTabIndex = selectedReaderMode,
                 modifier = Modifier.fillMaxWidth()
@@ -413,23 +550,46 @@ fun NcertReaderScreen(
                 Tab(
                     selected = selectedReaderMode == 0,
                     onClick = { selectedReaderMode = 0 },
-                    text = { Text("📄 PDF Canvas", fontWeight = FontWeight.Bold) }
+                    text = { Text("📄 Original NCERT PDF", fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = selectedReaderMode == 1,
                     onClick = { selectedReaderMode = 1 },
-                    text = { Text("📝 Chapter Notes & Q/A", fontWeight = FontWeight.Bold) }
+                    text = { Text("🌐 Official Portal", fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = selectedReaderMode == 2,
                     onClick = { selectedReaderMode = 2 },
-                    text = { Text("🌐 Official Portal", fontWeight = FontWeight.Bold) }
+                    text = { Text("📝 Syllabus & Notes", fontWeight = FontWeight.Bold) }
                 )
+            }
+
+            // Quick Chapter Chips Row (Visible in PDF Canvas mode)
+            if (selectedReaderMode == 0) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    chapters.take(10).forEach { ch ->
+                        FilterChip(
+                            selected = ch.suffix == selectedChapter.suffix,
+                            onClick = { selectedChapter = ch },
+                            label = { Text(ch.title, fontSize = 12.sp) },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                    TextButton(onClick = { showChapterSheet = true }) {
+                        Text("More Chapters...", fontSize = 12.sp)
+                    }
+                }
             }
 
             when (selectedReaderMode) {
                 0 -> {
-                    // PDF Canvas View
+                    // Original PDF Canvas View
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -448,32 +608,35 @@ fun NcertReaderScreen(
                                         modifier = Modifier.padding(24.dp)
                                     ) {
                                         Icon(
-                                            Icons.Default.MenuBook,
+                                            Icons.Default.CloudOff,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MaterialTheme.colorScheme.error,
                                             modifier = Modifier.size(48.dp)
                                         )
                                         Spacer(modifier = Modifier.height(12.dp))
                                         Text(
-                                            text = "Loading In-App Edition...",
+                                            text = "Official Server Connection",
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                         )
                                         Spacer(modifier = Modifier.height(6.dp))
                                         Text(
-                                            text = "Switched to verified offline NCERT edition for seamless reading.",
+                                            text = errorMessage ?: "Could not download authentic PDF from official government server.",
                                             style = MaterialTheme.typography.bodySmall,
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Spacer(modifier = Modifier.height(16.dp))
-                                        Button(
-                                            onClick = {
-                                                coroutineScope.launch {
-                                                    val f = NcertPdfGenerator.generateNcertBookPdf(context, book)
-                                                    initializeRenderer(f)
-                                                }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            FilledTonalButton(
+                                                onClick = { selectedReaderMode = 1 }
+                                            ) {
+                                                Text("Open Official Portal")
                                             }
-                                        ) {
-                                            Text("Open Textbook Now")
+                                            Button(
+                                                onClick = { retryTrigger++ }
+                                            ) {
+                                                Text("Retry Download")
+                                            }
                                         }
                                     }
                                 }
@@ -488,7 +651,7 @@ fun NcertReaderScreen(
                                 ) {
                                     Image(
                                         bitmap = currentBitmap!!.asImageBitmap(),
-                                        contentDescription = "Textbook Page ${currentPageIndex + 1}",
+                                        contentDescription = "Original Textbook Page ${currentPageIndex + 1}",
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .graphicsLayer(
@@ -507,36 +670,53 @@ fun NcertReaderScreen(
                                     modifier = Modifier.padding(24.dp)
                                 ) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(48.dp),
-                                        color = MaterialTheme.colorScheme.primary
+                                        progress = { if (downloadProgress > 0) downloadProgress / 100f else 0.5f },
+                                        modifier = Modifier.size(56.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.primaryContainer
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = "Opening NCERT Textbook...",
+                                        text = if (downloadProgress > 0) "Downloading Authentic NCERT Book ($downloadProgress%)..." else "Connecting to Official NCERT Server...",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                                     )
+                                    if (bytesDownloadedText.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = bytesDownloadedText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "Rendering high-resolution vector pages for Class ${book.classLevel} ${book.subject}...",
+                                        text = "Fetching original vector textbook for Class ${book.classLevel} ${book.subject} (${selectedChapter.title})...",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
                                     )
                                 }
                             }
-                            else -> {
-                                CircularProgressIndicator()
-                            }
                         }
                     }
                 }
                 1 -> {
-                    // Digital Chapter Notes & Exercises View
-                    NcertDigitalNotesView(book = book)
+                    // Official Portal E-Book WebView
+                    val portalUrl = remember(bookCode) {
+                        if (bookCode.isNotBlank()) {
+                            "https://ncert.nic.in/textbook.php?$bookCode=0-16"
+                        } else if (book.sourceUrl.isNotBlank()) {
+                            book.sourceUrl
+                        } else {
+                            "https://ncert.nic.in/textbook.php"
+                        }
+                    }
+                    NcertEmbeddedPortalWebView(url = portalUrl)
                 }
                 2 -> {
-                    // Official Portal E-Book WebView
-                    NcertEmbeddedPortalWebView(url = book.sourceUrl)
+                    // Digital Chapter Notes & Exercises View
+                    NcertDigitalNotesView(book = book)
                 }
             }
         }
@@ -686,51 +866,6 @@ fun NcertDigitalNotesView(book: NcertBook) {
                             modifier = Modifier.padding(10.dp)
                         )
                     }
-                }
-            }
-        }
-
-        // Section 3: NCERT Model Questions & Solutions
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("NCERT Model Questions & Solutions", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                }
-                HorizontalDivider()
-
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Q1: Explain how conceptual inquiry enhances long-term retention compared to rote learning.",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Solution: Conceptual inquiry engages higher cognitive faculties by connecting core scientific or mathematical theories with real-world observations. Under NEP 2020, this creates lasting mental frameworks that allow students to solve unseen exemplar problems effortlessly.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
-
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = "Q2: What is the primary rule for unit consistency in calculations?",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Solution: All physical variables must be converted to standard SI units (e.g., meters, kilograms, seconds) before substituting into formulas to prevent scale mismatch and calculation errors.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }

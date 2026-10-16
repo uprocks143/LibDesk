@@ -64,14 +64,15 @@ class NcertRepository(
     /**
      * Checks if a textbook has already been downloaded onto this device.
      */
-    fun isDownloaded(book: NcertBook): Boolean = downloadManager.isBookDownloaded(book)
+    fun isDownloaded(book: NcertBook, chapterSuffix: String? = null): Boolean =
+        downloadManager.isBookDownloaded(book, chapterSuffix)
 
     /**
-     * Gets the local file instance for reading if downloaded.
+     * Gets the local file instance for reading if downloaded and authentic.
      */
-    fun getDownloadedFile(book: NcertBook): File? {
-        val file = downloadManager.getLocalFileForBook(book)
-        return if (file.exists() && file.length() > 1024L) file else null
+    fun getDownloadedFile(book: NcertBook, chapterSuffix: String? = null): File? {
+        val file = downloadManager.getLocalFileForBook(book, chapterSuffix)
+        return if (downloadManager.isBookDownloaded(book, chapterSuffix)) file else null
     }
 
     /**
@@ -82,8 +83,8 @@ class NcertRepository(
     /**
      * Starts downloading book directly from official government server.
      */
-    fun downloadBook(book: NcertBook): Flow<DownloadState> {
-        return downloadManager.downloadBook(book)
+    fun downloadBook(book: NcertBook, chapterSuffix: String? = null): Flow<DownloadState> {
+        return downloadManager.downloadBook(book, chapterSuffix)
     }
 
     /**

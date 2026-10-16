@@ -30,7 +30,7 @@ object SupabaseClientConfig {
 
     // Default project credentials from .env for instant connectivity
     const val DEFAULT_SUPABASE_URL = "https://rfhqbdwctqulvwwjcsgt.supabase.co"
-    const val DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_ZOtDEvWWBgdFJfaqe8fKfQ_-YMshS6S"
+    const val DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmaHFiZHdjdHF1bHZ3d2pjc2d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MjIyNzEsImV4cCI6MjEwMjM5ODI3MX0.v7ZmYdJAxq9E2cpWeYdujx0IKvkbrMOPFfAzPagNJLk"
 
     /**
      * Validates whether a given URL is a legitimate Supabase project URL.
@@ -49,10 +49,12 @@ object SupabaseClientConfig {
      */
     fun isValidKey(key: String?): Boolean {
         if (key.isNullOrBlank()) return false
-        val trimmed = key.trim().lowercase()
-        return !trimmed.contains("your-anon-key") &&
-                !trimmed.contains("placeholder") &&
-                trimmed.length > 10
+        val trimmed = key.trim()
+        val lower = trimmed.lowercase()
+        return !lower.contains("your-anon-key") &&
+                !lower.contains("placeholder") &&
+                !lower.startsWith("sb_publishable_") &&
+                trimmed.length > 20
     }
 
     /**

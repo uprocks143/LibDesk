@@ -61,6 +61,7 @@ fun LibDeskDrawerContent(
     onOpenLockers: () -> Unit = {},
     onOpenDueScheduler: () -> Unit = {},
     onExportFinancialReport: () -> Unit = {},
+    onOpenSupabaseConfig: () -> Unit = {},
     onLogout: () -> Unit = {},
     onCloseDrawer: () -> Unit,
     modifier: Modifier = Modifier
@@ -390,6 +391,17 @@ fun LibDeskDrawerContent(
                         subtitle = "Protect your library database in Google Drive & local storage",
                         onClick = {
                             onOpenSyncBackup()
+                            onCloseDrawer()
+                        }
+                    )
+                    DrawerNavItem(
+                        icon = Icons.Default.CloudSync,
+                        title = "Supabase Database & Auth",
+                        subtitle = "Real-time PostgreSQL sync, tables & auth keys",
+                        badge = if (com.example.data.remote.SupabaseClient.isConfigured()) "Active" else "Connect",
+                        badgeColor = if (com.example.data.remote.SupabaseClient.isConfigured()) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                        onClick = {
+                            onOpenSupabaseConfig()
                             onCloseDrawer()
                         }
                     )

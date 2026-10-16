@@ -202,7 +202,7 @@ private fun LibrarianChatThreadsListView(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = if (isRealtimeLive) "Supabase Live" else "Sync",
+                                            text = if (isRealtimeLive) "Live" else "Sync",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isRealtimeLive) Color(0xFF10B981) else Color(0xFFF59E0B)

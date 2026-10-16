@@ -53,7 +53,7 @@ jobs:
         fi
         if ! grep -q "SUPABASE_URL=" .env 2>/dev/null || grep -q "your-project.supabase.co" .env 2>/dev/null; then
           echo "SUPABASE_URL=https://rfhqbdwctqulvwwjcsgt.supabase.co" > .env
-          echo "SUPABASE_ANON_KEY=sb_publishable_ZOtDEvWWBgdFJfaqe8fKfQ_-YMshS6S" >> .env
+          echo "SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmaHFiZHdjdHF1bHZ3d2pjc2d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MjIyNzEsImV4cCI6MjEwMjM5ODI3MX0.v7ZmYdJAxq9E2cpWeYdujx0IKvkbrMOPFfAzPagNJLk" >> .env
         fi
 
     - name: Grant execute permission for gradlew

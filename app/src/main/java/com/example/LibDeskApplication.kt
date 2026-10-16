@@ -16,6 +16,7 @@ class LibDeskApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         try {
+            com.example.data.remote.SupabaseClient.init(this)
             if (!WorkManager.isInitialized()) {
                 WorkManager.initialize(this, workManagerConfiguration)
             }

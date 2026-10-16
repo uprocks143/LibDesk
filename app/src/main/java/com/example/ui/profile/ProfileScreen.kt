@@ -487,7 +487,7 @@ fun ProfileScreen(
                         }
 
                         Text(
-                            text = "LibDesk Access Control • Realtime Supabase Cloud Session",
+                            text = "LibDesk Access Control • Secure Cloud Sync Active",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,

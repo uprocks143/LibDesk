@@ -70,6 +70,7 @@ fun ManagerSettingsScreen(
     onEditPlan: (MembershipPlanEntity) -> Unit = {},
     onDeletePlan: (MembershipPlanEntity) -> Unit = {},
     onManualCloudSync: () -> Unit = {},
+    onOpenSupabaseConfig: (() -> Unit)? = null,
     viewModel: com.example.viewmodel.LibDeskViewModel? = null,
     modifier: Modifier = Modifier
 ) {
@@ -1046,15 +1047,30 @@ fun ManagerSettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
 
-                                Button(
-                                    onClick = onManualCloudSync,
+                                Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    enabled = !isSupabaseSyncing,
-                                    shape = RoundedCornerShape(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (isSupabaseSyncing) "Syncing with Cloud..." else "Force Push All Records to Supabase")
+                                    Button(
+                                        onClick = onManualCloudSync,
+                                        modifier = Modifier.weight(1f),
+                                        enabled = !isSupabaseSyncing,
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(if (isSupabaseSyncing) "Syncing..." else "Sync Cloud")
+                                    }
+                                    if (onOpenSupabaseConfig != null) {
+                                        OutlinedButton(
+                                            onClick = onOpenSupabaseConfig,
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Configure Keys")
+                                        }
+                                    }
                                 }
                             }
                         }

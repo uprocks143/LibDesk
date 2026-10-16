@@ -2922,6 +2922,27 @@ class LibDeskViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateSupabaseCredentials(url: String, key: String, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            com.example.data.remote.SupabaseClient.updateConfig(url, key, getApplication())
+            val report = com.example.data.remote.SupabaseClient.testConnectionDetailed()
+            val ok = report.isFullyConnected || (report.isDatabaseConnected && report.isAuthConnected)
+            val msg = if (ok) {
+                "Supabase Database & Auth Connected (${report.latencyMs}ms)"
+            } else if (report.isAuthConnected && !report.isDatabaseConnected) {
+                "Auth Connected, but Database: ${report.databaseMessage}"
+            } else {
+                "${report.databaseMessage} | ${report.authMessage}"
+            }
+            _supabaseStatusMessage.value = msg
+            _userMessage.value = msg
+            onResult(ok, msg)
+            if (ok && _currentLibraryId.value.isNotBlank()) {
+                pullFromSupabaseCloud()
+            }
+        }
+    }
+
     fun syncLocalToSupabaseCloud() {
         viewModelScope.launch {
             _isSupabaseSyncing.value = true

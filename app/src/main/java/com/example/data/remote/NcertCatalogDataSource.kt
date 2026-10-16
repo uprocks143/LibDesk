@@ -13,13 +13,38 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class NcertCatalogDataSource(
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient = createHttpClient()
 ) {
     companion object {
         private const val TAG = "NcertCatalogDS"
+
+        private fun createHttpClient(): OkHttpClient {
+            return try {
+                val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(
+                    object : javax.net.ssl.X509TrustManager {
+                        override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                        override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                        override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                    }
+                )
+                val sslContext = javax.net.ssl.SSLContext.getInstance("TLS").apply {
+                    init(null, trustAllCerts, java.security.SecureRandom())
+                }
+                OkHttpClient.Builder()
+                    .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+                    .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as javax.net.ssl.X509TrustManager)
+                    .hostnameVerifier { _, _ -> true }
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(20, TimeUnit.SECONDS)
+                    .build()
+            } catch (_: Exception) {
+                OkHttpClient.Builder()
+                    .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(20, TimeUnit.SECONDS)
+                    .build()
+            }
+        }
     }
 
     private fun getBaseUrl(): String = SupabaseClient.getEffectiveUrl()

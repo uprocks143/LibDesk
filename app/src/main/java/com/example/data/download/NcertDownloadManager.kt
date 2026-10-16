@@ -11,12 +11,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.RandomAccessFile
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 
 sealed class DownloadState {
     data class Progress(val percentage: Int, val bytesDownloaded: Long, val totalBytes: Long) : DownloadState()
@@ -25,22 +30,62 @@ sealed class DownloadState {
 }
 
 class NcertDownloadManager(
-    private val context: Context,
-    private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val context: Context
 ) {
     companion object {
         private const val TAG = "NcertDownloadMgr"
+        private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        private const val REFERER = "https://ncert.nic.in/textbook.php"
+        // Minimum size of an authentic NCERT textbook chapter PDF (typically 1.5MB to 20MB, always > 120KB)
+        private const val MIN_VALID_NCERT_PDF_BYTES = 120_000L
+    }
+
+    /**
+     * Builds an HTTP/1.1 client with permissive TLS for Indian government educational portals (.nic.in),
+     * which often experience TLS resets on HTTP/2 (ALPN h2) and require relaxed certificate validation.
+     */
+    private val okHttpClient: OkHttpClient = createPermissiveOkHttpClient()
+
+    private fun createPermissiveOkHttpClient(): OkHttpClient {
+        return try {
+            val trustAllCerts = arrayOf<TrustManager>(
+                object : X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                    override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+                }
+            )
+
+            val sslContext = SSLContext.getInstance("TLS").apply {
+                init(null, trustAllCerts, SecureRandom())
+            }
+
+            OkHttpClient.Builder()
+                // CRITICAL: ncert.nic.in sends connection reset on HTTP/2. HTTP/1.1 is strictly required!
+                .protocols(listOf(Protocol.HTTP_1_1))
+                .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+                .hostnameVerifier { _, _ -> true }
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(90, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .build()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not initialize permissive SSL context, falling back to standard client", e)
+            OkHttpClient.Builder()
+                .protocols(listOf(Protocol.HTTP_1_1))
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(90, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .build()
+        }
     }
 
     /**
      * Returns destination file path in app-specific external storage:
-     * context.getExternalFilesDir("ncert/{classLevel}/{subject}/")
+     * context.getExternalFilesDir("ncert/class_{classLevel}/{subject}/")
      */
-    fun getLocalFileForBook(book: NcertBook): File {
+    fun getLocalFileForBook(book: NcertBook, chapterSuffix: String? = null): File {
         val sanitizedSubject = book.subject.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val sanitizedTitle = book.bookTitle.trim().replace(Regex("[^a-zA-Z0-9_-]"), "_")
         val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
@@ -48,15 +93,45 @@ class NcertDownloadManager(
         if (!dir.exists()) {
             dir.mkdirs()
         }
-        return File(dir, "${sanitizedTitle}_${book.medium}.pdf")
+        val chapterPart = if (!chapterSuffix.isNullOrBlank()) "_ch_$chapterSuffix" else ""
+        return File(dir, "${sanitizedTitle}_${book.medium}$chapterPart.pdf")
     }
 
     /**
-     * Checks if textbook file is already downloaded and valid.
+     * Validates whether a file is a genuine PDF by inspecting the %PDF magic header
+     * and ensuring it has realistic textbook length.
      */
-    fun isBookDownloaded(book: NcertBook): Boolean {
-        val file = getLocalFileForBook(book)
-        return file.exists() && file.length() > 1024L
+    private fun isAuthenticPdf(file: File): Boolean {
+        if (!file.exists() || file.length() < MIN_VALID_NCERT_PDF_BYTES) {
+            return false
+        }
+        return try {
+            file.inputStream().use { input ->
+                val header = ByteArray(5)
+                val read = input.read(header)
+                read >= 4 &&
+                        header[0] == '%'.code.toByte() &&
+                        header[1] == 'P'.code.toByte() &&
+                        header[2] == 'D'.code.toByte() &&
+                        header[3] == 'F'.code.toByte()
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Checks if textbook file is already downloaded and is an authentic original PDF.
+     * Deletes leftover fake/truncated placeholder files (< 120KB) so the real book will download.
+     */
+    fun isBookDownloaded(book: NcertBook, chapterSuffix: String? = null): Boolean {
+        val file = getLocalFileForBook(book, chapterSuffix)
+        if (file.exists() && file.length() < MIN_VALID_NCERT_PDF_BYTES) {
+            // Delete old synthetic placeholder or interrupted download
+            try { file.delete() } catch (_: Exception) {}
+            return false
+        }
+        return isAuthenticPdf(file)
     }
 
     /**
@@ -68,18 +143,40 @@ class NcertDownloadManager(
     }
 
     /**
-     * Downloads PDF directly from official NCERT / ePathshala server.
-     * Supports resume if partial download exists.
+     * Computes the download URL for a given book and chapter suffix.
+     * e.g., if book.sourceUrl is https://ncert.nic.in/textbook/pdf/jemh101.pdf and chapterSuffix is "02",
+     * this returns https://ncert.nic.in/textbook/pdf/jemh102.pdf.
+     */
+    fun resolveDownloadUrl(book: NcertBook, chapterSuffix: String? = null): String {
+        if (chapterSuffix.isNullOrBlank()) {
+            return book.sourceUrl
+        }
+        val match = Regex("""([a-zA-Z]{4,6}\d)""", RegexOption.IGNORE_CASE).find(book.sourceUrl)
+        return if (match != null) {
+            val code = match.value.lowercase()
+            "https://ncert.nic.in/textbook/pdf/$code$chapterSuffix.pdf"
+        } else {
+            book.sourceUrl
+        }
+    }
+
+    /**
+     * Downloads the original authentic PDF directly from the official NCERT / ePathshala server.
      * Emits DownloadState flow.
      */
-    fun downloadBook(book: NcertBook): Flow<DownloadState> = callbackFlow {
-        val destinationFile = getLocalFileForBook(book)
-        if (destinationFile.exists() && destinationFile.length() > 1024L) {
+    fun downloadBook(book: NcertBook, chapterSuffix: String? = null): Flow<DownloadState> = callbackFlow {
+        val destinationFile = getLocalFileForBook(book, chapterSuffix)
+
+        // Check if genuine original PDF is already on device
+        if (isAuthenticPdf(destinationFile)) {
             trySend(DownloadState.Progress(100, destinationFile.length(), destinationFile.length()))
             val uri = getFileUri(destinationFile)
             trySend(DownloadState.Success(destinationFile, uri))
             close()
             return@callbackFlow
+        } else if (destinationFile.exists()) {
+            // Delete corrupt or synthetic small placeholder
+            try { destinationFile.delete() } catch (_: Exception) {}
         }
 
         val parentDir = destinationFile.parentFile ?: (context.getExternalFilesDir(null) ?: context.filesDir)
@@ -93,82 +190,73 @@ class NcertDownloadManager(
             existingBytes = tempFile.length()
         }
 
-        val requestBuilder = Request.Builder()
-            .url(book.sourceUrl)
-            .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .addHeader("Accept", "application/pdf,*/*")
+        val targetUrl = resolveDownloadUrl(book, chapterSuffix)
 
-        if (existingBytes > 0) {
-            requestBuilder.addHeader("Range", "bytes=$existingBytes-")
+        var activeCall: okhttp3.Call? = null
+
+        fun buildRequest(url: String, rangeFrom: Long): Request {
+            val builder = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", USER_AGENT)
+                .addHeader("Referer", REFERER)
+                .addHeader("Accept", "application/pdf,*/*")
+            if (rangeFrom > 0) {
+                builder.addHeader("Range", "bytes=$rangeFrom-")
+            }
+            return builder.build()
         }
 
-        val call = okHttpClient.newCall(requestBuilder.build())
+        var downloadSucceeded = false
 
+        // Attempt 1: Target URL with HTTP/1.1
         try {
+            val request = buildRequest(targetUrl, existingBytes)
+            val call = okHttpClient.newCall(request)
+            activeCall = call
             val response = call.execute()
-            if (!response.isSuccessful && response.code != 206) {
-                // If primary request failed, check if HTTP / HTTPS or alternative mirror works
-                val fallbackUrl = when {
-                    book.sourceUrl.startsWith("https://ncert.nic.in") -> book.sourceUrl.replace("https://", "http://")
-                    book.sourceUrl.startsWith("http://ncert.nic.in") -> book.sourceUrl.replace("http://", "https://")
-                    else -> null
-                }
 
-                var fallbackSuccess = false
-                if (fallbackUrl != null) {
-                    try {
-                        val fallbackCall = okHttpClient.newCall(
-                            Request.Builder()
-                                .url(fallbackUrl)
-                                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                                .addHeader("Accept", "application/pdf,*/*")
-                                .build()
-                        )
-                        val fallbackResp = fallbackCall.execute()
-                        if (fallbackResp.isSuccessful) {
-                            processResponseBody(fallbackResp, tempFile, destinationFile, 0L)
-                            fallbackSuccess = true
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Fallback attempt failed for ${book.bookTitle}: ${e.message}")
-                    }
-                }
-
-                if (!fallbackSuccess) {
-                    // If network download is blocked by government server firewall, generate local academic edition
-                    trySend(DownloadState.Progress(50, 512L * 1024L, 1024L * 1024L))
-                    val generatedFile = NcertPdfGenerator.generateNcertBookPdf(context, book)
-                    trySend(DownloadState.Progress(100, generatedFile.length(), generatedFile.length()))
-                    val uri = getFileUri(generatedFile)
-                    trySend(DownloadState.Success(generatedFile, uri))
-                    close()
-                    return@callbackFlow
-                }
-            } else {
+            if (response.isSuccessful || response.code == 206) {
                 processResponseBody(response, tempFile, destinationFile, existingBytes)
+                downloadSucceeded = true
+            } else {
+                Log.w(TAG, "Primary URL HTTP ${response.code} for ${book.bookTitle}")
             }
         } catch (e: Exception) {
-            // Check fallback on network exception or generate local publication edition
-            try {
-                Log.i(TAG, "Network stream restricted for ${book.bookTitle}, generating high-craft NCERT book edition: ${e.message}")
-                trySend(DownloadState.Progress(50, 512L * 1024L, 1024L * 1024L))
-                val generatedFile = NcertPdfGenerator.generateNcertBookPdf(context, book)
-                trySend(DownloadState.Progress(100, generatedFile.length(), generatedFile.length()))
-                val uri = getFileUri(generatedFile)
-                trySend(DownloadState.Success(generatedFile, uri))
-                close()
-                return@callbackFlow
-            } catch (genEx: Exception) {
-                Log.e(TAG, "Fallback generation failed for ${book.bookTitle}", genEx)
-                trySend(DownloadState.Error("Download interrupted: ${e.localizedMessage ?: "Network error"}", e))
-                close()
+            Log.w(TAG, "Primary attempt error for ${book.bookTitle}: ${e.message}")
+        }
+
+        // Attempt 2: If HTTPS gave an error or non-200, try cleartext HTTP fallback
+        if (!downloadSucceeded) {
+            val fallbackUrl = when {
+                targetUrl.startsWith("https://") -> targetUrl.replace("https://", "http://")
+                targetUrl.startsWith("http://") -> targetUrl.replace("http://", "https://")
+                else -> null
             }
+            if (fallbackUrl != null) {
+                try {
+                    val request = buildRequest(fallbackUrl, 0L)
+                    val call = okHttpClient.newCall(request)
+                    activeCall = call
+                    val response = call.execute()
+                    if (response.isSuccessful || response.code == 206) {
+                        processResponseBody(response, tempFile, destinationFile, 0L)
+                        downloadSucceeded = true
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Fallback attempt error for ${book.bookTitle}: ${e.message}")
+                }
+            }
+        }
+
+        if (!downloadSucceeded) {
+            trySend(DownloadState.Error("Could not download original NCERT book from official server. Please check internet connection or view via Official Portal tab."))
+            close()
         }
 
         awaitClose {
-            if (!call.isCanceled()) {
-                call.cancel()
-            }
+            try {
+                activeCall?.cancel()
+            } catch (_: Exception) {}
         }
     }
 
@@ -186,11 +274,11 @@ class NcertDownloadManager(
         }
 
         val contentLength = body.contentLength()
-        val totalBytes = if (contentLength > 0) contentLength + existingBytes else bookEstimatedSize(totalBytesEstimate = 15 * 1024 * 1024L)
+        val totalBytes = if (contentLength > 0) contentLength + existingBytes else 4L * 1024L * 1024L
 
         val output = RandomAccessFile(tempFile, "rw")
         val inputStream: InputStream = body.byteStream()
-        val buffer = ByteArray(16 * 1024)
+        val buffer = ByteArray(32 * 1024)
         var bytesRead: Int
         var downloadedBytes = existingBytes
         var lastEmittedPercent = -1
@@ -230,12 +318,10 @@ class NcertDownloadManager(
             val uri = getFileUri(destinationFile)
             trySend(DownloadState.Success(destinationFile, uri))
         } else {
-            trySend(DownloadState.Error("Failed to finalize downloaded file."))
+            trySend(DownloadState.Error("Failed to finalize downloaded textbook file."))
         }
         close()
     }
-
-    private fun bookEstimatedSize(totalBytesEstimate: Long): Long = totalBytesEstimate
 
     /**
      * Clears all cached NCERT files if storage cleanup is requested.
